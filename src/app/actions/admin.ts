@@ -159,7 +159,10 @@ export async function moveItem(form: FormData): Promise<void> {
     const [me] = await tx`select * from ${tx(table)} where id = ${p.data.id}`;
     if (!me) return;
     const scopeVal = scope ? (me as Record<string, unknown>)[scope.replace(/_(\w)/g, (_, c: string) => c.toUpperCase())] : null;
-    const siblings = scope
+    const siblings = p.data.kind === 'placement'
+      ? await tx`select pl.id from product_placements pl join products pr on pr.id = pl.product_id and pr.status = 'active'
+          where pl.check_area_id = ${String(scopeVal)} order by pl.sort_order, pl.created_at for update of pl`
+      : scope
       ? await tx`select id from ${tx(table)} where ${tx(scope)} = ${String(scopeVal)} order by sort_order, created_at for update`
       : await tx`select id from ${tx(table)} order by sort_order, created_at for update`;
     const ids = siblings.map((r) => String(r.id));
