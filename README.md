@@ -12,7 +12,7 @@ This is an internal tool. Products and par levels in `db/seed/sample_data.sql` a
 |---|---|
 | **Next.js** (this repo), hosted on **Vercel** | The staff app, the admin screens, and the server code that checks every request. |
 | **Supabase Postgres** (Sydney region) | The shared database. The browser never connects to it directly; only the server does, using a private connection string. |
-| **The device's own database** (IndexedDB) | A copy of the product catalogue, so restocking keeps working without Wi-Fi. Phase 2 adds offline restock sessions. |
+| **The device's own database** (IndexedDB) | A copy of the product catalogue and every restock entry. Changes are saved here first, queued in an outbox, and uploaded when online. Each change has its own id so it is never applied twice. |
 
 Access:
 
@@ -86,6 +86,6 @@ src/components/       Shared interface pieces
 ## Build phases
 
 - [x] **Phase 1 – Foundation**: database, staff and admin access, home screen, admin catalogue management, product data cached on the device.
-- [ ] **Phase 2 – Core restocking**: Full and Quick Restock, area checking, collection list, offline-first saving.
+- [x] **Phase 2 – Core restocking**: Full and Quick Restock, area checking, collection list grouped by storeroom, shortages, Save and exit / Finish / Finish with exceptions, offline-first saving with an outbox, shared restocks across devices.
 - [ ] **Phase 3 – Reliability**: shared sessions across devices, conflict handling, shortages, summaries.
 - [ ] **Phase 4 – Refinement**: reference photos, CSV import/export, installable offline app shell, iPad testing.

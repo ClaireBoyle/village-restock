@@ -1,6 +1,6 @@
-import { DepartmentScreen } from '@/components/staff/DepartmentScreen';
+import { RestockApp } from '@/components/restock/RestockApp';
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return <DepartmentScreen id={id} />;
+  return <RestockApp departmentId={id} />;
 }

@@ -29,6 +29,8 @@ export interface CatPlacement {
 export interface Catalogue {
   version: number;
   generatedAt: string;
+  /** Restocks finished after midnight but before cutoffHour count as the previous day's close. */
+  settings: { timeZone: string; cutoffHour: number };
   departments: CatDepartment[];
   areas: CatArea[];
   locations: CatLocation[];

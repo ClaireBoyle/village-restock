@@ -26,6 +26,17 @@ const PATHS = {
   archive: <><rect x="3.5" y="4.5" width="17" height="4.5" rx="1.5" /><path d="M5 9v10.5h14V9M10 13h4" /></>,
   wifioff: <><path d="M2.5 9a14 14 0 0 1 19 0M5.8 12.6a9 9 0 0 1 12.4 0M9.2 16.1a4 4 0 0 1 5.6 0" /><path d="M3.5 3.5l17 17" /></>,
   sync: <path d="M19.5 11A7.5 7.5 0 0 0 6.3 6.6L4.5 8.5M4.5 4v4.5H9M4.5 13a7.5 7.5 0 0 0 13.2 4.4l1.8-1.9M19.5 20v-4.5H15" />,
+  half: <><circle cx="12" cy="12" r="8" /><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" /></>,
+  skip: <><path d="M5 5.5l9 6.5-9 6.5z" /><path d="M18.5 5.5v13" /></>,
+  minus: <path d="M5 12h14" />,
+  flag: <path d="M5.5 21V4M5.5 4h11l-2.2 4.2 2.2 4.3h-11" />,
+  camera: <><path d="M3.5 8h3.2l2-2.8h6.6l2 2.8h3.2v11h-17z" /><circle cx="12" cy="13.2" r="3.4" /></>,
+  copy: <><rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2" /><path d="M15.5 8.5V4H4v11.5h4.5" /></>,
+  save: <><path d="M5 4h11l3 3v13H5z" /><path d="M8 4v5h7V4M8 20v-6h8v6" /></>,
+  task: <><rect x="4" y="4" width="16" height="16" rx="3" /><path d="M8 12.2l2.8 2.8L16 9.5" /></>,
+  user: <><circle cx="12" cy="8.5" r="3.6" /><path d="M5 20a7 7 0 0 1 14 0" /></>,
+  wifi: <><path d="M2.5 9a14 14 0 0 1 19 0M5.8 12.6a9 9 0 0 1 12.4 0M9.2 16.1a4 4 0 0 1 5.6 0" /><circle cx="12" cy="19.5" r=".9" fill="currentColor" /></>,
+  search: <><circle cx="11" cy="11" r="6.5" /><path d="M20 20l-4.2-4.2" /></>,
   pin: <><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21z" /><circle cx="12" cy="10" r="2.3" /></>,
 } as const;
 

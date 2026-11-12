@@ -10,7 +10,8 @@ export async function loadCatalogue(): Promise<Catalogue> {
   const sql = db();
   // Read in one transaction so the version matches the rows returned.
   return sql.begin('isolation level repeatable read', async (tx) => {
-    const [v] = await tx`select value from app_settings where key = 'catalogue_version'`;
+    const settingRows = await tx`select key, value from app_settings where key in ('catalogue_version', 'timezone', 'trading_day_cutoff_hour')`;
+    const setting = (k: string) => settingRows.find((r) => r.key === k)?.value;
     const departments = await tx`
       select id, name, short_name, group_label, theme, icon, description, sort_order
       from departments where active order by sort_order, name`;
@@ -33,8 +34,9 @@ export async function loadCatalogue(): Promise<Catalogue> {
       join check_areas a on a.id = pl.check_area_id and a.active
       order by pl.sort_order`;
     return {
-      version: Number(v?.value ?? 1),
+      version: Number(setting('catalogue_version') ?? 1),
       generatedAt: new Date().toISOString(),
+      settings: { timeZone: String(setting('timezone') ?? 'Australia/Melbourne'), cutoffHour: Number(setting('trading_day_cutoff_hour') ?? 5) },
       departments, areas, locations, categories, products, placements,
     } as unknown as Catalogue;
   });
