@@ -1,33 +1,33 @@
 import { Icon } from '@/components/Icon';
 import { ActionForm, SubmitButton } from '@/components/admin/ActionForm';
-import { addAdmin, changeMyPassword, setAdminActive, setStaffCode } from '@/app/actions/admin';
+import { addAdmin, changeMyPassword, setAdminActive } from '@/app/actions/admin';
 import { requireAdmin } from '@/lib/server/auth';
-import { db, getSetting } from '@/lib/server/db';
+import { db } from '@/lib/server/db';
 
 export default async function Settings() {
   const me = await requireAdmin();
-  const codeSet = Boolean(await getSetting<string | null>('staff_code_hash', null));
   const admins = await db()`select id, display_name, email, active, last_login_at from admins order by created_at`;
   const row: React.CSSProperties = { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' };
   const section: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 12 };
 
   return (
     <>
-      <div className="page-head"><div><h1>Access &amp; settings</h1><p>Who can use the app, and how.</p></div></div>
+      <div className="page-head"><div><h1>Access &amp; settings</h1><p>Who can change products and par levels.</p></div></div>
 
       <section className="panel" style={section}>
-        <h2>Staff access code</h2>
-        <p className="meta">Staff enter this once on each iPad or phone. {codeSet ? 'Changing it signs out every staff device straight away.' : 'No code is set yet, so staff can’t unlock the app.'}</p>
-        <ActionForm action={setStaffCode} style={row} resetOnSuccess>
-          <div className="field" style={{ flex: '1 1 180px' }}><label htmlFor="code">{codeSet ? 'New code' : 'Code'}</label><input id="code" name="code" autoComplete="off" required minLength={4} maxLength={20} /></div>
-          <div className="field" style={{ flex: '1 1 180px' }}><label htmlFor="confirm">Type it again</label><input id="confirm" name="confirm" autoComplete="off" required minLength={4} maxLength={20} /></div>
-          <SubmitButton>{codeSet ? 'Change code' : 'Set code'}</SubmitButton>
-        </ActionForm>
+        <h2>How access works</h2>
+        <div className="banner s-info">
+          <Icon name="info" />
+          <div>
+            <b>Staff screens are open to anyone with the link.</b>
+            <p>Keep the web address private. The admin area has no visible link: press and hold the logo on the home screen for 2 seconds, or add <b>/admin</b> to the address. It always asks for an admin password.</p>
+          </div>
+        </div>
       </section>
 
       <section className="panel" style={section}>
         <h2>Admins</h2>
-        <p className="meta">Admins can change products, par levels and settings. Staff don&rsquo;t need accounts.</p>
+        <p className="meta">Admins can change products, par levels and settings. On a shared iPad, sign out when you&rsquo;re done (sign-ins end by themselves after 12 hours).</p>
         <div className="rows">
           {admins.map((a) => (
             <div key={String(a.id)} className={`row ${a.active ? '' : 'muted'}`}>

@@ -27,8 +27,8 @@ export function ConnectionPill({ connection, checkedAt }: { connection: Connecti
   );
 }
 
-export function TopBar({ title = 'Village Restock', crumbs, backHref, right }: {
-  title?: string; crumbs?: string; backHref?: string; right?: React.ReactNode;
+export function TopBar({ title = 'Village Restock', crumbs, backHref, right, logo }: {
+  title?: string; crumbs?: string; backHref?: string; right?: React.ReactNode; logo?: React.ReactNode;
 }) {
   return (
     <header className="top">
@@ -36,7 +36,7 @@ export function TopBar({ title = 'Village Restock', crumbs, backHref, right }: {
         {backHref ? (
           <Link className="iconbtn" href={backHref} aria-label="Back"><Icon name="back" /></Link>
         ) : (
-          <span className="logo" aria-hidden="true"><Icon name="logo" /></span>
+          logo ?? <span className="logo" aria-hidden="true"><Icon name="logo" /></span>
         )}
         <div className="brand">
           <b>{title}</b>

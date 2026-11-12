@@ -34,10 +34,6 @@ export function useCatalogue(): CatalogueState {
     try {
       const since = versionRef.current ?? '';
       const res = await fetch(`/api/catalogue?since=${since}`, { cache: 'no-store' });
-      if (res.status === 401) {
-        window.location.href = '/unlock';
-        return;
-      }
       if (!res.ok) throw new Error(`Server replied ${res.status}`);
       const body = (await res.json()) as CatalogueResponse;
       if (!body.unchanged) {

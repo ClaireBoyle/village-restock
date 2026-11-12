@@ -1,14 +1,11 @@
-// Signed session cookie, shared by middleware (edge runtime) and server code.
-// The cookie only says WHO this device is signed in as; it holds no stock data.
+// Signed admin sign-in cookie, shared by middleware (edge runtime) and server code.
+// Staff don't sign in, so only admins ever get one.
 import { SignJWT, jwtVerify } from 'jose';
 
 export const SESSION_COOKIE = 'vr_session';
-export const STAFF_SESSION_DAYS = 30;
 export const ADMIN_SESSION_HOURS = 12;
 
-export type SessionClaims =
-  | { role: 'staff'; sv: number }                       // sv = staff code version when unlocked
-  | { role: 'admin'; aid: string; name: string; sv: number };
+export type SessionClaims = { role: 'admin'; aid: string; name: string };
 
 function key(): Uint8Array {
   const secret = process.env.SESSION_SECRET;
@@ -30,9 +27,8 @@ export async function verifySession(token: string | undefined): Promise<SessionC
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, key(), { algorithms: ['HS256'] });
-    if (payload.role === 'staff' && typeof payload.sv === 'number') return { role: 'staff', sv: payload.sv };
-    if (payload.role === 'admin' && typeof payload.aid === 'string' && typeof payload.sv === 'number') {
-      return { role: 'admin', aid: payload.aid, name: String(payload.name ?? ''), sv: payload.sv };
+    if (payload.role === 'admin' && typeof payload.aid === 'string') {
+      return { role: 'admin', aid: payload.aid, name: String(payload.name ?? '') };
     }
     return null;
   } catch {

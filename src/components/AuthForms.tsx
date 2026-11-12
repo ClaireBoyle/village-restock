@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { Icon } from './Icon';
 import { useKeepValuesForm } from './useKeepValuesForm';
-import { adminSignInAction, setupAction, unlockAction, type FormState } from '@/app/actions/auth';
+import { adminSignInAction, setupAction, type FormState } from '@/app/actions/auth';
 
 function Submit({ children, pending }: { children: React.ReactNode; pending: boolean }) {
   return <button className="btn primary wide" style={{ minHeight: 56 }} disabled={pending}>{pending ? 'Checking…' : children}</button>;
@@ -11,26 +11,6 @@ function Submit({ children, pending }: { children: React.ReactNode; pending: boo
 function ErrorBanner({ state }: { state: FormState }) {
   if (!state?.error) return null;
   return <div className="banner s-bad" role="alert"><Icon name="warn" /><div><b>{state.error}</b></div></div>;
-}
-
-export function UnlockForm() {
-  const { state, onSubmit, pending } = useKeepValuesForm(unlockAction);
-  return (
-    <form onSubmit={onSubmit} className="auth-card">
-      <span className="logo" style={{ width: 52, height: 52, borderRadius: 16 }} aria-hidden="true"><Icon name="logo" /></span>
-      <div>
-        <h1>Village Restock</h1>
-        <p className="meta" style={{ marginTop: 4 }}>Enter the staff access code to use this device. You only need to do this once a month.</p>
-      </div>
-      <ErrorBanner state={state} />
-      <div className="field">
-        <label htmlFor="code">Staff access code</label>
-        <input id="code" name="code" className="code-input" inputMode="numeric" autoComplete="off" autoFocus required maxLength={20} />
-      </div>
-      <Submit pending={pending}>Unlock</Submit>
-      <Link className="linkbtn" href="/admin/login" style={{ alignSelf: 'center' }}>Supervisor sign in</Link>
-    </form>
-  );
 }
 
 export function AdminSignInForm() {

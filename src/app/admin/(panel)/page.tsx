@@ -20,7 +20,6 @@ export default async function Overview({ searchParams }: { searchParams: Promise
          and exists (select 1 from product_placements pl where pl.product_id = p.id and pl.par_level is null))::int as missing_par,
       (select count(*) from products p where p.status = 'active'
          and not exists (select 1 from product_placements pl where pl.product_id = p.id))::int as no_area`;
-  const staffCodeSet = Boolean(await getSetting<string | null>('staff_code_hash', null));
   const version = await getSetting<number>('catalogue_version', 1);
 
   const stats: [string, number, string][] = [
@@ -40,10 +39,6 @@ export default async function Overview({ searchParams }: { searchParams: Promise
       {rm ? (
         <div className="banner s-ok" role="status"><Icon name="check" /><div><b>Sample data removed</b>
           <p>Removed {rm[1]} products, {rm[2]} areas, {rm[3]} categories, {rm[4]} departments and {rm[5]} storerooms. Anything your own products use was kept.</p></div></div>
-      ) : null}
-      {!staffCodeSet ? (
-        <div className="banner s-warn"><Icon name="lock" /><div><b>Set a staff access code</b><p>Staff can&rsquo;t unlock the app on their devices until you do.</p></div>
-          <Link className="btn small" href="/admin/settings">Set code</Link></div>
       ) : null}
       {Number(c.missingPar) > 0 || Number(c.noArea) > 0 ? (
         <div className="banner s-warn"><Icon name="warn" /><div><b>Some products need attention</b>

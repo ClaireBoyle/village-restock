@@ -7,8 +7,8 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { db, setSetting } from '@/lib/server/db';
-import { hashSecret, requireAdmin, staffCodeVersion } from '@/lib/server/auth';
+import { db } from '@/lib/server/db';
+import { hashSecret, requireAdmin } from '@/lib/server/auth';
 
 export type ActionResult = { ok?: boolean; error?: string; message?: string } | undefined;
 
@@ -305,19 +305,8 @@ export async function removeSampleData(_: ActionResult, form: FormData): Promise
 }
 
 // ---------------------------------------------------------------------------
-// Staff access code and admin accounts
+// Admin accounts
 // ---------------------------------------------------------------------------
-export async function setStaffCode(_: ActionResult, form: FormData): Promise<ActionResult> {
-  await requireAdmin();
-  const code = String(form.get('code') ?? '').trim();
-  const confirm = String(form.get('confirm') ?? '').trim();
-  if (!/^[A-Za-z0-9]{4,20}$/.test(code)) return { error: 'Use 4 to 20 letters or numbers for the code.' };
-  if (code !== confirm) return { error: 'The two codes don’t match.' };
-  await setSetting('staff_code_hash', await hashSecret(code));
-  await setSetting('staff_code_version', (await staffCodeVersion()) + 1);
-  return done('Staff access code updated. Every staff device will need the new code.');
-}
-
 const newAdminSchema = z.object({
   name: text(40, 'Name'),
   email: z.email('Enter a valid email address.'),
@@ -357,5 +346,5 @@ export async function changeMyPassword(_: ActionResult, form: FormData): Promise
 export async function adminSignOut(): Promise<void> {
   const { clearSession } = await import('@/lib/server/auth');
   await clearSession();
-  redirect('/admin/login');
+  redirect('/');
 }

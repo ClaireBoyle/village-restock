@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { Icon } from '@/components/Icon';
 import { ConnectionPill, TopBar, timeLabel } from '@/components/TopBar';
 import { useCatalogue } from '@/lib/client/use-catalogue';
+import { adminSignOut } from '@/app/actions/admin';
+import { HoldLogo } from './HoldLogo';
 import type { CatDepartment } from '@/lib/catalogue-types';
 
 export function HomeScreen({ isAdmin }: { isAdmin: boolean }) {
@@ -11,8 +13,16 @@ export function HomeScreen({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <>
-      <TopBar crumbs="Staff restocking" right={<ConnectionPill connection={connection} checkedAt={checkedAt} />} />
+      <TopBar logo={<HoldLogo />} crumbs="Staff restocking" right={<ConnectionPill connection={connection} checkedAt={checkedAt} />} />
       <main className="wrap" style={{ display: 'flex', flexDirection: 'column', gap: 26, paddingBlock: '22px 32px' }}>
+        {isAdmin ? (
+          <div className="banner s-info">
+            <Icon name="lock" />
+            <div><b>An admin is signed in on this device</b><p>Sign out before handing the device back to staff.</p></div>
+            <Link className="btn small" href="/admin">Admin</Link>
+            <form action={adminSignOut}><button className="btn small">Sign out</button></form>
+          </div>
+        ) : null}
         <section className="welcome">
           <div>
             <p className="date">{today}</p>
@@ -45,7 +55,6 @@ export function HomeScreen({ isAdmin }: { isAdmin: boolean }) {
 
         <footer className="meta" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           <span>{checkedAt ? `Product data checked ${timeLabel(checkedAt)}` : ''}</span>
-          <Link className="linkbtn" href="/admin">{isAdmin ? 'Admin' : 'Supervisor sign in'}</Link>
         </footer>
       </main>
     </>

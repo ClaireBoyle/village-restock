@@ -2,17 +2,9 @@
 
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { clearSession, createFirstAdmin, signInAdmin, unlockWithStaffCode } from '@/lib/server/auth';
+import { createFirstAdmin, signInAdmin } from '@/lib/server/auth';
 
 export type FormState = { error?: string } | undefined;
-
-export async function unlockAction(_: FormState, form: FormData): Promise<FormState> {
-  const code = String(form.get('code') ?? '');
-  if (!code.trim()) return { error: 'Enter the staff access code.' };
-  const r = await unlockWithStaffCode(code);
-  if (!r.ok) return { error: r.error };
-  redirect('/');
-}
 
 export async function adminSignInAction(_: FormState, form: FormData): Promise<FormState> {
   const email = String(form.get('email') ?? '');
@@ -36,9 +28,4 @@ export async function setupAction(_: FormState, form: FormData): Promise<FormSta
   const r = await createFirstAdmin(parsed.data);
   if (!r.ok) return { error: r.error };
   redirect('/admin');
-}
-
-export async function signOutAction() {
-  await clearSession();
-  redirect('/unlock');
 }

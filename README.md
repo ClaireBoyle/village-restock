@@ -14,9 +14,9 @@ This is an internal tool. Products and par levels in `db/seed/sample_data.sql` a
 
 Access:
 
-- **Staff** enter a shared staff access code once per device. Changing the code signs out every staff device.
-- **Admins** (supervisors) sign in with an email and password. Only admins can change products, par levels or settings.
-- Repeated wrong codes or passwords are blocked for 15 minutes.
+- **Staff screens are open to anyone with the link.** There are no staff accounts or codes, so keep the web address private. Search engines are told not to list the app.
+- **The admin area** (products, par levels, settings) has no visible link. To open it, press and hold the logo on the home screen for 2 seconds, or add `/admin` to the address. It always asks for an admin email and password.
+- Repeated wrong admin passwords are blocked for 15 minutes. Admin sign-ins end after 12 hours, and the home screen reminds an admin to sign out before handing a shared iPad back to staff.
 - No personal staff details are stored. Phase 2 will record an optional first name or initials against restock work.
 
 ## Set up (one time)
@@ -45,8 +45,7 @@ Access:
 ### 3. First sign-in
 
 1. Open `https://<your-app>.vercel.app/admin/setup`, enter the `ADMIN_SETUP_CODE` and create your admin account. This page stops working once an admin exists.
-2. In **Admin > Access & settings**, set the **staff access code**.
-3. On each iPad, open the app in **Safari**, enter the staff code, then tap **Share > Add to Home Screen**.
+2. On each iPad, open the app's address in **Safari**, then tap **Share > Add to Home Screen**.
 
 ## Local development
 

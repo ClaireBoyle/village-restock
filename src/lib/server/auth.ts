@@ -2,12 +2,12 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createHash } from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import { db, getSetting } from './db';
-import {
-  ADMIN_SESSION_HOURS, SESSION_COOKIE, STAFF_SESSION_DAYS,
-  signSession, verifySession, type SessionClaims,
-} from '@/lib/session-token';
+import { db } from './db';
+import { ADMIN_SESSION_HOURS, SESSION_COOKIE, signSession, verifySession, type SessionClaims } from '@/lib/session-token';
 
+// Staff screens are open to anyone with the link (no staff accounts or codes).
+// Only the admin area, where products and par levels are changed, needs a
+// sign-in. Its entrance is hidden in the staff app (press and hold the logo).
 export type Viewer =
   | { role: 'staff' }
   | { role: 'admin'; adminId: string; name: string };
@@ -16,7 +16,7 @@ const MAX_FAILURES = 8;
 const FAILURE_WINDOW_MINUTES = 15;
 
 // ---------------------------------------------------------------------------
-// Session cookie
+// Session cookie (admins only)
 // ---------------------------------------------------------------------------
 async function writeCookie(claims: SessionClaims, maxAgeSeconds: number) {
   const token = await signSession(claims, maxAgeSeconds);
@@ -33,39 +33,25 @@ export async function clearSession() {
   (await cookies()).delete(SESSION_COOKIE);
 }
 
-export async function staffCodeVersion(): Promise<number> {
-  return Number(await getSetting<number>('staff_code_version', 1));
-}
-
-/** The signed-in viewer, or null. Checks the staff code hasn't been changed since unlock. */
-export async function getViewer(): Promise<Viewer | null> {
+/** Who is using the app: a signed-in, active admin, or otherwise staff. */
+export async function getViewer(): Promise<Viewer> {
   const claims = await verifySession((await cookies()).get(SESSION_COOKIE)?.value);
-  if (!claims) return null;
-  if (claims.role === 'admin') {
+  if (claims) {
     const rows = await db()`select id, display_name from admins where id = ${claims.aid} and active`;
-    if (!rows.length) return null;
-    return { role: 'admin', adminId: claims.aid, name: String(rows[0].displayName) };
+    if (rows.length) return { role: 'admin', adminId: claims.aid, name: String(rows[0].displayName) };
   }
-  if (claims.sv !== (await staffCodeVersion())) return null;
   return { role: 'staff' };
-}
-
-/** For pages: send signed-out devices to the unlock screen. */
-export async function requireStaffPage(): Promise<Viewer> {
-  const v = await getViewer();
-  if (!v) redirect('/unlock');
-  return v;
 }
 
 /** For admin pages and admin server actions. */
 export async function requireAdmin(): Promise<Extract<Viewer, { role: 'admin' }>> {
   const v = await getViewer();
-  if (!v || v.role !== 'admin') redirect('/admin/login');
+  if (v.role !== 'admin') redirect('/admin/login');
   return v;
 }
 
 // ---------------------------------------------------------------------------
-// Slowing down guessing
+// Slowing down password guessing
 // ---------------------------------------------------------------------------
 async function ipHash(): Promise<string> {
   const h = await headers();
@@ -73,58 +59,42 @@ async function ipHash(): Promise<string> {
   return createHash('sha256').update(`${process.env.SESSION_SECRET ?? ''}:${ip}`).digest('hex').slice(0, 32);
 }
 
-async function isLockedOut(kind: 'staff' | 'admin', hash: string): Promise<boolean> {
+async function isLockedOut(hash: string): Promise<boolean> {
   const [{ n }] = await db()`
     select count(*)::int as n from login_failures
-    where kind = ${kind} and ip_hash = ${hash}
+    where kind = 'admin' and ip_hash = ${hash}
       and failed_at > now() - make_interval(mins => ${FAILURE_WINDOW_MINUTES})`;
   return Number(n) >= MAX_FAILURES;
 }
 
-async function recordFailure(kind: 'staff' | 'admin', hash: string) {
-  await db()`insert into login_failures (kind, ip_hash) values (${kind}, ${hash})`;
+async function recordFailure(hash: string) {
+  await db()`insert into login_failures (kind, ip_hash) values ('admin', ${hash})`;
   await db()`delete from login_failures where failed_at < now() - interval '1 day'`;
 }
 
 let dummy: Promise<string> | null = null;
 const dummyHash = () => (dummy ??= bcrypt.hash('not-a-real-password', 12));
 
-export type AuthResult ={ ok: true } | { ok: false; error: string };
+export type AuthResult = { ok: true } | { ok: false; error: string };
 
 const LOCKED = `Too many wrong attempts. Wait ${FAILURE_WINDOW_MINUTES} minutes and try again.`;
-
-// ---------------------------------------------------------------------------
-// Staff unlock
-// ---------------------------------------------------------------------------
-export async function unlockWithStaffCode(code: string): Promise<AuthResult> {
-  const hash = await ipHash();
-  if (await isLockedOut('staff', hash)) return { ok: false, error: LOCKED };
-  const stored = await getSetting<string | null>('staff_code_hash', null);
-  if (!stored) return { ok: false, error: 'No staff access code has been set yet. Ask a supervisor to set one in Admin > Settings.' };
-  if (!(await bcrypt.compare(code.trim(), stored))) {
-    await recordFailure('staff', hash);
-    return { ok: false, error: 'That code isn’t right. Check with your supervisor.' };
-  }
-  await writeCookie({ role: 'staff', sv: await staffCodeVersion() }, STAFF_SESSION_DAYS * 86400);
-  return { ok: true };
-}
 
 // ---------------------------------------------------------------------------
 // Admin sign-in
 // ---------------------------------------------------------------------------
 export async function signInAdmin(email: string, password: string): Promise<AuthResult> {
   const hash = await ipHash();
-  if (await isLockedOut('admin', hash)) return { ok: false, error: LOCKED };
+  if (await isLockedOut(hash)) return { ok: false, error: LOCKED };
   const rows = await db()`select id, display_name, password_hash from admins where lower(email) = lower(${email.trim()}) and active`;
   const row = rows[0];
   // Compare against a dummy hash when the email is unknown, so timing doesn't reveal which emails exist.
   const ok = await bcrypt.compare(password, row ? String(row.passwordHash) : await dummyHash());
   if (!row || !ok) {
-    await recordFailure('admin', hash);
+    await recordFailure(hash);
     return { ok: false, error: 'Email or password is incorrect.' };
   }
   await db()`update admins set last_login_at = now() where id = ${String(row.id)}`;
-  await writeCookie({ role: 'admin', aid: String(row.id), name: String(row.displayName), sv: await staffCodeVersion() }, ADMIN_SESSION_HOURS * 3600);
+  await writeCookie({ role: 'admin', aid: String(row.id), name: String(row.displayName) }, ADMIN_SESSION_HOURS * 3600);
   return { ok: true };
 }
 
@@ -142,9 +112,9 @@ export async function createFirstAdmin(input: { setupCode: string; name: string;
   const expected = process.env.ADMIN_SETUP_CODE;
   if (!expected) return { ok: false, error: 'ADMIN_SETUP_CODE is not set on the server. See README.md.' };
   const hash = await ipHash();
-  if (await isLockedOut('admin', hash)) return { ok: false, error: LOCKED };
+  if (await isLockedOut(hash)) return { ok: false, error: LOCKED };
   if (input.setupCode !== expected) {
-    await recordFailure('admin', hash);
+    await recordFailure(hash);
     return { ok: false, error: 'Setup code is incorrect.' };
   }
   const passwordHash = await hashSecret(input.password);
@@ -158,6 +128,6 @@ export async function createFirstAdmin(input: { setupCode: string; name: string;
     return String(row.id);
   });
   if (!created) return { ok: false, error: 'An admin already exists. Sign in instead.' };
-  await writeCookie({ role: 'admin', aid: created, name: input.name.trim(), sv: await staffCodeVersion() }, ADMIN_SESSION_HOURS * 3600);
+  await writeCookie({ role: 'admin', aid: created, name: input.name.trim() }, ADMIN_SESSION_HOURS * 3600);
   return { ok: true };
 }
