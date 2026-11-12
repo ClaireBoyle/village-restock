@@ -2,6 +2,8 @@
 
 A guided restocking app for cinema staff. Staff pick a department, check each physical area, and get one collection list grouped by storeroom. Supervisors manage products and par levels in an admin area.
 
+Live app: https://village-restock.vercel.app (keep this address private).
+
 This is an internal tool. Products and par levels in `db/seed/sample_data.sql` are examples only.
 
 ## How it fits together
@@ -39,8 +41,7 @@ Access:
    - `DATABASE_URL`: from Supabase step 5.
    - `SESSION_SECRET`: a long random value.
    - `ADMIN_SETUP_CODE`: a long random value you'll type once.
-3. Open **Settings > Functions** and set **Function Region** to **Sydney (syd1)**, so the app runs next to the database.
-4. Click **Deploy**.
+3. Click **Deploy**. The app runs in Sydney (next to the database), set by `vercel.json`.
 
 ### 3. First sign-in
 
