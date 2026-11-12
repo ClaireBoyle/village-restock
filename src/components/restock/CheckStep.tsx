@@ -79,7 +79,7 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
             {cur.placements.length === 0 ? <p className="meta">No products in this area yet.</p> : null}
             {cur.placements.map((p) => (
               <ProductCard key={p.placementId} p={p} item={items.get(p.placementId) ?? EMPTY_ITEM}
-                onChange={(fields) => void setItems(session.id, [{ placementId: p.placementId, fields }], who)} />
+                onChange={(fields, resolve) => void setItems(session.id, [{ placementId: p.placementId, fields }], who, resolve)} />
             ))}
           </div>
 

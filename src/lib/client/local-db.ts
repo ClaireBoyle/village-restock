@@ -40,6 +40,8 @@ export interface LocalArea {
 export interface LocalItem extends ItemState {
   sessionId: string;
   placementId: string;
+  /** The values last received from the server: sent with each change so clashes can be spotted. */
+  base?: Partial<Pick<ItemState, 'currentQty' | 'requestedQty' | 'routineChoice'>>;
   updatedBy: string | null;
   updatedAt: string;
 }

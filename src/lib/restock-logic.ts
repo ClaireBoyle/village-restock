@@ -5,7 +5,16 @@ import { formatQty, requiredForPar, round2 } from './restock-math';
 
 export type ShortReason = 'insufficient' | 'access' | 'time' | 'other';
 export type AreaStatus = 'not_started' | 'in_progress' | 'complete' | 'skipped';
-export type CardState = 'none' | 'ok' | 'warn';
+export type CardState = 'none' | 'ok' | 'warn' | 'bad';
+
+/** Two devices entered different values for the same thing. The server kept "theirs". */
+export interface Conflict {
+  field: 'currentQty' | 'requestedQty' | 'routineChoice';
+  theirs: number | string | null; theirsBy: string | null; theirsAt: string | null;
+  mine: number | string | null; mineBy: string | null; mineAt: string | null;
+}
+/** Fields where a clash between two people must be resolved by a person. */
+export const CONFLICT_FIELDS = ['currentQty', 'requestedQty', 'routineChoice'] as const;
 export type LineState = 'todo' | 'done' | 'part' | 'short';
 
 export const SHORT_REASONS: [ShortReason, string][] = [
@@ -44,11 +53,13 @@ export interface ItemState {
   collectedQty: number | null;
   shortfallReason: ShortReason | null;
   flagged: boolean;
+  /** Set when two people entered different counts; cleared when someone chooses. */
+  conflict?: Conflict | null;
 }
 
 export const EMPTY_ITEM: ItemState = {
   currentQty: null, requestedQty: null, routineChoice: null,
-  collectedMode: null, collectedQty: null, shortfallReason: null, flagged: false,
+  collectedMode: null, collectedQty: null, shortfallReason: null, flagged: false, conflict: null,
 };
 
 export interface DepartmentView {
@@ -106,6 +117,7 @@ export function needOf(p: PlacementView, i: ItemState): number | null {
 }
 
 export function isChecked(p: PlacementView, i: ItemState): boolean {
+  if (i.conflict) return false; // needs a person to choose first
   if (p.method === 'par') return i.currentQty !== null;
   if (p.method === 'manual') return i.requestedQty !== null;
   return i.routineChoice !== null;
@@ -113,6 +125,7 @@ export function isChecked(p: PlacementView, i: ItemState): boolean {
 
 /** none = not checked (grey) · warn = something to collect (amber) · ok = stocked (green). */
 export function cardState(p: PlacementView, i: ItemState): CardState {
+  if (i.conflict) return 'bad';
   if (!isChecked(p, i)) return 'none';
   if (p.method === 'routine') return i.routineChoice === 'needed' ? 'warn' : 'ok';
   return (needOf(p, i) ?? 0) > 0 ? 'warn' : 'ok';
@@ -272,6 +285,8 @@ export function exceptions(args: {
     if (un.length) out.push({ kind: 'unchecked', status: 'not_started', text: `${un.length} product${un.length === 1 ? '' : 's'} without a number`, detail: un.map((p) => p.productName).join(', ') });
   }
   const covered = activePlacements(kind, placements, recordedAreas);
+  const clashes = covered.filter((p) => items.get(p.placementId)?.conflict);
+  if (clashes.length) out.push({ kind: 'unchecked', status: 'not_started', text: `${clashes.length} product${clashes.length === 1 ? ' needs' : 's need'} a decision`, detail: `Two different counts: ${clashes.map((p) => p.productName).join(', ')}`, areaId: clashes[0].areaId });
   const outstanding = collectionLines(covered, items).filter((l) => {
     const st = lineState(l, items);
     return st === 'todo' || st === 'part' || (st === 'short' && lineInfo(l, items).reason !== 'insufficient');

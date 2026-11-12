@@ -30,7 +30,7 @@ Access:
    - Region: **Oceania (Sydney)**
    - Choose a strong database password and store it in a password manager.
 2. When the project is ready, open **SQL Editor**, then **New query**.
-3. Paste the whole of `db/migrations/001_initial_schema.sql` and click **Run**.
+3. Paste the whole of `db/migrations/001_initial_schema.sql` and click **Run**. Then do the same for each later file in `db/migrations/` in number order (`002_conflicts.sql`, ...).
 4. Optional: to try the app with example products, run `db/seed/sample_data.sql` the same way. You can remove the sample data later from Admin > Overview.
 5. Go to **Project Settings > Database > Connection string**, choose **Transaction pooler** and copy the URI. This is your `DATABASE_URL`. Replace `[YOUR-PASSWORD]` with the database password from step 1.
 
@@ -87,5 +87,5 @@ src/components/       Shared interface pieces
 
 - [x] **Phase 1 – Foundation**: database, staff and admin access, home screen, admin catalogue management, product data cached on the device.
 - [x] **Phase 2 – Core restocking**: Full and Quick Restock, area checking, collection list grouped by storeroom, shortages, Save and exit / Finish / Finish with exceptions, offline-first saving with an outbox, shared restocks across devices.
-- [ ] **Phase 3 – Reliability**: shared sessions across devices, conflict handling, shortages, summaries.
+- [x] **Phase 3 – Reliability**: clashing counts from two devices are kept and resolved by a person, supervisor Restocks and Shortages screens (resolve with a note, copyable low-stock list), restocks left open past the cut-off marked Unfinished.
 - [ ] **Phase 4 – Refinement**: reference photos, CSV import/export, installable offline app shell, iPad testing.

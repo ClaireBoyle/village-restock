@@ -2,12 +2,14 @@ import type postgres from 'postgres';
 import { db } from './db';
 import { loadCatalogue } from './catalogue';
 import {
-  EMPTY_ITEM, activePlacements, collectionLines, departmentView, exceptions, lineGot, lineInfo, lineState,
+  CONFLICT_FIELDS, EMPTY_ITEM, activePlacements, type Conflict, collectionLines, departmentView, exceptions, lineGot, lineInfo, lineState,
   type AreaStatus, type ItemState,
 } from '@/lib/restock-logic';
 import { opSchema, type ItemFields, type OpResult, type RemoteSession, type SyncOp } from '@/lib/sync-types';
 
 type Tx = postgres.TransactionSql<Record<string, unknown>>;
+
+const same = (a: unknown, b: unknown) => (a ?? null) === (b ?? null) || (typeof a === 'number' && typeof b === 'number' && Math.abs(a - b) < 0.005);
 
 class OpError extends Error {
   constructor(message: string, public permanent = true) { super(message); }
@@ -39,7 +41,7 @@ async function applyOne(deviceId: string, op: SyncOp): Promise<OpResult> {
       // Already applied? Return what happened the first time.
       const [seen] = await tx`select result from sync_ops where op_id = ${op.opId}`;
       if (seen) return seen.result as OpResult;
-      const extra = await apply(tx, op);
+      const extra = await apply(tx, op, deviceId);
       const result: OpResult = { opId: op.opId, ok: true, ...extra };
       await tx`insert into sync_ops (op_id, device_id, result) values (${op.opId}, ${deviceId}, ${tx.json(result)})`;
       return result;
@@ -63,7 +65,7 @@ async function sessionRow(tx: Tx, id: string) {
   return s;
 }
 
-async function apply(tx: Tx, op: SyncOp): Promise<{ mergedInto?: string }> {
+async function apply(tx: Tx, op: SyncOp, deviceId: string): Promise<{ mergedInto?: string; conflict?: boolean }> {
   switch (op.type) {
     case 'session.start': {
       const s = op.session;
@@ -93,7 +95,7 @@ async function apply(tx: Tx, op: SyncOp): Promise<{ mergedInto?: string }> {
         left join storage_locations l1 on l1.id = pl.location_id
         left join storage_locations l2 on l2.id = p.default_location_id
         where pl.id = ${op.placementId} and p.department_id = ${String(s.departmentId)}`;
-      const [existing] = await tx`select 1 from session_items where session_id = ${op.sessionId} and placement_id = ${op.placementId}`;
+      const [existing] = await tx`select * from session_items where session_id = ${op.sessionId} and placement_id = ${op.placementId} for update`;
       if (!pl && !existing) throw new OpError('That product is no longer in this department');
       const f = op.fields;
       if (pl && !pl.allowDecimal) {
@@ -107,19 +109,39 @@ async function apply(tx: Tx, op: SyncOp): Promise<{ mergedInto?: string }> {
       for (const [k, col] of Object.entries(COLUMN) as [keyof ItemFields, string][]) {
         if (k in f) values[col] = typeof f[k] === 'number' ? round(f[k] as number) : f[k];
       }
+      // Two people disagreeing: this device changed a count from a value it saw,
+      // but someone on ANOTHER device has since saved a different value. Keep
+      // theirs, record both, and let a person choose. (Never silently overwrite.)
+      let conflict: Conflict | null = null;
+      if (existing && !op.resolve) {
+        for (const field of CONFLICT_FIELDS) {
+          if (!(field in f)) continue;
+          const col = COLUMN[field];
+          const server = existing[field] as number | string | null;
+          const seen = op.base && field in op.base ? (op.base[field] as number | string | null) : null;
+          const mine = f[field] as number | string | null;
+          if (existing.updatedDevice !== deviceId && !same(server, seen) && !same(server, mine)) {
+            conflict = { field, theirs: server, theirsBy: (existing.updatedBy as string) ?? null, theirsAt: existing.updatedAt ? new Date(existing.updatedAt as string).toISOString() : null, mine, mineBy: op.by, mineAt: op.at };
+            delete values[col];
+          }
+        }
+      }
+      if (op.resolve) values.conflict = null;
+      else if (conflict) values.conflict = tx.json(conflict as unknown as postgres.JSONValue) as unknown;
       if (!existing) {
         await tx`insert into session_items ${tx({
           session_id: op.sessionId, placement_id: op.placementId, product_id: String(pl.productId), check_area_id: String(pl.checkAreaId),
           product_name: String(pl.name), unit_singular: String(pl.unitSingular), unit_plural: String(pl.unitPlural), method: String(pl.method),
           par_level: pl.parLevel as number | null, location_name: (pl.locationName as string) ?? null,
-          updated_by: op.by, updated_at: op.at, ...values,
+          updated_by: op.by, updated_at: op.at, updated_device: deviceId, ...values,
         } as Record<string, postgres.ParameterOrJSON<never>>)}`;
       } else if (Object.keys(values).length) {
-        await tx`update session_items set ${tx({ ...values, updated_by: op.by, updated_at: op.at } as Record<string, postgres.ParameterOrJSON<never>>)},
+        const stamp = conflict && Object.keys(values).length === 1 ? {} : { updated_by: op.by, updated_at: op.at, updated_device: deviceId };
+        await tx`update session_items set ${tx({ ...values, ...stamp } as Record<string, postgres.ParameterOrJSON<never>>)},
           version = version + 1 where session_id = ${op.sessionId} and placement_id = ${op.placementId}`;
       }
       await addPerson(tx, op.sessionId, op.by);
-      return {};
+      return conflict ? { conflict: true } : {};
     }
 
     case 'area.set': {
@@ -165,6 +187,7 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
     currentQty: r.currentQty as number | null, requestedQty: r.requestedQty as number | null,
     routineChoice: r.routineChoice as ItemState['routineChoice'], collectedMode: r.collectedMode as ItemState['collectedMode'],
     collectedQty: r.collectedQty as number | null, shortfallReason: r.shortfallReason as ItemState['shortfallReason'], flagged: Boolean(r.flagged),
+    conflict: (r.conflict as Conflict | null) ?? null,
   }]));
   const recorded = new Map<string, AreaStatus>(areaRows.map((r) => [String(r.checkAreaId), r.status as AreaStatus]));
 
@@ -207,7 +230,7 @@ function toRemote(s: Record<string, unknown>, areas: Record<string, unknown>[], 
       currentQty: (r.currentQty as number) ?? null, requestedQty: (r.requestedQty as number) ?? null,
       routineChoice: (r.routineChoice as 'needed' | 'not_needed') ?? null, collectedMode: (r.collectedMode as 'all' | 'partial') ?? null,
       collectedQty: (r.collectedQty as number) ?? null, shortfallReason: (r.shortfallReason as RemoteSession['items'][number]['shortfallReason']) ?? null,
-      flagged: Boolean(r.flagged),
+      flagged: Boolean(r.flagged), conflict: (r.conflict as Conflict | null) ?? null,
     })),
   };
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Catalogue } from './catalogue-types';
 import {
-  EMPTY_ITEM, areaStatus, cardState, collectionLines, departmentView, exceptions, gotAllUpdates,
+  EMPTY_ITEM, areaStatus, cardState, isChecked, collectionLines, departmentView, exceptions, gotAllUpdates,
   gotFewerUpdates, groupByStoreroom, lineGot, lineState, needOf, summaryText, type AreaStatus, type ItemState,
 } from './restock-logic';
 
@@ -69,6 +69,20 @@ describe('cards', () => {
   it('manual products use what staff ask for', () => {
     expect(needOf(P(kitchen, 'p-cloth'), { ...EMPTY_ITEM, requestedQty: 2 })).toBe(2);
     expect(cardState(P(kitchen, 'p-cloth'), { ...EMPTY_ITEM, requestedQty: 0 })).toBe('ok');
+  });
+});
+
+describe('clashes between two people', () => {
+  const p = () => P(kitchen, 'p-tom');
+  const clash = { field: 'currentQty' as const, theirs: 3, theirsBy: 'Jess', theirsAt: null, mine: 5, mineBy: 'Sam', mineAt: null };
+  it('a product with two different counts is not checked and shows red', () => {
+    expect(isChecked(p(), { ...EMPTY_ITEM, currentQty: 3, conflict: clash })).toBe(false);
+    expect(cardState(p(), { ...EMPTY_ITEM, currentQty: 3, conflict: clash })).toBe('bad');
+  });
+  it('blocks a clean finish even if its area was marked complete', () => {
+    const it = items({ 'p-tom': { currentQty: 8, conflict: clash }, 'p-cloth': { requestedQty: 0 }, 'p-sauce': { currentQty: 4 } });
+    const ex = exceptions({ kind: 'full', view: kitchen, placements: kitchen.placements, recordedAreas: new Map([['f1', 'complete'], ['dry', 'complete']]), items: it });
+    expect(ex.map((e) => e.text)).toEqual(['1 product needs a decision']);
   });
 });
 

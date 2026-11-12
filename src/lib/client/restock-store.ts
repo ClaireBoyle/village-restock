@@ -4,7 +4,7 @@
 // change can never be saved without also being queued for upload), and then
 // asks the sync engine to upload soon.
 import type { ItemState } from '@/lib/restock-logic';
-import { EMPTY_ITEM } from '@/lib/restock-logic';
+import { CONFLICT_FIELDS, EMPTY_ITEM } from '@/lib/restock-logic';
 import type { RemoteSession, SyncOp } from '@/lib/sync-types';
 import { localDb, type LocalArea, type LocalItem, type LocalSession } from './local-db';
 import { requestSync, sendingUpTo } from './sync-engine';
@@ -22,9 +22,11 @@ async function queue(op: OpInput, who: string) {
   // but never touch an op that is already being sent.
   if (full.type === 'item.set') {
     const last = await db.outbox.orderBy('seq').last();
-    if (last && last.op.type === 'item.set' && (last.seq ?? 0) > sendingUpTo()
+    if (last && last.op.type === 'item.set' && (last.seq ?? 0) > sendingUpTo() && !last.op.resolve && !full.resolve
       && last.op.sessionId === full.sessionId && last.op.placementId === full.placementId) {
-      await db.outbox.update(last.seq!, { op: { ...last.op, fields: { ...last.op.fields, ...full.fields }, at: full.at, by: full.by } });
+      // Keep the EARLIEST base: it's what the server last told us.
+      const mergedBase = { ...full.base, ...last.op.base };
+      await db.outbox.update(last.seq!, { op: { ...last.op, fields: { ...last.op.fields, ...full.fields }, base: mergedBase, at: full.at, by: full.by } });
       return;
     }
   }
@@ -93,15 +95,26 @@ export async function updateLocalSession(id: string, changes: Partial<Pick<Local
 // ---------------------------------------------------------------------------
 // Products and areas
 // ---------------------------------------------------------------------------
-export async function setItems(sessionId: string, updates: { placementId: string; fields: Partial<ItemState> }[], who: string) {
+/**
+ * Record changes to products. `resolve` is used when a person chooses between
+ * two clashing counts: it applies their choice and clears the clash.
+ */
+export async function setItems(sessionId: string, updates: { placementId: string; fields: Partial<ItemState> }[], who: string, resolve = false) {
   const db = localDb();
   await db.transaction('rw', db.items, db.sessions, db.outbox, async () => {
     for (const u of updates) {
       const key: [string, string] = [sessionId, u.placementId];
       const existing = await db.items.get(key);
-      const next: LocalItem = { ...EMPTY_ITEM, ...existing, ...u.fields, sessionId, placementId: u.placementId, updatedBy: by(who), updatedAt: now() };
+      const { conflict: _c, ...fields } = u.fields;
+      void _c;
+      const next: LocalItem = {
+        ...EMPTY_ITEM, ...existing, ...fields, conflict: resolve ? null : existing?.conflict ?? null,
+        sessionId, placementId: u.placementId, updatedBy: by(who), updatedAt: now(),
+      };
       await db.items.put(next);
-      await queue({ type: 'item.set', sessionId, placementId: u.placementId, fields: u.fields }, who);
+      const base: Record<string, unknown> = {};
+      for (const f of CONFLICT_FIELDS) if (f in fields) base[f] = existing?.base?.[f] ?? null;
+      await queue({ type: 'item.set', sessionId, placementId: u.placementId, fields, base, ...(resolve ? { resolve: true } : {}) }, who);
     }
     const s = await db.sessions.get(sessionId);
     if (s) await db.sessions.update(sessionId, { people: addPerson(s, who), updatedAt: now() });
@@ -171,7 +184,8 @@ export async function importRemote(remote: RemoteSession) {
     for (const it of remote.items) {
       if (pendingItems.has(it.placementId)) continue;
       const { placementId, updatedBy, updatedAt, ...fields } = it;
-      await db.items.put({ ...EMPTY_ITEM, ...fields, sessionId: remote.id, placementId, updatedBy, updatedAt });
+      const base = { currentQty: fields.currentQty, requestedQty: fields.requestedQty, routineChoice: fields.routineChoice };
+      await db.items.put({ ...EMPTY_ITEM, ...fields, base, sessionId: remote.id, placementId, updatedBy, updatedAt });
     }
     for (const a of remote.areas) {
       if (pendingAreas.has(a.areaId)) continue;

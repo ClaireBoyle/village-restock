@@ -69,7 +69,7 @@ export function QuickStep({ ctx }: { ctx: RestockCtx }) {
             <div className="cards">
               {placements.length === 0 ? <div className="empty"><b>Your list is empty.</b><br />Tap <b>Add</b> on anything that&rsquo;s running low.</div> : placements.map((p) => (
                 <ProductCard key={p.placementId} p={p} item={items.get(p.placementId) ?? EMPTY_ITEM} showArea onRemove={() => toggle(p.placementId)}
-                  onChange={(fields) => void setItems(session.id, [{ placementId: p.placementId, fields }], who)} />
+                  onChange={(fields, resolve) => void setItems(session.id, [{ placementId: p.placementId, fields }], who, resolve)} />
               ))}
             </div>
           </section>

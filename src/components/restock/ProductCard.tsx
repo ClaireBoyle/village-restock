@@ -13,7 +13,7 @@ const unit = (p: PlacementView, n: number | null) => (n === 1 ? p.unitSingular :
  * Typing is kept as text until it's a valid number, so a half-typed "2." is never lost.
  */
 export function ProductCard({ p, item, onChange, showArea, onRemove }: {
-  p: PlacementView; item: ItemState; onChange: (fields: Partial<ItemState>) => void; showArea?: boolean; onRemove?: () => void;
+  p: PlacementView; item: ItemState; onChange: (fields: Partial<ItemState>, resolve?: boolean) => void; showArea?: boolean; onRemove?: () => void;
 }) {
   const st = cardState(p, item);
   const need = needOf(p, item);
@@ -37,7 +37,8 @@ export function ProductCard({ p, item, onChange, showArea, onRemove }: {
   const bump = (dir: 1 | -1) => commit(Math.max(0, round2((value ?? 0) + dir * step)));
 
   const badge =
-    st === 'none' ? <Badge st="none">Not checked</Badge>
+    st === 'bad' ? <Badge st="bad">Needs a decision</Badge>
+    : st === 'none' ? <Badge st="none">Not checked</Badge>
     : p.method === 'routine' ? (st === 'warn' ? <Badge st="warn">On list</Badge> : <Badge st="ok">Not needed</Badge>)
     : (need ?? 0) > 0 ? <Badge st="warn">Collect {round2(need!)}</Badge>
     : <Badge st="ok">{p.method === 'manual' ? 'None needed' : 'Stocked'}</Badge>;
@@ -64,7 +65,25 @@ export function ProductCard({ p, item, onChange, showArea, onRemove }: {
   );
 
   let body: React.ReactNode;
-  if (p.method === 'par') {
+  const c = item.conflict;
+  if (c) {
+    const show = (v: number | string | null) => v === null ? 'blank'
+      : typeof v === 'number' ? `${round2(v)} ${unit(p, v)}` : v === 'needed' ? 'Needed' : 'Not needed';
+    const when = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }).toLowerCase() : '');
+    body = (
+      <div className="conflict" role="alert">
+        <span className="h"><Icon name="warn" />Two different {p.method === 'routine' ? 'answers' : 'counts'} were entered</span>
+        <p><b>{c.theirsBy ?? 'Someone'}</b>: {show(c.theirs)}{c.theirsAt ? ` at ${when(c.theirsAt)}` : ''}<br /><b>{c.mineBy ?? 'Someone else'}</b>: {show(c.mine)}{c.mineAt ? ` at ${when(c.mineAt)}` : ''}</p>
+        <p className="meta">Neither was thrown away. Check {p.areaName} and choose the right one.</p>
+        <div className="opts">
+          {[c.theirs, c.mine].filter((v, i, a) => a.indexOf(v) === i).map((v) => (
+            <button key={String(v)} className="btn" onClick={() => onChange({ [c.field]: v } as Partial<ItemState>, true)}>Use {show(v)}</button>
+          ))}
+          <button className="btn" onClick={() => { onChange({ [c.field]: null } as Partial<ItemState>, true); window.setTimeout(() => document.getElementById(`q-${p.placementId}`)?.focus(), 50); }}>Recount</button>
+        </div>
+      </div>
+    );
+  } else if (p.method === 'par') {
     const pct = value === null || !p.par ? 0 : Math.min(100, (value / p.par) * 100);
     body = (
       <div className="c-grid">

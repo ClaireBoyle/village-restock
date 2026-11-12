@@ -308,6 +308,22 @@ export async function removeSampleData(_: ActionResult, form: FormData): Promise
 }
 
 // ---------------------------------------------------------------------------
+// Shortages
+// ---------------------------------------------------------------------------
+export async function resolveShortage(form: FormData): Promise<void> {
+  const me = await requireAdmin();
+  const id = uuid.safeParse(form.get('id'));
+  if (!id.success) return;
+  const note = String(form.get('note') ?? '').trim().slice(0, 200) || null;
+  if (form.get('reopen') === 'true') {
+    await db()`update shortages set status = 'open', resolved_at = null, resolved_by = null, resolution_note = null where id = ${id.data}`;
+  } else {
+    await db()`update shortages set status = 'resolved', resolved_at = now(), resolved_by = ${me.name}, resolution_note = ${note} where id = ${id.data}`;
+  }
+  revalidatePath('/admin', 'layout');
+}
+
+// ---------------------------------------------------------------------------
 // Admin accounts
 // ---------------------------------------------------------------------------
 const newAdminSchema = z.object({

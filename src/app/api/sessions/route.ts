@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { sessionsForDay } from '@/lib/server/sync';
+import { markUnfinished } from '@/lib/server/restocks';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,5 +8,6 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest) {
   const date = req.nextUrl.searchParams.get('date') ?? '';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return NextResponse.json({ error: 'date required' }, { status: 400 });
+  await markUnfinished();
   return NextResponse.json({ sessions: await sessionsForDay(date) }, { headers: { 'Cache-Control': 'no-store' } });
 }

@@ -2,6 +2,7 @@
 // with its own id, so sending the same op twice (after a dropped connection)
 // only ever applies it once.
 import { z } from 'zod';
+import type { Conflict } from './restock-logic';
 
 const qty = z.number().min(0).max(9999).nullable();
 const name = z.string().trim().max(30).nullable();
@@ -26,7 +27,13 @@ export const opSchema = z.discriminatedUnion('type', [
       tradingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), startedAt: z.iso.datetime(),
     }),
   }),
-  z.object({ ...base, type: z.literal('item.set'), sessionId: z.uuid(), placementId: z.uuid(), fields: itemFieldsSchema }),
+  z.object({
+    ...base, type: z.literal('item.set'), sessionId: z.uuid(), placementId: z.uuid(), fields: itemFieldsSchema,
+    /** The values this device last saw from the server, so the server can spot two people disagreeing. */
+    base: itemFieldsSchema.optional(),
+    /** A person chose between two clashing values: apply it and clear the clash. */
+    resolve: z.boolean().optional(),
+  }),
   z.object({
     ...base, type: z.literal('area.set'), sessionId: z.uuid(), areaId: z.uuid(),
     status: z.enum(['not_started', 'complete', 'skipped']), skipReason: z.string().trim().max(80).nullable(),
@@ -44,7 +51,7 @@ export const syncRequestSchema = z.object({
 });
 
 export type OpResult =
-  | { opId: string; ok: true; mergedInto?: string }
+  | { opId: string; ok: true; mergedInto?: string; conflict?: boolean }
   | { opId: string; ok: false; error: string; permanent: boolean };
 
 export interface SyncResponse { results: OpResult[]; serverTime: string }
@@ -55,5 +62,5 @@ export interface RemoteSession {
   status: 'open' | 'finished' | 'finished_exceptions' | 'unfinished';
   exceptionReason: string | null; people: string[]; startedAt: string; finishedAt: string | null; updatedAt: string;
   areas: { areaId: string; status: 'not_started' | 'in_progress' | 'complete' | 'skipped'; skipReason: string | null; updatedBy: string | null; updatedAt: string }[];
-  items: ({ placementId: string; updatedBy: string | null; updatedAt: string } & Required<ItemFields>)[];
+  items: ({ placementId: string; updatedBy: string | null; updatedAt: string; conflict: Conflict | null } & Required<ItemFields>)[];
 }
