@@ -61,7 +61,7 @@ npm run db:migrate           # or: npm run db:seed  (schema + sample data)
 npm run dev
 ```
 
-Checks:
+Checks (browser tests: see `tests/e2e/README.md`):
 
 ```bash
 npm test            # calculation and validation tests
@@ -93,4 +93,5 @@ src/components/       Shared interface pieces
 - [x] **Phase 2 – Core restocking**: Full and Quick Restock, area checking, collection list grouped by storeroom, shortages, Save and exit / Finish / Finish with exceptions, offline-first saving with an outbox, shared restocks across devices.
 - [x] **Phase 3 – Reliability**: clashing counts from two devices are kept and resolved by a person, supervisor Restocks and Shortages screens (resolve with a note, copyable low-stock list), restocks left open past the cut-off marked Unfinished.
 - [x] **Extras**: menu items to mark sold out per product; finished screen shows Out of stock / Running low; automatic manager email after each finished full restock, with optional staff comments.
+- [x] **Redesign for real shifts**: products listed in the order staff physically find them (set per area in Admin > Products > *Arrange order*), compact rows with − / number / + controls (blank = not checked, 0 = nothing needed), instructions repeated across products shown once per area, compact picking list grouped by storeroom, slim header and bottom bar on phones.
 - [x] **Phase 4 – Refinement**: reference photos for products and areas, spreadsheet (CSV) import/export, installable offline app (opens with no connection), iPad checklist in `docs/ipad-checklist.md`.

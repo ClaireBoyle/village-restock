@@ -4,7 +4,7 @@ import { Icon } from '@/components/Icon';
 import { EMPTY_ITEM, collectionLines, isChecked } from '@/lib/restock-logic';
 import { formatQty } from '@/lib/restock-math';
 import { setItems, updateLocalSession } from '@/lib/client/restock-store';
-import { ProductCard } from './ProductCard';
+import { ProductRow } from './ProductCard';
 import { Dock, initials } from './shared';
 import type { RestockCtx } from './RestockApp';
 
@@ -66,9 +66,10 @@ export function QuickStep({ ctx }: { ctx: RestockCtx }) {
           </section>
           <section className="picked" aria-label="Your list">
             <h2 style={{ fontSize: 22 }}>Your list ({placements.length})</h2>
-            <div className="cards">
+            <div className="prows">
               {placements.length === 0 ? <div className="empty"><b>Your list is empty.</b><br />Tap <b>Add</b> on anything that&rsquo;s running low.</div> : placements.map((p) => (
-                <ProductCard key={p.placementId} p={p} item={items.get(p.placementId) ?? EMPTY_ITEM} showArea onRemove={() => toggle(p.placementId)}
+                <ProductRow key={p.placementId} p={p} item={items.get(p.placementId) ?? EMPTY_ITEM} showArea onRemove={() => toggle(p.placementId)}
+                  note={p.method !== 'routine' ? p.instructions : null}
                   onChange={(fields, resolve) => void setItems(session.id, [{ placementId: p.placementId, fields }], who, resolve)} />
               ))}
             </div>
@@ -77,7 +78,7 @@ export function QuickStep({ ctx }: { ctx: RestockCtx }) {
       </main>
       <Dock icon="list" title={`${placements.length} on your list · ${lines.length} to collect`} sub={unchecked ? `${unchecked} still need a number` : placements.length ? 'Ready to collect' : 'Add products to start'}>
         <button className="btn save-exit" onClick={ctx.saveAndExit} aria-label="Save and exit"><Icon name="save" /><span className="lg">Save and exit</span><span className="sm">Save &amp; exit</span></button>
-        <button className="btn primary big" onClick={() => ctx.go('collect')} disabled={!lines.length}>Collection list<Icon name="next" /></button>
+        <button className="btn primary big" onClick={() => ctx.go('collect')} disabled={!lines.length}><span className="lg">Collection list</span><span className="sm">Collect</span><Icon name="next" /></button>
       </Dock>
     </>
   );

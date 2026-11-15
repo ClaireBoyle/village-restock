@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Catalogue } from './catalogue-types';
-import {
+import { areaNotes,
   EMPTY_ITEM, areaStatus, cardState, isChecked, collectionLines, departmentView, exceptions, gotAllUpdates,
   gotFewerUpdates, groupByStoreroom, lineGot, lineState, needOf, stockOutcomes, summaryText, type AreaStatus, type ItemState,
 } from './restock-logic';
@@ -200,3 +200,31 @@ describe('finishing', () => {
     expect(ex.map((e) => e.text)).toEqual(['Fridge 1 skipped']);
   });
 });
+
+describe('areaNotes', () => {
+  const pv = (id: string, instructions: string, method: 'manual' | 'routine' = 'manual') => ({
+    placementId: id, productId: id, areaId: 'a', areaName: 'Stand', productName: id, unitSingular: 'pack', unitPlural: 'packs',
+    method, par: null, allowDecimal: false, locationId: null, locationName: null, instructions, categoryName: null, affects: [], photoPath: null,
+  });
+  it('shows text repeated on several products once for the area', () => {
+    const general = 'Check both sides of the stand and enter the total.';
+    const r = areaNotes([pv('a', general), pv('b', ` ${general}`), pv('c', general.toUpperCase()), pv('d', 'Keep away from heat lamp'), pv('e', '')]);
+    expect(r.shared).toEqual([general]);
+    expect([...r.own.entries()]).toEqual([['d', 'Keep away from heat lamp']]);
+  });
+  it('keeps product-specific notes on the product', () => {
+    const r = areaNotes([pv('a', 'Rotate stock'), pv('b', 'Check use-by'), pv('c', '')]);
+    expect(r.shared).toEqual([]);
+    expect(r.own.size).toBe(2);
+  });
+  it('treats a note on every product of a small area as general', () => {
+    const r = areaNotes([pv('a', 'Face forward'), pv('b', 'Face forward')]);
+    expect(r.shared).toEqual(['Face forward']);
+    expect(r.own.size).toBe(0);
+  });
+  it('never moves a routine task’s instruction (it is the task itself)', () => {
+    const r = areaNotes([pv('a', 'Do it', 'routine'), pv('b', 'Do it', 'routine'), pv('c', 'Do it', 'routine')]);
+    expect(r.shared).toEqual([]);
+  });
+});
+

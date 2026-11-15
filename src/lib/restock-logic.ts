@@ -138,6 +138,33 @@ export function cardState(p: PlacementView, i: ItemState): CardState {
 }
 
 // ---------------------------------------------------------------------------
+// Instructions: say general things once per area, not under every product
+// ---------------------------------------------------------------------------
+/**
+ * Splits product instructions into notes for the whole area (the same text on
+ * several products, e.g. "check both sides of the stand") and notes that are
+ * really about one product. Nothing is removed from the data: shared text is
+ * just shown once at the top of the area instead of under every product.
+ */
+export function areaNotes(placements: PlacementView[]): { shared: string[]; own: Map<string, string> } {
+  const norm = (t: string) => t.trim().replace(/\s+/g, ' ').toLowerCase();
+  const withText = placements.filter((p) => p.method !== 'routine' && p.instructions.trim());
+  const counts = new Map<string, { text: string; n: number }>();
+  for (const p of withText) {
+    const k = norm(p.instructions);
+    const c = counts.get(k);
+    if (c) c.n++; else counts.set(k, { text: p.instructions.trim(), n: 1 });
+  }
+  // Shared = on at least 3 products, or on every product when the area is small (2+).
+  const isShared = (n: number) => n >= 3 || (n >= 2 && n === placements.length);
+  const shared = [...counts.values()].filter((c) => isShared(c.n)).map((c) => c.text);
+  const sharedKeys = new Set(shared.map(norm));
+  const own = new Map<string, string>();
+  for (const p of withText) if (!sharedKeys.has(norm(p.instructions))) own.set(p.placementId, p.instructions.trim());
+  return { shared, own };
+}
+
+// ---------------------------------------------------------------------------
 // Areas
 // ---------------------------------------------------------------------------
 export function areaStatus(recorded: AreaStatus | undefined, placements: PlacementView[], items: Map<string, ItemState>): AreaStatus {

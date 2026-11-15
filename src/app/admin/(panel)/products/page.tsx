@@ -59,11 +59,14 @@ export default async function Products({ searchParams }: { searchParams: Promise
 
       {grouped ? (
         <>
-          <p className="meta">Listed area by area, in the order staff check them. Use the arrows to change where a product appears within an area.</p>
+          <p className="meta">Listed area by area, in the order staff check them. Use <b>Arrange order</b> to drag products into the order staff physically find them.</p>
           {areas.length === 0 && unplaced.length === 0 ? <section className="panel"><p className="meta">No products yet. Add the first one.</p></section> : null}
           {areas.map((a) => (
             <section key={a.id} className="panel">
-              <h2 style={{ marginBottom: 6 }}>{a.name}<span className="meta" style={{ fontWeight: 400, marginLeft: 10 }}>{a.items.length} product{a.items.length === 1 ? '' : 's'}</span></h2>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', marginBottom: 6 }}>
+                <h2>{a.name}<span className="meta" style={{ fontWeight: 400, marginLeft: 10 }}>{a.items.length} product{a.items.length === 1 ? '' : 's'}</span></h2>
+                <Link className="btn small" href={`/admin/arrange/${a.id}`}><Icon name="list" />Arrange order</Link>
+              </div>
               <div className="rows">
                 {a.items.map((p, i) => (
                   <div key={String(p.placementId)} className="row">

@@ -397,3 +397,343 @@ button.pill:hover{background:var(--surface-2)}
   .dock-acts .save-exit .sm{display:none!important}
   .dock-acts .save-exit{padding-inline:14px}
 }
+
+/* =============================================================================
+   Redesign: compact checking rows, area guide, compact area list
+   ========================================================================== */
+/* Area list: compact chips on phones, a slim sidebar on tablets/desktop */
+.area-btn{min-height:52px;padding:7px 12px 7px 9px;min-width:0;border-radius:14px;gap:9px}
+.area-btn .progress-ring{width:28px;height:28px}
+.area-btn b{font-size:14.5px;line-height:1.2}
+.area-btn small{font-size:12px}
+@media (min-width:920px){.chk-layout{grid-template-columns:220px minmax(0,1fr)}.area-btn{width:100%}}
+@media (max-width:919px){.rail{margin-inline:-14px;padding-inline:14px;scroll-snap-type:x proximity}.area-btn{scroll-snap-align:start;max-width:72vw}}
+
+/* Area header */
+.area{gap:10px}
+.area-head{align-items:flex-end}
+.area-head h2{font-size:26px}
+.ah-sub{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px;font-size:14.5px;color:var(--ink-2)}
+.ah-sub b{color:var(--ink);font-weight:600}
+.area-head .acts .btn{min-height:42px}
+
+/* "How to check this area": once at the top, foldable */
+.aguide{background:var(--d-soft);border-radius:14px;border:1px solid color-mix(in srgb,var(--d-accent) 18%,transparent)}
+.ag-head{display:flex;gap:9px;align-items:center;width:100%;min-height:46px;padding:0 14px;background:none;border:0;text-align:left;font-weight:600;font-size:15px;color:var(--d-ink)}
+.ag-head span{flex:1}
+.ag-head .ic{width:18px;height:18px;color:var(--d-accent)}
+.ag-body{display:flex;gap:12px;padding:0 14px 13px;align-items:flex-start}
+.ag-text{display:flex;flex-direction:column;gap:6px;font-size:14.5px;line-height:1.45;color:var(--ink);min-width:0}
+.ag-photo{flex:none;width:76px;height:76px;padding:0;border:0;border-radius:12px;overflow:hidden;cursor:zoom-in;background:var(--surface)}
+.ag-photo img{width:100%;height:100%;object-fit:cover;display:block}
+
+/* Product rows */
+.prows{display:flex;flex-direction:column;gap:6px}
+@media (min-width:1280px){.chk-layout .prows{display:block;columns:2;column-gap:8px}.chk-layout .prows>.prow{break-inside:avoid;margin-bottom:6px}}
+.card.prow{display:grid;grid-template-columns:22px minmax(0,1fr) auto;align-items:center;gap:4px 10px;padding:8px 10px 8px 10px;border-radius:14px;border:1px solid var(--hair);border-left:4px solid var(--none-line);box-shadow:none;min-height:62px;container-type:normal;transition:border-color .2s ease,background .2s ease}
+.card.prow.s-warn{border-left-color:var(--warn-fill);background:color-mix(in srgb,var(--warn-bg) 45%,var(--surface))}
+.card.prow.s-ok{border-left-color:var(--ok);border-color:var(--hair)}
+.card.prow.s-bad{border-left-color:var(--bad);border-color:var(--bad-line)}
+.pi{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;color:var(--none)}
+.pi .ic{width:20px;height:20px}
+.s-ok>.pi{color:var(--ok)}
+.s-warn>.pi{color:#fff;background:var(--warn-fill)}
+.s-warn>.pi .ic{width:14px;height:14px;stroke-width:2.6}
+.s-bad>.pi{color:var(--bad)}
+.pt{min-width:0;display:flex;flex-direction:column;gap:1px}
+.pname{display:flex;gap:8px;align-items:center;min-width:0}
+.pt h3{font-family:var(--f-body);font-size:16px;font-weight:600;line-height:1.25;letter-spacing:-.005em;overflow-wrap:anywhere}
+.ps{font-size:13px;color:var(--ink-2);display:flex;align-items:center;gap:3px;flex-wrap:wrap;line-height:1.3}
+.ps .ic{width:14px;height:14px}
+.s-warn .ps{color:var(--warn)}
+.s-warn .ps b{font-weight:700}
+.s-ok .ps{color:var(--ok)}
+.s-bad .ps{color:var(--bad);font-weight:600}
+.parea{color:var(--ink-2)}
+.pnote{font-size:12.5px;color:var(--ink-2);display:flex;gap:5px;align-items:flex-start;margin-top:2px;line-height:1.35}
+.pnote .ic{width:14px;height:14px;flex:none;margin-top:1px;color:var(--info)}
+.pnote.task .ic{color:var(--d-accent)}
+.pphoto{flex:none;width:34px;height:34px;padding:0;border:0;border-radius:9px;overflow:hidden;cursor:zoom-in;box-shadow:0 0 0 1px var(--hair)}
+.pphoto img{width:100%;height:100%;object-fit:cover;display:block}
+.pc{display:flex;gap:6px;align-items:center;justify-content:flex-end}
+.pwide{grid-column:1/-1}
+.premove{position:absolute;top:2px;right:2px;min-height:32px;width:32px;padding:0;justify-content:center;color:var(--ink-2)}
+.card.prow:has(.premove){position:relative;padding-top:10px}
+
+/* Number entry: − [ n ] + with a one-tap shortcut beside it */
+.pstep{display:flex;align-items:center;gap:4px}
+.pstep button{width:44px;height:44px;border-radius:12px;border:1px solid var(--hair);background:var(--surface-2);display:grid;place-items:center;flex:none;transition:transform .08s,background .15s}
+.pstep button:active{transform:scale(.92);background:var(--line)}
+.pstep button .ic{width:20px;height:20px}
+.pstep .qty-input{width:58px;height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);text-align:center;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;padding:0 4px;color:var(--ink)}
+.pstep .qty-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+.s-warn .pstep .qty-input{border-color:var(--warn-line)}
+.s-ok .pstep .qty-input{border-color:var(--ok-line)}
+.pquick{min-width:58px;height:44px;padding:0 10px;border-radius:12px;border:1px solid var(--hair);background:var(--surface);font-weight:600;font-size:14px;color:var(--ink-2);transition:background .15s,color .15s,transform .08s}
+.pquick:active{transform:scale(.95)}
+.pquick.on{background:var(--ok);border-color:var(--ok);color:#fff}
+.pquick[disabled]{opacity:.4}
+.pcount{display:flex;flex-direction:column;align-items:center;gap:1px}
+.plabel{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);line-height:1}
+.m-par .pc{align-items:flex-end}
+.pseg{display:flex;border-radius:12px;background:var(--surface-2);padding:3px;gap:3px}
+.pseg button{min-height:40px;padding:0 12px;border:0;border-radius:10px;background:transparent;font-weight:600;font-size:14px;color:var(--ink-2);white-space:nowrap}
+.pseg button.on{background:var(--ok);color:#fff}
+.pseg button.on.warn{background:var(--warn-fill);color:#fff}
+.prow .conflict{margin-top:4px}
+.prow .err{margin:0;font-size:13.5px}
+
+/* Phones: keep one row per product; stack controls under the name only on very narrow screens */
+@media (max-width:640px){
+  .area-head h2{font-size:22px}
+  .card.prow{grid-template-columns:minmax(0,1fr) auto;padding:8px 8px 8px 10px;gap:4px 8px}
+  .card.prow>.pi{display:none}
+  .pt h3{font-size:15.5px}
+  .pstep button{width:42px;height:46px}
+  .pstep .qty-input{width:50px;height:46px}
+  .pquick{min-width:52px;height:46px;padding:0 8px}
+  .plabel{display:none}
+  .ag-photo{width:60px;height:60px}
+}
+@media (max-width:359px){
+  .card.prow{grid-template-columns:minmax(0,1fr)}
+  .pc{justify-content:flex-start}
+}
+.area-end{margin-top:4px}
+
+/* =============================================================================
+   Redesign: collection list as a compact picking list
+   ========================================================================== */
+.col-sum{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.col-sum h2{font-size:24px;letter-spacing:-.02em}
+.col-sum .progress{flex:1;max-width:340px;min-width:200px}
+.col-sum .progress b{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:14.5px}
+.banner.slim{padding:8px 10px 8px 14px;align-items:center}
+.banner.slim>div{font-size:14.5px}
+.rooms{gap:14px}
+.room{gap:6px}
+button.room-h{width:100%;display:flex;gap:10px;align-items:center;min-height:52px;padding:8px 14px;border:0;text-align:left;cursor:pointer}
+button.room-h h3{flex:1;font-size:17px;min-width:0;overflow-wrap:anywhere}
+button.room-h>.ic{width:20px;height:20px;flex:none}
+button.room-h>.ic:first-child{width:34px;height:34px;padding:7px;border-radius:10px;background:rgba(255,255,255,.16);box-shadow:inset 0 0 0 1px rgba(255,255,255,.28)}
+.room-n{font-size:13.5px;font-weight:700;white-space:nowrap}
+.room-bar{width:64px;height:6px;border-radius:99px;background:rgba(255,255,255,.28);overflow:hidden;flex:none}
+.room-bar i{display:block;height:100%;background:#fff;border-radius:inherit;transition:width .3s ease}
+.room.complete button.room-h{opacity:.75}
+.room-lines{display:flex;flex-direction:column;gap:6px;align-items:stretch}
+@media (min-width:1280px){.room-lines{display:block;columns:2;column-gap:8px}.room-lines>.line{break-inside:avoid;margin-bottom:6px}}
+
+.line{padding:8px 10px 8px 12px;gap:8px;border-radius:14px;border:1px solid var(--hair);border-left:4px solid var(--warn-fill);box-shadow:none}
+.line.done{background:var(--surface);border-left-color:var(--ok);border-color:var(--hair)}
+.line.done .l-name b,.line.done .l-qty{opacity:.55}
+.line.short{background:color-mix(in srgb,var(--bad-bg) 60%,var(--surface));border-left-color:var(--bad);border-color:var(--bad-line)}
+.l-main{gap:10px;min-height:46px}
+.l-name{flex:1}
+.l-name b{font-family:var(--f-body);font-size:16px;font-weight:600;letter-spacing:0;overflow-wrap:anywhere}
+.l-name small{font-size:12.5px}
+.l-qty{display:block;min-width:0;padding:0;background:none;box-shadow:none;color:var(--ink-2);font-size:13.5px;text-align:right;white-space:nowrap}
+.l-qty b{font-family:var(--f-head);font-size:22px;color:var(--ink);font-variant-numeric:tabular-nums}
+.l-acts{display:flex;gap:6px;flex:none}
+.l-acts .btn,.l-all{min-height:46px;padding:0 12px;white-space:nowrap}
+.l-all{min-width:104px}
+.l-few{color:var(--ink-2);font-weight:600;min-width:0}
+.l-done{flex:none;gap:4px 10px;justify-content:flex-end;font-size:14.5px}
+.l-done.short{color:var(--bad)}
+.l-done.short span .ic{background:var(--bad)}
+.l-done .linkbtn{min-height:40px;padding:4px 6px}
+.fewer{padding:10px;gap:8px;box-shadow:none;border:1px solid var(--hair)}
+.fw-foot{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+@media (max-width:640px){
+  .col-sum h2{font-size:20px}
+  .l-main{flex-wrap:wrap;row-gap:6px}
+  .l-name{flex:1 1 55%}
+  .l-acts .btn,.l-all{min-height:46px}
+  .l-all{min-width:96px}
+}
+.col-sum .meter{height:8px;border-radius:99px;overflow:hidden;background:var(--surface-2)}
+.col-sum .meter i{display:block;height:100%;background:var(--ok);border-radius:inherit;transition:width .3s ease}
+.l-few-link{display:none}
+.fewer .chips{gap:6px}
+.fewer .chip{min-height:40px;font-size:14px;padding:0 12px}
+@media (max-width:640px){
+  .l-main{flex-wrap:nowrap}
+  .l-name{flex:1 1 auto}
+  .l-acts .l-few{display:none}
+  .l-few-link{display:inline-flex;min-height:30px;padding:2px 0;font-size:13px}
+  .l-qty b{font-size:20px}
+  .l-qty{font-size:12.5px}
+  .line.done .l-qty{display:none}
+}
+
+/* =============================================================================
+   Operational screens, mobile-first: products start near the top of the screen.
+   No banners or gradients while restocking; branding stays on home/department.
+   ========================================================================== */
+:root{--top-h:69px}
+@media (max-width:640px){:root{--top-h:61px}}
+.restock-main{gap:10px;padding-block:10px 16px}
+
+/* Step tabs: one slim segmented control */
+.rbar .stages{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;padding:3px;gap:3px;border-radius:12px;background:var(--surface-2);flex-wrap:nowrap}
+.gc .rbar .stages{background:rgba(201,166,107,.14)}
+.rbar .stage{justify-content:center;min-height:38px;padding:3px 10px 3px 4px;border-radius:9px;font-size:14px;white-space:nowrap}
+.rbar .stage .n{width:24px;height:24px;font-size:12px}
+@media (min-width:920px){.rbar .stages{max-width:540px}}
+
+/* Storeroom headings: plain, pinned under the top bar while you work through that storeroom */
+button.room-h{position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--top-h));z-index:5;background:var(--bg);color:var(--ink);min-height:44px;padding:6px 2px;border-radius:0;border-bottom:1px solid var(--hair);gap:8px;box-shadow:none}
+button.room-h h3{font-family:var(--f-head);font-size:16px;font-weight:700;text-transform:none;letter-spacing:-.01em;color:var(--ink)}
+button.room-h>.ic:first-child{width:28px;height:28px;padding:6px;border-radius:8px;background:var(--d-soft);color:var(--d-accent);box-shadow:none}
+button.room-h>.ic:last-child{color:var(--ink-2)}
+.room-n{color:var(--ink-2);font-size:13px;font-weight:600}
+.room-bar{width:44px;height:5px;background:var(--surface-2)}
+.room-bar i{background:var(--ok)}
+.room.complete button.room-h{opacity:1}
+.room.complete button.room-h h3{color:var(--ink-2)}
+.room.complete button.room-h>.ic:first-child{background:var(--ok-bg);color:var(--ok)}
+.rooms{gap:12px}
+.room{gap:6px}
+
+/* Collection rows: name + where it goes | amount | Fewer · Got all */
+.line{padding:6px 8px 6px 10px;gap:6px;border-radius:12px}
+.l-main{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px;min-height:46px}
+.l-name b{font-size:15.5px;line-height:1.25}
+.l-name small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;margin-top:1px}
+.l-qty{display:flex;flex-direction:column;align-items:center;min-width:42px;line-height:1;text-align:center}
+.l-qty b{font-size:21px}
+.l-qty small{font-size:11px;color:var(--ink-2);margin-top:3px;font-weight:600}
+.l-acts{gap:6px}
+.l-acts .btn,.l-all{min-height:44px;padding:0 11px;font-size:14.5px;border-radius:11px;min-width:0}
+.l-few{background:transparent;border:1px solid var(--line);box-shadow:none;color:var(--ink-2)}
+.l-few-link{display:none!important}
+.l-done{font-size:14px;gap:2px 8px}
+.l-done span .ic{width:22px;height:22px}
+.line.done .l-qty{display:flex}
+.fewer{margin-top:2px}
+
+/* Bottom bar: progress line + one row */
+.dock-bar{height:3px;background:var(--surface-2)}
+.dock-bar i{display:block;height:100%;background:var(--ok);transition:width .3s ease}
+.dock-txt .short-tag{margin-left:6px}
+
+@media (max-width:640px){
+  .rbar .stage{font-size:13.5px;min-height:36px}
+  /* Collection */
+  .l-acts .l-few{display:inline-flex}
+  .l-acts .btn,.l-all{padding:0 10px}
+  .l-all .ic{width:16px;height:16px}
+  /* Bottom bar */
+  .dock-in{flex-wrap:nowrap;gap:8px;padding-block:6px}
+  .dock-txt{font-size:13px;line-height:1.25;flex:1 1 auto;gap:0}
+  .dock-txt>.ic{display:none}
+  .dock-txt b{font-weight:600}
+  .dock-sep{display:none}
+  .dock-2{display:block;font-weight:500;color:var(--ink-2)}
+  .dock-acts{width:auto;flex-wrap:nowrap;gap:6px}
+  .dock-acts .btn{flex:0 0 auto;min-height:44px;padding-inline:12px;font-size:15px}
+  .dock-in:has(.dock-acts>:nth-child(3)){flex-wrap:wrap}
+  .dock-in:has(.dock-acts>:nth-child(3)) .dock-acts{width:100%;flex-wrap:wrap}
+  .dock-in:has(.dock-acts>:nth-child(3)) .dock-acts .btn{flex:1 1 auto}
+  /* Checking: compact area chips, header, guide and rows */
+  .area-btn{min-height:40px;padding:5px 12px 5px 7px;gap:7px;border-radius:12px}
+  .area-btn .progress-ring{width:22px;height:22px}
+  .area-btn .t{flex-direction:row;align-items:baseline;gap:6px;white-space:nowrap}
+  .area-btn b{font-size:14px}
+  .area-head{gap:8px;align-items:center}
+  .area-head h2{font-size:20px}
+  .ah-sub{font-size:13px;margin-top:2px}
+  .area-head .acts .btn{min-height:38px;font-size:13.5px;padding:0 10px}
+  .ag-head{min-height:40px;font-size:14px}
+  .ag-text{font-size:13.5px}
+  .card.prow{min-height:56px;padding:6px 8px 6px 10px}
+  .pt h3{font-size:15px}
+  .ps{font-size:12.5px}
+  .prows{gap:5px}
+}
+/* Finished restock: a calm status card instead of a banner */
+.finish-hero{background:var(--cb);color:var(--ink);padding:14px 16px;min-height:0;border-radius:16px;gap:12px}
+.finish-hero h2{color:var(--c);font-size:20px;text-transform:none;font-weight:700;letter-spacing:-.01em}
+.finish-hero p{color:var(--ink-2)}
+.finish-hero .fh-icon{width:42px;height:42px;border-radius:12px;background:var(--surface)}
+.finish-title{font-size:22px}
+/* Area guide: a two-line preview, tap to read it all */
+.aguide{display:flex;gap:10px;align-items:flex-start;padding:8px 10px 8px 12px}
+.aguide>.ic{width:18px;height:18px;color:var(--d-accent);flex:none;margin-top:2px}
+.aguide .ag-photo{width:44px;height:44px;border-radius:10px}
+.aguide .ag-text{flex:1;min-width:0;background:none;border:0;padding:0;text-align:left;display:flex;flex-direction:column;gap:4px;font-size:14px;line-height:1.4;color:var(--ink);cursor:pointer}
+.aguide:not(.open) .ag-text{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.aguide:not(.open) .ag-text span::after{content:" "}
+.ag-more{flex:none;min-height:24px;padding:0 2px;font-size:13.5px;align-self:flex-end}
+@media (max-width:640px){
+  .area-head h2{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .area-head{flex-wrap:nowrap;align-items:center;min-height:38px}
+  .area-head .ah-t{flex:1;min-width:0}
+  .ah-sub{margin:0;font-size:14px}
+  .area-head .acts{flex-wrap:nowrap}
+  .aguide .ag-text{font-size:13.5px}
+}
+/* "N products not checked" as one slim line */
+.col-note{display:flex;gap:8px;align-items:center;width:100%;min-height:42px;padding:6px 12px;border-radius:12px;border:1px dashed var(--none-line);background:var(--surface);color:var(--ink-2);font-size:14px;text-align:left}
+.col-note>.ic{width:18px;height:18px;flex:none}
+.col-note b{color:var(--ink);font-weight:600}
+.col-note>span:first-of-type{flex:1;min-width:0}
+.col-go{display:inline-flex;align-items:center;gap:2px;color:var(--accent);font-weight:600;white-space:nowrap}
+.col-go .ic{width:16px;height:16px}
+.chk-layout{gap:10px}
+/* Phones: name + amount on top, where it goes + actions underneath; names never break mid-word */
+@media (max-width:640px){
+  .l-main{grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"name name qty" "for few all";row-gap:4px;column-gap:6px;min-height:0}
+  .l-name,.l-acts{display:contents}
+  .l-name b{grid-area:name;align-self:center;overflow-wrap:normal;word-break:normal}
+  .l-name small{grid-area:for;align-self:center;margin:0}
+  .l-qty{grid-area:qty;flex-direction:row;align-items:baseline;gap:4px;min-width:0}
+  .l-qty b{font-size:20px}
+  .l-qty small{margin:0;font-size:12px}
+  .l-few{grid-area:few}
+  .l-all{grid-area:all}
+  .l-acts .btn,.l-all{min-height:40px}
+  .l-done{grid-area:few/few/all/all;justify-content:flex-end}
+  .line.task .l-all,.l-main>.l-all{grid-area:few/few/all/all;justify-self:end}
+  .line{padding:7px 8px 7px 10px}
+}
+/* Collection rows: one line when the name fits, the amount + buttons wrap together only for long names */
+.l-right{display:flex;align-items:center;gap:8px;flex:none}
+.l-main{grid-template-columns:minmax(0,1fr) auto}
+.area-skip-end{display:none}
+@media (max-width:640px){
+  .l-main{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;grid-template-areas:none}
+  .l-name{display:block;flex:1 1 120px;min-width:0}
+  .l-acts{display:flex}
+  .l-name b{overflow-wrap:break-word}
+  .l-name small{margin-top:1px}
+  .l-right{margin-left:auto;gap:6px}
+  .l-qty{flex-direction:column;align-items:center;gap:0;min-width:40px}
+  .l-qty b{font-size:19px}
+  .l-qty small{margin-top:2px;font-size:11px}
+  .l-done{grid-area:auto}
+  .l-acts .btn,.l-all{min-height:42px}
+  /* Checking: the area tab already shows progress; Skip lives at the end of the list */
+  .area-head{display:none}
+  .area-skip-end{display:inline-flex}
+}
+@media (max-width:380px){
+  .l-name{flex-basis:108px}
+  .l-all .ic{display:none}
+  .l-acts .btn,.l-all{padding:0 9px}
+  .l-right{gap:5px}
+  .l-qty{min-width:34px}
+  .col-note .col-go{font-size:13.5px}
+}
+/* Product notes: one line, tap to read the rest */
+button.pnote{background:none;border:0;padding:0;text-align:left;cursor:pointer;color:var(--ink-2)}
+button.pnote span{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+button.pnote.open span{display:block}
+.premove{position:static;width:auto;min-height:28px;padding:2px 0;font-size:13px;justify-content:flex-start;color:var(--ink-2);text-decoration:underline;text-underline-offset:3px}
+.card.prow:has(.premove){padding-top:6px}
+/* Quick Restock picker: slim rows */
+@media (max-width:640px){
+  .qrow{gap:10px;min-height:52px;padding-block:6px}
+  .qrow .thumb{display:none}
+  .qrow .t small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .qrow .btn{min-height:42px;padding:0 12px}
+}

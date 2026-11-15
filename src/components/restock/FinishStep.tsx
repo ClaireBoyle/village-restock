@@ -87,7 +87,7 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
 
         {finished ? (
           <>
-            <div className={`finish-meta vblock finish-hero ${session.status === 'finished_exceptions' ? 's-warn' : 's-ok'}`}>
+            <div className={`finish-meta finish-hero ${session.status === 'finished_exceptions' ? 's-warn' : 's-ok'}`}>
               <span className="fh-icon"><Icon name={session.status === 'finished_exceptions' ? 'warn' : 'check'} /></span>
               <div>
                 <h2>{session.status === 'finished_exceptions' ? 'Finished with exceptions' : 'Restock complete'}</h2>
@@ -102,7 +102,7 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
           </>
         ) : (
           <>
-            <div className="vblock block-head"><h2 className="finish-title">Finish restock</h2></div>
+            <h2 className="finish-title">Finish restock</h2>
             {ex.length === 0 ? (
               <section className="ready s-ok"><h2><Icon name="check" />Ready to finish</h2><p>Every {session.kind === 'full' ? 'area is complete' : 'product has a number'} and every item is collected or recorded.</p></section>
             ) : (

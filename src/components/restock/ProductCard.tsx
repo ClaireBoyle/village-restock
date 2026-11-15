@@ -2,18 +2,28 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { cardState, needOf, type ItemState, type PlacementView } from '@/lib/restock-logic';
-import { parseQuantity, round2 } from '@/lib/restock-math';
-import { Badge, initials } from './shared';
+import { formatQty, parseQuantity, round2 } from '@/lib/restock-math';
 
 const fmt = (n: number | null) => (n === null ? '' : String(round2(n)));
 const unit = (p: PlacementView, n: number | null) => (n === 1 ? p.unitSingular : p.unitPlural);
 
+/** Enter on a number box moves straight to the next product, so a whole area can be typed in one go. */
+function focusNext(from: HTMLInputElement) {
+  const all = [...document.querySelectorAll<HTMLInputElement>('input.qty-input:not([readonly])')];
+  const next = all[all.indexOf(from) + 1];
+  if (next) { next.focus(); next.select(); next.scrollIntoView({ block: 'center', behavior: 'smooth' }); } else from.blur();
+}
+
 /**
- * One product, everything at a glance: target, what's here now, what to collect.
+ * One product as a compact row: name, a one-line status, and the control for
+ * its restock method. Blank = not checked yet; 0 = checked, nothing needed.
  * Typing is kept as text until it's a valid number, so a half-typed "2." is never lost.
  */
-export function ProductCard({ p, item, onChange, showArea, onRemove }: {
-  p: PlacementView; item: ItemState; onChange: (fields: Partial<ItemState>, resolve?: boolean) => void; showArea?: boolean; onRemove?: () => void;
+export function ProductRow({ p, item, onChange, showArea, onRemove, note }: {
+  p: PlacementView; item: ItemState; onChange: (fields: Partial<ItemState>, resolve?: boolean) => void;
+  showArea?: boolean; onRemove?: () => void;
+  /** A note about this product only (general area notes are shown once at the top). */
+  note?: string | null;
 }) {
   const st = cardState(p, item);
   const need = needOf(p, item);
@@ -22,6 +32,7 @@ export function ProductCard({ p, item, onChange, showArea, onRemove }: {
   const [text, setText] = useState(fmt(value));
   const [err, setErr] = useState('');
   const [zoom, setZoom] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
   const focused = useRef(false);
   useEffect(() => { if (!focused.current) setText(fmt(value)); }, [value]);
 
@@ -34,47 +45,64 @@ export function ProductCard({ p, item, onChange, showArea, onRemove }: {
     if (r.value !== value) onChange({ [field]: r.value });
   };
   const step = p.allowDecimal ? 0.5 : 1;
-  // From blank, + gives 1 and - gives 0 (a quick way to say "empty").
+  // From blank, + gives 1 and − gives 0 (a quick way to say "none" / "empty").
   const bump = (dir: 1 | -1) => commit(Math.max(0, round2((value ?? 0) + dir * step)));
+  const c = item.conflict;
 
-  const badge =
-    st === 'bad' ? <Badge st="bad">Needs a decision</Badge>
-    : st === 'none' ? <Badge st="none">Not checked</Badge>
-    : p.method === 'routine' ? (st === 'warn' ? <Badge st="warn">On list</Badge> : <Badge st="ok">Not needed</Badge>)
-    : (need ?? 0) > 0 ? <Badge st="warn">Collect {round2(need!)}</Badge>
-    : <Badge st="ok">{p.method === 'manual' ? 'None needed' : 'Stocked'}</Badge>;
+  // One line that says where this product stands, in words as well as colour.
+  const target = p.method === 'par' && p.par !== null ? `Target ${round2(p.par)}` : null;
+  let status: React.ReactNode;
+  if (c) status = <><Icon name="warn" />Two different {p.method === 'routine' ? 'answers' : 'counts'}: choose below</>;
+  else if (st === 'none') status = p.method === 'par' ? <>Not checked &middot; {target ?? 'no target set'}</> : 'Not checked';
+  else if (p.method === 'routine') status = item.routineChoice === 'needed' ? <><Icon name="up" />On the list</> : <><Icon name="check" />Not needed</>;
+  else if ((need ?? 0) > 0) status = <>{target ? `${target} · ` : ''}<Icon name="up" /><b>{formatQty(need!, p.unitSingular, p.unitPlural)}</b><span className="lg">&nbsp;to collect</span></>;
+  else status = <>{target ? `${target} · ` : ''}<Icon name="check" />{p.method === 'manual' ? 'None needed' : 'At target'}</>;
 
   const stepper = (
-    <div className="stepper">
+    <div className="pstep">
       <button type="button" onClick={() => bump(-1)} aria-label={`One less ${p.productName}`}><Icon name="minus" /></button>
-      <input className="qty-input" id={`q-${p.placementId}`} type="text" inputMode={p.allowDecimal ? 'decimal' : 'numeric'}
-        value={text} placeholder="–" autoComplete="off" aria-describedby={`e-${p.placementId}`}
-        onFocus={() => { focused.current = true; }} onBlur={() => { focused.current = false; setText(fmt(value)); setErr(''); }}
-        onChange={(e) => onType(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
+      <input className="qty-input" id={`q-${p.placementId}`} type="text" inputMode={p.allowDecimal ? 'decimal' : 'numeric'} enterKeyHint="next"
+        value={text} placeholder="–" autoComplete="off" aria-describedby={`s-${p.placementId}`}
+        aria-label={p.method === 'par' ? `${p.productName}: how many on the shelf` : `${p.productName}: how many needed`}
+        onFocus={(e) => { focused.current = true; e.target.select(); }} onBlur={() => { focused.current = false; setText(fmt(value)); setErr(''); }}
+        onChange={(e) => onType(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); focusNext(e.currentTarget); } }} />
       <button type="button" onClick={() => bump(1)} aria-label={`One more ${p.productName}`}><Icon name="plus" /></button>
     </div>
   );
 
-  const collect = (
-    <div className={`qs c ${need === null ? '' : need > 0 ? 's-warn' : 's-ok'}`}>
-      {need === null
-        ? <><span className="lbl">Collect</span><span className="big">&ndash;</span><span className="unit">{p.method === 'par' ? 'Enter count' : 'Enter need'}</span></>
-        : need > 0
-          ? <><span className="lbl"><Icon name="up" />Collect</span><span className="big" key={need} style={{ display: 'inline-block', animation: 'bump .26s ease-out' }}>{round2(need)}</span><span className="unit">{unit(p, need)}</span></>
-          : <><span className="lbl"><Icon name="check" />Collect</span><span className="big">0</span><span className="unit">{p.method === 'par' ? 'At target' : 'None'}</span></>}
-    </div>
-  );
+  let controls: React.ReactNode = null;
+  if (c) controls = null;
+  else if (p.method === 'manual') {
+    controls = <>
+      <button type="button" className={`pquick ${value === 0 ? 'on' : ''}`} aria-pressed={value === 0} onClick={() => commit(value === 0 ? null : 0)}>None</button>
+      {stepper}
+    </>;
+  } else if (p.method === 'par') {
+    const full = value !== null && p.par !== null && value >= p.par;
+    controls = <>
+      <button type="button" className={`pquick ${full ? 'on' : ''}`} aria-pressed={full} disabled={p.par === null} onClick={() => commit(full ? null : p.par)}>Full</button>
+      <div className="pcount"><span className="plabel" aria-hidden="true">On shelf</span>{stepper}</div>
+    </>;
+  } else {
+    controls = (
+      <div className="pseg" role="group" aria-label={`${p.productName}: needed tonight?`}>
+        <button type="button" className={item.routineChoice === 'needed' ? 'on warn' : ''} aria-pressed={item.routineChoice === 'needed'}
+          onClick={() => onChange({ routineChoice: item.routineChoice === 'needed' ? null : 'needed' })}>Needed</button>
+        <button type="button" className={item.routineChoice === 'not_needed' ? 'on' : ''} aria-pressed={item.routineChoice === 'not_needed'}
+          onClick={() => onChange({ routineChoice: item.routineChoice === 'not_needed' ? null : 'not_needed' })}>Not needed</button>
+      </div>
+    );
+  }
 
-  let body: React.ReactNode;
-  const c = item.conflict;
+  let clash: React.ReactNode = null;
   if (c) {
     const show = (v: number | string | null) => v === null ? 'blank'
       : typeof v === 'number' ? `${round2(v)} ${unit(p, v)}` : v === 'needed' ? 'Needed' : 'Not needed';
     const when = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }).toLowerCase() : '');
-    body = (
+    clash = (
       <div className="conflict" role="alert">
-        <span className="h"><Icon name="warn" />Two different {p.method === 'routine' ? 'answers' : 'counts'} were entered</span>
-        <p><b>{c.theirsBy ?? 'Someone'}</b>: {show(c.theirs)}{c.theirsAt ? ` at ${when(c.theirsAt)}` : ''}<br /><b>{c.mineBy ?? 'Someone else'}</b>: {show(c.mine)}{c.mineAt ? ` at ${when(c.mineAt)}` : ''}</p>
+        <p><b>{c.theirsBy ?? 'Someone'}</b>: {show(c.theirs)}{c.theirsAt ? ` at ${when(c.theirsAt)}` : ''} &middot; <b>{c.mineBy ?? 'Someone else'}</b>: {show(c.mine)}{c.mineAt ? ` at ${when(c.mineAt)}` : ''}</p>
         <p className="meta">Neither was thrown away. Check {p.areaName} and choose the right one.</p>
         <div className="opts">
           {[c.theirs, c.mine].filter((v, i, a) => a.indexOf(v) === i).map((v) => (
@@ -84,59 +112,33 @@ export function ProductCard({ p, item, onChange, showArea, onRemove }: {
         </div>
       </div>
     );
-  } else if (p.method === 'par') {
-    const pct = value === null || !p.par ? 0 : Math.min(100, (value / p.par) * 100);
-    body = (
-      <div className="c-grid">
-        <div className="qs t"><span className="lbl">Target</span><span className="big">{p.par === null ? '–' : round2(p.par)}</span><span className="unit">{unit(p, p.par)}</span>
-          <div className={`tbar s-${st}`} role="img" aria-label={value === null ? 'Not checked yet' : `${fmt(value)} of ${fmt(p.par)} ${p.unitPlural}`}><i style={{ width: `${pct}%` }} /></div></div>
-        <div className="qs h"><label className="lbl" htmlFor={`q-${p.placementId}`}>Have now</label>{stepper}
-          <div className="shortcuts">
-            <button type="button" className={value === 0 ? 'on' : ''} onClick={() => commit(0)}>Empty</button>
-            <button type="button" className={value !== null && value === p.par ? 'on' : ''} onClick={() => commit(p.par)}><Icon name="check" />Full</button>
-            <button type="button" className="x" disabled={value === null} onClick={() => commit(null)} aria-label={`Clear ${p.productName}`}><Icon name="x" /></button>
-          </div></div>
-        {collect}
-      </div>
-    );
-  } else if (p.method === 'manual') {
-    body = (
-      <div className="c-grid manual">
-        <div className="qs h"><label className="lbl" htmlFor={`q-${p.placementId}`}>Need</label>{stepper}
-          <div className="shortcuts">
-            {[0, 1, 2, 3].map((v) => <button type="button" key={v} className={value === v ? 'on' : ''} onClick={() => commit(v)}>{v === 0 ? 'None' : v}</button>)}
-            <button type="button" className="x" disabled={value === null} onClick={() => commit(null)} aria-label={`Clear ${p.productName}`}><Icon name="x" /></button>
-          </div></div>
-        {collect}
-      </div>
-    );
-  } else {
-    body = (
-      <div className="routine"><span className="lbl"><Icon name="task" />Routine task</span><p className="r-text">{p.instructions || 'Restock as usual.'}</p>
-        <div className="shortcuts">
-          <button type="button" className={item.routineChoice === 'needed' ? 'on' : ''} onClick={() => onChange({ routineChoice: item.routineChoice === 'needed' ? null : 'needed' })}><Icon name="up" />Needed</button>
-          <button type="button" className={item.routineChoice === 'not_needed' ? 'on' : ''} onClick={() => onChange({ routineChoice: item.routineChoice === 'not_needed' ? null : 'not_needed' })}>Not needed tonight</button>
-        </div></div>
-    );
   }
 
+  const routineText = p.method === 'routine' ? (p.instructions || 'Routine task') : null;
   return (
-    <article className={`card s-${st}`} data-placement={p.placementId}>
-      <div className="c-head">
-        {p.photoPath ? (
-          <button type="button" className="thumb photo" onClick={() => setZoom(true)} aria-label={`Show photo of ${p.productName}`}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={p.photoPath} alt="" loading="lazy" />
-          </button>
-        ) : <div className="thumb" aria-hidden="true">{initials(p.productName)}</div>}
-        <div className="c-title"><h3>{p.productName}</h3><p className="meta">{showArea ? `${p.areaName} · ` : ''}From <b>{p.locationName ?? 'no storeroom set'}</b></p></div>
-        {badge}
+    <article className={`prow card s-${st} m-${p.method}`} data-placement={p.placementId}>
+      <span className="pi" aria-hidden="true">
+        <Icon name={st === 'bad' ? 'warn' : st === 'none' ? 'circle' : st === 'warn' ? 'up' : 'check'} />
+      </span>
+      <div className="pt">
+        <div className="pname">
+          {p.photoPath ? (
+            <button type="button" className="pphoto" onClick={() => setZoom(true)} aria-label={`Show photo of ${p.productName}`}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.photoPath} alt="" loading="lazy" />
+            </button>
+          ) : null}
+          <h3>{p.productName}</h3>
+        </div>
+        <p className="ps" id={`s-${p.placementId}`}>{showArea ? <span className="parea">{p.areaName} &middot; </span> : null}{status}</p>
+        {routineText ? <p className="pnote task"><Icon name="task" />{routineText}</p> : null}
+        {note ? <button type="button" className={`pnote ${noteOpen ? 'open' : ''}`} onClick={() => setNoteOpen(!noteOpen)} aria-expanded={noteOpen}><Icon name="info" /><span>{note}</span></button> : null}
+        {onRemove ? <button type="button" className="linkbtn premove" onClick={onRemove}>Remove from list</button> : null}
       </div>
-      {body}
-      {err ? <p className="err" id={`e-${p.placementId}`} role="alert">{err}</p> : null}
-      {p.method !== 'routine' && p.instructions ? <p className="note"><Icon name="info" /><span>{p.instructions}</span></p> : null}
+      <div className="pc">{controls}</div>
+      {err ? <p className="err pwide" role="alert">{err}</p> : null}
+      {clash ? <div className="pwide">{clash}</div> : null}
       {zoom && p.photoPath ? <PhotoZoom src={p.photoPath} title={p.productName} onClose={() => setZoom(false)} /> : null}
-      {onRemove ? <button type="button" className="linkbtn removebtn" onClick={onRemove}>Remove from list</button> : null}
     </article>
   );
 }

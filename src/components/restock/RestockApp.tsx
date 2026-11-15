@@ -15,7 +15,7 @@ import { FinishStep } from './FinishStep';
 import { QuickStep } from './QuickStep';
 import { OfflineBanner, TopControls } from './SyncControls';
 import { TypeStep } from './TypeStep';
-import { DeptBand, Stages, timeOf, type Step } from './shared';
+import { Stages, timeOf, type Step } from './shared';
 import type { RemoteSession } from '@/lib/sync-types';
 
 export interface RestockCtx {
@@ -112,9 +112,13 @@ export function RestockApp({ departmentId }: { departmentId: string }) {
   }, [mode, today]);
 
   const gold = view?.department.theme === 'gold';
+  const activeSession = mode === 'full' ? fullSession : mode === 'quick' ? quickSession : null;
   const top = (
     <>
-      <TopBar backHref={mode ? undefined : '/'} crumbs={view ? `Home › ${view.department.name}${mode ? ` › ${mode === 'full' ? 'Full' : 'Quick'} restock` : ''}` : 'Home'}
+      <TopBar backHref={mode ? undefined : '/'}
+        title={mode && view ? view.department.name : undefined}
+        crumbs={mode && activeSession ? `${activeSession.kind === 'full' ? 'Full' : 'Quick'} restock · started ${timeOf(activeSession.startedAt)}`
+          : view ? `Home › ${view.department.name}${mode ? ` › ${mode === 'full' ? 'Full' : 'Quick'} restock` : ''}` : 'Home'}
         right={<TopControls catalogueCheckedAt={checkedAt} />}
         logo={mode ? <button className="iconbtn" onClick={() => { setMode(null); setQuickId(null); setUrl(null, 'check'); }} aria-label="Back to restock options"><Icon name="back" /></button> : undefined} />
       <OfflineBanner />
@@ -146,11 +150,11 @@ export function RestockApp({ departmentId }: { departmentId: string }) {
   const areaRecords = new Map(areaRows.map((a) => [a.areaId, a]));
   const recorded = new Map<string, AreaStatus>(areaRows.filter((a) => a.status !== 'not_started').map((a) => [a.areaId, a.status as AreaStatus]));
   const placements = session.kind === 'full' ? view.placements : session.selected.map((id) => view.byId.get(id)).filter((p): p is PlacementView => Boolean(p));
-  const sub = `${session.kind === 'full' ? 'Full restock' : 'Quick restock'} · started ${timeOf(session.startedAt)}${session.people.length ? ` · ${session.people.join(', ')}` : ''}`;
 
   const ctx: RestockCtx = {
     view, session, placements, items, areaRecords, recorded, who, go,
-    header: <DeptBand d={view.department} sub={sub} right={<Stages kind={session.kind} current={step} onGo={go} />} />,
+    // Restock screens: one slim step bar, no banner, so products start near the top of the screen.
+    header: <div className="rbar"><Stages kind={session.kind} current={step} onGo={go} /></div>,
     saveAndExit: () => router.push('/?saved=1'),
     done: () => router.push('/'),
   };

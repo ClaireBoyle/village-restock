@@ -454,3 +454,27 @@ export async function importProductsCsv(text: string) {
   revalidatePath('/admin', 'layout');
   return r;
 }
+
+// ---------------------------------------------------------------------------
+// Product order within a checking area (the order staff physically find them)
+// ---------------------------------------------------------------------------
+export async function saveAreaOrder(areaId: string, placementIds: string[]): Promise<ActionResult> {
+  await requireAdmin();
+  if (!uuid.safeParse(areaId).success || !Array.isArray(placementIds) || placementIds.length > 2000
+    || placementIds.some((id) => !uuid.safeParse(id).success) || new Set(placementIds).size !== placementIds.length) {
+    return { error: 'Something went wrong. Reload and try again.' };
+  }
+  const sql = db();
+  const result = await sql.begin(async (tx) => {
+    const rows = await tx`select id from product_placements where check_area_id = ${areaId} order by sort_order, created_at for update`;
+    const inArea = rows.map((r) => String(r.id));
+    if (placementIds.some((id) => !inArea.includes(id))) return 'changed';
+    // The new order first; anything not shown (archived products) keeps its place after them.
+    const order = [...placementIds, ...inArea.filter((id) => !placementIds.includes(id))];
+    for (let k = 0; k < order.length; k++) await tx`update product_placements set sort_order = ${k + 1} where id = ${order[k]}`;
+    return 'ok';
+  });
+  if (result === 'changed') return { error: 'The products in this area changed while you were arranging. Reload and try again.' };
+  revalidatePath('/admin', 'layout');
+  return { ok: true };
+}

@@ -412,3 +412,16 @@ a { color: inherit; }
   .type-head h2 { font-size: 22px; }
   .finish-hero h2 { font-size: 21px; }
 }
+
+/* Arrange products in an area */
+.arr-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; touch-action: pan-y; }
+.arr-list li { display: flex; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 12px; background: var(--surface); border: 1px solid var(--hair); user-select: none; }
+.arr-list li.dragging { border-color: var(--accent); box-shadow: var(--shadow-md); background: var(--accent-soft); }
+.arr-handle { width: 40px; height: 40px; border: 0; border-radius: 10px; background: var(--surface-2); display: grid; place-items: center; cursor: grab; touch-action: none; flex: none; }
+.arr-handle:active { cursor: grabbing; }
+.arr-n { width: 26px; text-align: right; color: var(--ink-2); font-size: 13px; flex: none; }
+.arr-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.arr-t b { font-weight: 600; overflow-wrap: anywhere; }
+.arr-t small { font-size: 12.5px; color: var(--ink-2); }
+.arr-bar { position: sticky; bottom: 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px 0 4px; background: var(--surface); margin-top: 10px; border-top: 1px solid var(--hair); }
+@media (max-width: 640px) { .arr-edit { display: none; } .arr-n { display: none; } }

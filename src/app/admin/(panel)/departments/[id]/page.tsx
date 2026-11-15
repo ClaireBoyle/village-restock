@@ -38,6 +38,7 @@ export default async function DepartmentDetail({ params }: { params: Promise<{ i
                 <div className="title">{String(a.name)} {a.isSample ? <span className="tag sample">Sample</span> : null} {!a.active ? <span className="tag">Hidden</span> : null}</div>
                 <div className="meta">{Number(a.products)} products{a.guideText ? ' · has a stocking guide' : ''}{a.guidePhotoPath ? ' · has a photo' : ''}</div>
               </div>
+              <Link className="btn small" href={`/admin/arrange/${a.id}`}><Icon name="list" />Arrange products</Link>
               <MoveButtons kind="area" id={String(a.id)} first={i === 0} last={i === areas.length - 1} label={String(a.name)} />
               <details style={{ flexBasis: '100%' }}>
                 <summary className="linkbtn" style={{ cursor: 'pointer' }}>Edit {String(a.name)}</summary>

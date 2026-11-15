@@ -1,0 +1,37 @@
+const { chromium } = require('playwright');
+const postgres = require('postgres');
+const B = process.env.E2E_URL || 'http://localhost:3100';
+const sql = postgres(process.env.E2E_DATABASE_URL || 'postgres://vr:vr@localhost:5432/village_restock', { onnotice: () => {}, transform: postgres.camel });
+const ok = (c, m) => { if (!c) throw new Error('FAIL: ' + m); console.log('PASS:', m); };
+const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; for (;;) { const r = await q(); if (check(r)) return r; if (Date.now() > end) return r; await new Promise((res) => setTimeout(res, 300)); } };
+(async () => {
+  const b = await chromium.launch(); const errs = [];
+  const p = await (await b.newContext({ viewport: { width: 820, height: 1180 }, deviceScaleFactor: 2 })).newPage();
+  p.on('pageerror', (e) => errs.push(e.message));
+  await p.goto(B + '/'); await p.waitForSelector('.dcard');
+  await p.click('.who'); await p.fill('#staffname', 'Sam'); await p.click('text=Done');
+  await p.click('.dcard:has-text("Kitchen")'); await p.click('text=Start full restock');
+  await p.waitForSelector('article.card');
+  console.log(p.url()); await p.click('.stages .stage:has-text("Finish")');
+  await p.waitForSelector('#finish-note');
+  await p.fill('#finish-note', 'Fridge 2 door is not sealing.\nMilk delivery was late.');
+  await p.waitForTimeout(700);
+  // Leaving and coming back keeps the draft
+  await p.reload(); await p.waitForTimeout(3000); console.log(p.url()); await p.screenshot({ path: 'dbg-reload.png' }); await p.waitForSelector('#finish-note');
+  ok((await p.inputValue('#finish-note')).includes('Milk delivery'), 'comment draft is kept on the device after leaving the screen');
+  await p.locator('.note-box').screenshot({ path: __dirname + '/out/note-box.png' });
+  await p.click('button:has-text("Finish with exceptions")');
+  await p.click('#expanel .chip >> nth=0');
+  await p.click('text=Confirm finish with exceptions');
+  await p.waitForSelector('.finish-meta');
+  await p.waitForSelector('.note-sent');
+  ok((await p.textContent('.note-sent')).includes('Fridge 2 door'), 'finished screen shows the comments sent to managers');
+  await p.screenshot({ path: __dirname + '/out/note-finished.png', fullPage: true });
+  const [s] = await waitDb(() => sql`select finish_note from restock_sessions where kind='full'`, (r) => r[0]?.finishNote);
+  ok(s.finishNote === 'Fridge 2 door is not sealing.\nMilk delivery was late.', 'comment saved on the restock');
+  const [e] = await waitDb(() => sql`select status, body_text, html from email_outbox`, (r) => r[0]?.status === 'sent');
+  ok(e && e.bodyText.includes('COMMENTS FROM STAFF\nFridge 2 door is not sealing.') && e.html.includes('Comments from staff'), 'manager email includes the comments (and was sent)');
+  require('fs').writeFileSync(__dirname + '/out/email-note.html', e.html);
+  ok(errs.length === 0, 'no page errors ' + errs.join(';'));
+  await b.close(); await sql.end();
+})().catch(async (e) => { console.error(e); process.exit(1); });

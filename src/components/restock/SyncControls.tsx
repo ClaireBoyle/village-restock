@@ -15,8 +15,8 @@ export function StatusPill({ onOpen, catalogueCheckedAt }: { onOpen: () => void;
   const s = useSyncStatus();
   // `short` is shown on phones, where the full wording doesn't fit.
   let cls = 'warn', text = 'Checking…', short = 'Checking';
-  if (s.problems > 0) { cls = 'off'; text = `${s.problems} not saved to server`; short = `${s.problems} not saved`; }
-  else if (s.connection === 'offline') { cls = 'off'; text = s.pending ? `Offline · ${s.pending} saved on device` : 'Offline'; short = s.pending ? `Offline · ${s.pending}` : 'Offline'; }
+  if (s.problems > 0) { cls = 'off'; text = `Sync needs attention (${s.problems})`; short = 'Needs attention'; }
+  else if (s.connection === 'offline') { cls = 'off'; text = s.pending ? `Offline · ${s.pending} saved on device` : 'Offline · changes save on device'; short = s.pending ? `Offline · ${s.pending}` : 'Offline'; }
   else if (s.pending > 0) { cls = 'warn'; text = `Syncing ${s.pending}…`; short = `Syncing ${s.pending}`; }
   else if (s.connection === 'online') { cls = 'ok'; text = 'All changes synced'; short = 'Synced'; }
   return (
