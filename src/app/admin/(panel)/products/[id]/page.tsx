@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Icon } from '@/components/Icon';
+import { PhotoField } from '@/components/admin/PhotoField';
 import { ProductForm, type ProductFormData } from '@/components/admin/ProductForm';
 import { setProductStatus } from '@/app/actions/admin';
 import { db } from '@/lib/server/db';
@@ -43,6 +44,11 @@ export default async function EditProduct({ params, searchParams }: {
       </div>
       {saved ? <div className="banner s-ok" role="status"><Icon name="check" /><div><b>Product added.</b></div></div> : null}
       {archived ? <div className="banner s-none"><Icon name="archive" /><div><b>Archived</b><p>Staff don&rsquo;t see this product. Past restocks that included it are unchanged.</p></div></div> : null}
+      <section className="panel" style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 18 }}>
+        <h2>Reference photo</h2>
+        <PhotoField kind="product" id={id} current={(p.photoPath as string) ?? null}
+          hint="Shown on the product card so staff can spot the right item. On an iPad you can take the photo straight away." />
+      </section>
       <ProductForm departmentId={String(p.departmentId)} product={product} {...opts} />
     </>
   );

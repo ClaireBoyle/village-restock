@@ -12,8 +12,14 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Photos are shrunk on the device first; this leaves room for a large one.
+  experimental: { serverActions: { bodySizeLimit: '2mb' } },
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      // The offline service worker must always be re-checked, so updates reach devices.
+      { source: '/sw.js', headers: [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }, { key: 'Service-Worker-Allowed', value: '/' }] },
+    ];
   },
 };
 

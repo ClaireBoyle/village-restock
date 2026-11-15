@@ -4,6 +4,7 @@ import type { Catalogue, CatalogueResponse } from '@/lib/catalogue-types';
 import {
   readCatalogueCheck, readStoredCatalogue, requestPersistentStorage, storeCatalogue, touchCatalogueCheck,
 } from './local-db';
+import { warmOfflineCache } from '@/components/ServiceWorker';
 
 export type Connection = 'checking' | 'online' | 'offline';
 
@@ -82,6 +83,15 @@ export function useCatalogue(): CatalogueState {
       window.clearInterval(timer);
     };
   }, [refresh]);
+
+  // Once online with a catalogue: save every department page and photo for offline use.
+  const warmed = useRef<number | null>(null);
+  useEffect(() => {
+    if (!catalogue || connection !== 'online' || warmed.current === catalogue.version) return;
+    warmed.current = catalogue.version;
+    const photos = [...catalogue.products.map((p) => p.photoPath), ...catalogue.areas.map((a) => a.guidePhotoPath)].filter((p): p is string => !!p);
+    void warmOfflineCache(['/', ...catalogue.departments.map((d) => `/d/${d.id}`)], photos);
+  }, [catalogue, connection]);
 
   return { catalogue, checkedAt, connection, error, refresh };
 }

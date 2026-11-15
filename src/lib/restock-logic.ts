@@ -44,6 +44,8 @@ export interface PlacementView {
   categoryName: string | null;
   /** Menu items to mark as sold out if this product runs out. */
   affects: string[];
+  /** Reference photo, if one has been added. */
+  photoPath: string | null;
 }
 
 /** What staff have recorded for one placement during a restock. Blank = not yet. */
@@ -97,6 +99,7 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
             instructions: pl.instructions ?? p.instructions,
             categoryName: p.categoryId ? categories.get(p.categoryId) ?? null : null,
             affects: p.affects ?? [],
+            photoPath: p.photoPath ?? null,
           };
         });
       return { area, placements };

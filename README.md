@@ -12,6 +12,7 @@ This is an internal tool. Products and par levels in `db/seed/sample_data.sql` a
 |---|---|
 | **Next.js** (this repo), hosted on **Vercel** | The staff app, the admin screens, and the server code that checks every request. |
 | **Supabase Postgres** (Sydney region) | The shared database. The browser never connects to it directly; only the server does, using a private connection string. |
+| **The offline service worker** (`public/sw.js`) | Saves the app itself, each department page and reference photos on the device, so the app opens with no connection. Admin pages are never saved. |
 | **The device's own database** (IndexedDB) | A copy of the product catalogue and every restock entry. Changes are saved here first, queued in an outbox, and uploaded when online. Each change has its own id so it is never applied twice. |
 
 Access:
@@ -47,7 +48,7 @@ Access:
 ### 3. First sign-in
 
 1. Open `https://<your-app>.vercel.app/admin/setup`, enter the `ADMIN_SETUP_CODE` and create your admin account. This page stops working once an admin exists.
-2. On each iPad, open the app's address in **Safari**, then tap **Share > Add to Home Screen**.
+2. On each iPad, open the app's address in **Safari**, then tap **Share > Add to Home Screen**. Then work through `docs/ipad-checklist.md` (about 10 minutes per device).
 
 ## Local development
 
@@ -80,7 +81,9 @@ src/lib/restock-math.ts   Pure restock calculations (shared by device and server
 src/lib/server/       Database, sign-in and catalogue code (server only)
 src/lib/client/       Device database and catalogue download (browser only)
 src/app/actions/      Server actions; every admin change is validated here
-src/app/admin/        Admin screens
+src/app/admin/        Admin screens (incl. Spreadsheets: CSV import/export)
+public/sw.js          Offline service worker
+docs/                 iPad checklist
 src/components/       Shared interface pieces
 ```
 
@@ -90,4 +93,4 @@ src/components/       Shared interface pieces
 - [x] **Phase 2 – Core restocking**: Full and Quick Restock, area checking, collection list grouped by storeroom, shortages, Save and exit / Finish / Finish with exceptions, offline-first saving with an outbox, shared restocks across devices.
 - [x] **Phase 3 – Reliability**: clashing counts from two devices are kept and resolved by a person, supervisor Restocks and Shortages screens (resolve with a note, copyable low-stock list), restocks left open past the cut-off marked Unfinished.
 - [x] **Extras**: menu items to mark sold out per product; finished screen shows Out of stock / Running low; automatic manager email after each finished full restock, with optional staff comments.
-- [ ] **Phase 4 – Refinement**: reference photos, CSV import/export, installable offline app shell, iPad testing.
+- [x] **Phase 4 – Refinement**: reference photos for products and areas, spreadsheet (CSV) import/export, installable offline app (opens with no connection), iPad checklist in `docs/ipad-checklist.md`.

@@ -21,6 +21,7 @@ export function ProductCard({ p, item, onChange, showArea, onRemove }: {
   const value = item[field];
   const [text, setText] = useState(fmt(value));
   const [err, setErr] = useState('');
+  const [zoom, setZoom] = useState(false);
   const focused = useRef(false);
   useEffect(() => { if (!focused.current) setText(fmt(value)); }, [value]);
 
@@ -122,14 +123,37 @@ export function ProductCard({ p, item, onChange, showArea, onRemove }: {
   return (
     <article className={`card s-${st}`} data-placement={p.placementId}>
       <div className="c-head">
-        <div className="thumb" aria-hidden="true">{initials(p.productName)}</div>
+        {p.photoPath ? (
+          <button type="button" className="thumb photo" onClick={() => setZoom(true)} aria-label={`Show photo of ${p.productName}`}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={p.photoPath} alt="" loading="lazy" />
+          </button>
+        ) : <div className="thumb" aria-hidden="true">{initials(p.productName)}</div>}
         <div className="c-title"><h3>{p.productName}</h3><p className="meta">{showArea ? `${p.areaName} · ` : ''}From <b>{p.locationName ?? 'no storeroom set'}</b></p></div>
         {badge}
       </div>
       {body}
       {err ? <p className="err" id={`e-${p.placementId}`} role="alert">{err}</p> : null}
       {p.method !== 'routine' && p.instructions ? <p className="note"><Icon name="info" /><span>{p.instructions}</span></p> : null}
+      {zoom && p.photoPath ? <PhotoZoom src={p.photoPath} title={p.productName} onClose={() => setZoom(false)} /> : null}
       {onRemove ? <button type="button" className="linkbtn removebtn" onClick={onRemove}>Remove from list</button> : null}
     </article>
+  );
+}
+
+/** Full-screen photo. Tap anywhere (or press Escape) to close. */
+export function PhotoZoom({ src, title, onClose }: { src: string; title: string; onClose: () => void }) {
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', k);
+    return () => window.removeEventListener('keydown', k);
+  }, [onClose]);
+  return (
+    <div className="photo-zoom" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt={title} />
+      <p>{title}</p>
+      <button type="button" className="btn" onClick={onClose}><Icon name="x" />Close</button>
+    </div>
   );
 }

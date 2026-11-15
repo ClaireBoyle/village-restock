@@ -76,7 +76,7 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
             <div><h2>{cur.area.name}</h2>
               <div className="sub"><Badge st={AREA_BADGE[st]}>{AREA_LABEL[st]}</Badge><span><b>{done} of {cur.placements.length}</b> checked</span></div></div>
             <div className="acts">
-              {cur.area.guideText ? <button className="guide-toggle" onClick={() => setGuideOpen((o) => !o)} aria-expanded={guideOpen}><Icon name="camera" />{guideOpen ? 'Hide guide' : 'Stocking guide'}</button> : null}
+              {cur.area.guideText || cur.area.guidePhotoPath ? <button className="guide-toggle" onClick={() => setGuideOpen((o) => !o)} aria-expanded={guideOpen}><Icon name="camera" />{guideOpen ? 'Hide guide' : 'Stocking guide'}</button> : null}
               {st !== 'complete' && st !== 'skipped' ? <button className="btn" onClick={() => setSkipOpen(true)}><Icon name="skip" />Skip area</button> : null}
             </div>
           </div>
@@ -86,7 +86,13 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
               <div className="chips">{SKIP_REASONS.map((r) => <button key={r} className="chip" onClick={() => { pin(); void setArea(session.id, cur.area.id, 'skipped', r, who); setSkipOpen(false); }}>{r}</button>)}</div>
               <button className="linkbtn" style={{ alignSelf: 'flex-start' }} onClick={() => setSkipOpen(false)}>Cancel</button></div>
           ) : null}
-          {guideOpen && cur.area.guideText ? <div className="guide" style={{ gridTemplateColumns: '1fr' }}><div><p>{cur.area.guideText}</p></div></div> : null}
+          {guideOpen && (cur.area.guideText || cur.area.guidePhotoPath) ? (
+            <div className="guide" style={{ gridTemplateColumns: cur.area.guidePhotoPath && cur.area.guideText ? 'minmax(0, 1fr) minmax(0, 1fr)' : '1fr' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {cur.area.guidePhotoPath ? <img className="guide-photo" src={cur.area.guidePhotoPath} alt={`${cur.area.name} fully stocked`} /> : null}
+              {cur.area.guideText ? <div><p>{cur.area.guideText}</p></div> : null}
+            </div>
+          ) : null}
 
           <div className="cards">
             {cur.placements.length === 0 ? <p className="meta">No products in this area yet.</p> : null}

@@ -406,3 +406,51 @@ export async function adminSignOut(): Promise<void> {
   await clearSession();
   redirect('/');
 }
+
+// ---------------------------------------------------------------------------
+// Reference photos (products and checking areas)
+// ---------------------------------------------------------------------------
+export async function setPhoto(_: ActionResult, form: FormData): Promise<ActionResult> {
+  await requireAdmin();
+  const kind = form.get('kind');
+  const id = uuid.safeParse(form.get('id'));
+  if ((kind !== 'product' && kind !== 'area') || !id.success) return { error: 'Something went wrong. Reload and try again.' };
+  const { savePhoto, deletePhotoIfUnused } = await import('@/lib/server/photos');
+  const sql = db();
+  const remove = form.get('remove') === '1';
+  const [cur] = kind === 'product'
+    ? await sql`select photo_path as path from products where id = ${id.data}`
+    : await sql`select guide_photo_path as path from check_areas where id = ${id.data}`;
+  if (!cur) return { error: 'Not found. Reload and try again.' };
+  let path: string | null = null;
+  if (!remove) {
+    const saved = await savePhoto(form.get('photo'));
+    if ('error' in saved) return { error: saved.error };
+    path = saved.path;
+  }
+  if (kind === 'product') await sql`update products set photo_path = ${path} where id = ${id.data}`;
+  else await sql`update check_areas set guide_photo_path = ${path} where id = ${id.data}`;
+  await deletePhotoIfUnused(cur.path as string | null);
+  revalidatePath('/admin', 'layout');
+  return { ok: true, message: remove ? 'Photo removed.' : 'Photo saved. Devices get it next time they connect.' };
+}
+
+// ---------------------------------------------------------------------------
+// Products spreadsheet import (check first, then apply)
+// ---------------------------------------------------------------------------
+const MAX_CSV = 1_000_000;
+export async function checkProductsCsv(text: string) {
+  await requireAdmin();
+  if (typeof text !== 'string' || text.length > MAX_CSV) return { errors: [{ row: 1, message: 'That file is too large (1 MB at most).' }], newProducts: [], updated: [], unchanged: 0, newCategories: [], rows: 0 };
+  const { previewImport } = await import('@/lib/server/catalogue-csv');
+  return previewImport(text);
+}
+
+export async function importProductsCsv(text: string) {
+  await requireAdmin();
+  if (typeof text !== 'string' || text.length > MAX_CSV) return { errors: [{ row: 1, message: 'That file is too large (1 MB at most).' }], newProducts: [], updated: [], unchanged: 0, newCategories: [], rows: 0 };
+  const { applyImport } = await import('@/lib/server/catalogue-csv');
+  const r = await applyImport(text);
+  revalidatePath('/admin', 'layout');
+  return r;
+}

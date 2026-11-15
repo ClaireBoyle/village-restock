@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { DM_Sans, Plus_Jakarta_Sans } from 'next/font/google';
 import './globals.css';
 import './restock.css';
+import { ServiceWorker } from '@/components/ServiceWorker';
 
 // Fonts are bundled with the app at build time, so they also work offline.
 const dmSans = DM_Sans({ subsets: ['latin'], variable: '--font-dm-sans', display: 'swap' });
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
   applicationName: 'Village Restock',
   appleWebApp: { capable: true, title: 'Restock', statusBarStyle: 'default' },
   robots: { index: false, follow: false },
+  icons: { icon: '/icons/icon-192.png', apple: '/icons/apple-touch-icon.png' },
 };
 
 export const viewport: Viewport = {
@@ -28,7 +30,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en-AU" className={`${dmSans.variable} ${jakarta.variable}`}>
-      <body>{children}</body>
+      <body>{children}<ServiceWorker /></body>
     </html>
   );
 }

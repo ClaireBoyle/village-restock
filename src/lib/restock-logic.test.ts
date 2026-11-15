@@ -25,11 +25,11 @@ const cat: Catalogue = {
   ],
   categories: [],
   products: [
-    { id: 'tom', departmentId: 'k', categoryId: null, name: 'Tomatoes', unitSingular: 'tomato', unitPlural: 'tomatoes', method: 'par', allowDecimal: false, instructions: '', defaultLocationId: 'cool', sortOrder: 1, affects: [] },
-    { id: 'cloth', departmentId: 'k', categoryId: null, name: 'Cloths', unitSingular: 'pack', unitPlural: 'packs', method: 'manual', allowDecimal: false, instructions: '', defaultLocationId: 'dryst', sortOrder: 2, affects: [] },
-    { id: 'sauce', departmentId: 'k', categoryId: null, name: 'Sauce', unitSingular: 'bottle', unitPlural: 'bottles', method: 'par', allowDecimal: false, instructions: '', defaultLocationId: 'dryst', sortOrder: 3, affects: [] },
-    { id: 'beer', departmentId: 'b', categoryId: null, name: 'Pale Ale', unitSingular: 'bottle', unitPlural: 'bottles', method: 'par', allowDecimal: false, instructions: '', defaultLocationId: 'alc', sortOrder: 1, affects: ['Pale Ale Tasting Paddle'] },
-    { id: 'glass', departmentId: 'b', categoryId: null, name: 'Glasses', unitSingular: 'rack', unitPlural: 'racks', method: 'routine', allowDecimal: false, instructions: 'Refill the rack', defaultLocationId: 'alc', sortOrder: 2, affects: [] },
+    { id: 'tom', departmentId: 'k', categoryId: null, name: 'Tomatoes', unitSingular: 'tomato', unitPlural: 'tomatoes', method: 'par', allowDecimal: false, instructions: '', defaultLocationId: 'cool', sortOrder: 1, affects: [], photoPath: null },
+    { id: 'cloth', departmentId: 'k', categoryId: null, name: 'Cloths', unitSingular: 'pack', unitPlural: 'packs', method: 'manual', allowDecimal: false, instructions: '', defaultLocationId: 'dryst', sortOrder: 2, affects: [], photoPath: null },
+    { id: 'sauce', departmentId: 'k', categoryId: null, name: 'Sauce', unitSingular: 'bottle', unitPlural: 'bottles', method: 'par', allowDecimal: false, instructions: '', defaultLocationId: 'dryst', sortOrder: 3, affects: [], photoPath: null },
+    { id: 'beer', departmentId: 'b', categoryId: null, name: 'Pale Ale', unitSingular: 'bottle', unitPlural: 'bottles', method: 'par', allowDecimal: false, instructions: '', defaultLocationId: 'alc', sortOrder: 1, affects: ['Pale Ale Tasting Paddle'], photoPath: null },
+    { id: 'glass', departmentId: 'b', categoryId: null, name: 'Glasses', unitSingular: 'rack', unitPlural: 'racks', method: 'routine', allowDecimal: false, instructions: 'Refill the rack', defaultLocationId: 'alc', sortOrder: 2, affects: [], photoPath: null },
   ],
   placements: [
     { id: 'p-tom', productId: 'tom', checkAreaId: 'f1', parLevel: 8, locationId: null, instructions: null, sortOrder: 1 },

@@ -22,6 +22,8 @@ export interface CatProduct {
   instructions: string; defaultLocationId: string | null; sortOrder: number;
   /** Menu items to mark as sold out if this runs out. */
   affects: string[];
+  /** Reference photo (e.g. /api/photos/<id>), or null. */
+  photoPath: string | null;
 }
 export interface CatPlacement {
   id: string; productId: string; checkAreaId: string; parLevel: number | null;

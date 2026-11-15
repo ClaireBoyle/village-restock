@@ -366,3 +366,12 @@ button.pill:hover{background:var(--surface-2)}
 .note-sent { margin: 12px 0; padding: 14px 16px; border-radius: 16px; background: #EEF3FD; border: 1.5px solid #C9D6F5; }
 .note-sent h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 15px; color: #2446B8; }
 .note-sent p { margin: 0; white-space: pre-wrap; line-height: 1.45; }
+
+/* Reference photos */
+.thumb.photo{padding:0;border:0;overflow:hidden;cursor:zoom-in;width:56px;height:56px;border-radius:14px;box-shadow:0 0 0 1px var(--hair)}
+.thumb.photo img{width:100%;height:100%;object-fit:cover;display:block}
+.guide-photo{width:100%;max-height:340px;object-fit:cover;border-radius:14px;display:block}
+@media (max-width:640px){.guide{grid-template-columns:1fr !important}}
+.photo-zoom{position:fixed;inset:0;z-index:100;background:rgba(10,14,30,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;animation:rise .15s ease-out}
+.photo-zoom img{max-width:100%;max-height:72vh;border-radius:16px;object-fit:contain;background:#fff}
+.photo-zoom p{color:#fff;font-family:var(--f-head);font-weight:700;font-size:18px;margin:0}
