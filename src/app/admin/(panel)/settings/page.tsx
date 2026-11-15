@@ -1,6 +1,6 @@
 import { Icon } from '@/components/Icon';
 import { ActionForm, SubmitButton } from '@/components/admin/ActionForm';
-import { addAdmin, changeMyPassword, saveManagerEmail, sendTestEmailAction, setAdminActive } from '@/app/actions/admin';
+import { addAdmin, changeMyPassword, retryEmailAction, saveManagerEmail, sendTestEmailAction, setAdminActive } from '@/app/actions/admin';
 import { emailSettings, emailTransport, recentEmails } from '@/lib/server/email';
 import { requireAdmin } from '@/lib/server/auth';
 import { db } from '@/lib/server/db';
@@ -36,7 +36,7 @@ export default async function Settings() {
         {!transport ? (
           <div className="banner s-warn"><Icon name="warn" /><div><b>Email sending isn&rsquo;t set up yet</b>
             <p>Add <b>RESEND_API_KEY</b> (or <b>SMTP_USER</b> and <b>SMTP_PASS</b>) in Vercel &rarr; Settings &rarr; Environment Variables, then redeploy. Emails are kept and sent once it&rsquo;s set up.</p></div></div>
-        ) : <p className="meta">Sending with: <b>{transport === 'resend' ? 'Resend' : transport === 'smtp' ? 'email account (SMTP)' : 'test mode (not actually sent)'}</b></p>}
+        ) : <p className="meta">Sending with: <b>{transport === 'resend' ? 'Resend' : transport === 'smtp' ? `email account (${process.env.SMTP_USER})` : 'test mode (not actually sent)'}</b></p>}
         <ActionForm action={saveManagerEmail} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={row}>
             <div className="field" style={{ flex: '1 1 280px' }}><label htmlFor="mto">Managers&rsquo; email address</label>
@@ -57,7 +57,10 @@ export default async function Settings() {
               <div key={i} className="row">
                 <div className="grow"><div className="title">{String(e.subject)}</div>
                   <div className="meta">{when(e.createdAt)} &middot; to {String(e.recipient)}{e.lastError ? ` \u00b7 ${String(e.lastError)}` : ''}</div></div>
-                <span className={`badge ${e.status === 'sent' ? 's-ok' : e.status === 'failed' ? 's-bad' : 's-info'}`}>{e.status === 'sent' ? `Sent ${when(e.sentAt)}` : e.status === 'failed' ? `Not sent yet (${Number(e.attempts)} tries)` : 'Waiting to send'}</span>
+                <span className={`badge ${e.status === 'sent' ? 's-ok' : e.status === 'failed' ? 's-bad' : 's-info'}`}>{e.status === 'sent' ? `Sent ${when(e.sentAt)}` : e.status === 'failed' ? `Not sent (${Number(e.attempts)} tries)` : 'Waiting to send'}</span>
+                {e.status !== 'sent' ? (
+                  <form action={retryEmailAction}><input type="hidden" name="id" value={String(e.id)} /><button className="btn small">Try again</button></form>
+                ) : null}
               </div>
             ))}
           </div>

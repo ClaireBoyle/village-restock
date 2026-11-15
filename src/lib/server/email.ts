@@ -21,8 +21,9 @@ const MAX_ATTEMPTS = 6;
 
 export function emailTransport(): 'resend' | 'smtp' | 'log' | null {
   if (process.env.EMAIL_TRANSPORT === 'log') return 'log';
-  if (process.env.RESEND_API_KEY) return 'resend';
+  // An email account (SMTP) can send to anyone, so it wins if both are set up.
   if (process.env.SMTP_USER && process.env.SMTP_PASS) return 'smtp';
+  if (process.env.RESEND_API_KEY) return 'resend';
   return null;
 }
 
@@ -117,7 +118,16 @@ async function send(to: string, subject: string, html: string, text: string): Pr
       headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ from, to: [to], subject, html, text }),
     });
-    if (!res.ok) throw new Error(`Resend replied ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    if (!res.ok) {
+      const body = await res.text();
+      let msg = body;
+      try { msg = String(JSON.parse(body).message ?? body); } catch { /* not JSON */ }
+      if (res.status === 403 && /own email address/i.test(msg)) {
+        const own = msg.match(/\(([^)]+@[^)]+)\)/)?.[1];
+        throw new Error(`Resend can only send to the address you signed up to Resend with${own ? ` (${own})` : ''} until a web domain is verified. Use an email account (SMTP) instead, or send to that address.`);
+      }
+      throw new Error(`Resend replied ${res.status}: ${msg.slice(0, 160)}`);
+    }
     return;
   }
   const transporter = nodemailer.createTransport({
@@ -164,7 +174,13 @@ export async function sendTestEmail(to: string): Promise<void> {
   await send(to, `[Test] ${m.subject}`, m.html, m.text);
 }
 
+/** Send a failed email again (Admin > Access & settings). */
+export async function retryEmail(id: string): Promise<void> {
+  await db()`update email_outbox set status = 'pending', attempts = 0, last_error = null where id = ${id} and status <> 'sent'`;
+  await processEmailOutbox();
+}
+
 export async function recentEmails(limit = 5) {
-  return db()`select e.status, e.recipient, e.subject, e.attempts, e.last_error, e.created_at, e.sent_at
+  return db()`select e.id, e.status, e.recipient, e.subject, e.attempts, e.last_error, e.created_at, e.sent_at
     from email_outbox e order by e.created_at desc limit ${limit}`;
 }

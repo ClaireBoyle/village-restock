@@ -340,6 +340,15 @@ export async function saveManagerEmail(_: ActionResult, form: FormData): Promise
   return done(enabled ? `Emails will go to ${to} after every finished full restock.` : 'Manager emails are switched off.');
 }
 
+export async function retryEmailAction(form: FormData): Promise<void> {
+  await requireAdmin();
+  const id = uuid.safeParse(form.get('id'));
+  if (!id.success) return;
+  const { retryEmail } = await import('@/lib/server/email');
+  await retryEmail(id.data);
+  revalidatePath('/admin', 'layout');
+}
+
 export async function sendTestEmailAction(_: ActionResult, form: FormData): Promise<ActionResult> {
   await requireAdmin();
   const to = String(form.get('to') ?? '').trim();
