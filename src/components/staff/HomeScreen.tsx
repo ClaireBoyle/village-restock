@@ -78,16 +78,11 @@ export function HomeScreen({ isAdmin }: { isAdmin: boolean }) {
           <div>
             <p className="date">{dateLabel}</p>
             <h1>Restocking</h1>
-            <p className="tagline">Restock smarter. Stay prepared.</p>
           </div>
         </section>
 
         <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-            <h2 style={{ fontSize: 22 }}>Departments</h2>
-            <p className="meta">Choose where you&rsquo;re restocking</p>
-          </div>
-
+          <h2 className="sr-only">Departments</h2>
           {!catalogue && !error ? <p className="meta">Loading product data&hellip;</p> : null}
           {error && !catalogue ? (
             <div className="banner s-warn"><Icon name="wifioff" /><div><b>No product data on this device yet</b><p>{error}</p></div></div>
