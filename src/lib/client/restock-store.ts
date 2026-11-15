@@ -88,7 +88,7 @@ export async function startSession(departmentId: string, kind: 'full' | 'quick',
 }
 
 /** Device-only details (which area is open, the quick list). Not uploaded. */
-export async function updateLocalSession(id: string, changes: Partial<Pick<LocalSession, 'curAreaId' | 'selected'>>) {
+export async function updateLocalSession(id: string, changes: Partial<Pick<LocalSession, 'curAreaId' | 'selected' | 'note'>>) {
   await localDb().sessions.update(id, changes);
 }
 
@@ -133,15 +133,15 @@ export async function setArea(sessionId: string, areaId: string, status: LocalAr
   requestSync();
 }
 
-export async function finishSession(sessionId: string, exceptionReason: string | null, who: string) {
+export async function finishSession(sessionId: string, exceptionReason: string | null, who: string, note: string | null = null) {
   const db = localDb();
   await db.transaction('rw', db.sessions, db.outbox, async () => {
     const s = await db.sessions.get(sessionId);
     if (!s) return;
     await db.sessions.update(sessionId, {
-      status: exceptionReason ? 'finished_exceptions' : 'finished', exceptionReason, finishedAt: now(), people: addPerson(s, who), updatedAt: now(),
+      status: exceptionReason ? 'finished_exceptions' : 'finished', exceptionReason, finishedAt: now(), people: addPerson(s, who), updatedAt: now(), note,
     });
-    await queue({ type: 'session.finish', sessionId, exceptionReason }, who);
+    await queue({ type: 'session.finish', sessionId, exceptionReason, note }, who);
   });
   requestSync();
 }
@@ -179,6 +179,8 @@ export async function importRemote(remote: RemoteSession) {
       exceptionReason: pendingSession && existing ? existing.exceptionReason : remote.exceptionReason,
       people: [...new Set([...(existing?.people ?? []), ...remote.people])],
       startedAt: remote.startedAt, finishedAt: pendingSession && existing ? existing.finishedAt : remote.finishedAt,
+      // Keep a comment being typed here; otherwise take the server's.
+      note: pendingSession && existing ? existing.note ?? null : remote.note ?? existing?.note ?? null,
       selected: existing?.selected ?? [], curAreaId: existing?.curAreaId ?? null, updatedAt: remote.updatedAt,
     });
     for (const it of remote.items) {

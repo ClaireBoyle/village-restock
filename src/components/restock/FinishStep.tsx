@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
   EXCEPTION_REASONS, EMPTY_ITEM, SHORT_REASONS, activePlacements, areaStatus, collectionLines, exceptions, isChecked,
@@ -21,6 +21,16 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
   const sync = useSyncStatus();
   const [exOpen, setExOpen] = useState(false);
   const [exReason, setExReason] = useState<string | null>(null);
+  const [note, setNote] = useState(session.note ?? '');
+  const noteTimer = useRef<number | undefined>(undefined);
+  // Keep the draft on this device, so leaving the screen doesn't lose it.
+  const editNote = (v: string) => {
+    setNote(v);
+    window.clearTimeout(noteTimer.current);
+    noteTimer.current = window.setTimeout(() => void updateLocalSession(session.id, { note: v }), 400);
+  };
+  useEffect(() => () => window.clearTimeout(noteTimer.current), []);
+  const finalNote = note.trim() ? note.trim() : null;
   const finished = session.status === 'finished' || session.status === 'finished_exceptions';
   const ex = finished ? [] : exceptions({ kind: session.kind, view, placements, recordedAreas: recorded, items });
 
@@ -83,6 +93,9 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
                 {session.exceptionReason ? <> &middot; {session.exceptionReason}</> : null}
                 {session.people.length ? <> &middot; {session.people.join(', ')}</> : null}</span>
             </div>
+            {session.note ? (
+              <section className="note-sent"><h3><Icon name="list" />Comments{session.kind === 'full' ? ' sent to managers' : ''}</h3><p>{session.note}</p></section>
+            ) : null}
             {report}
           </>
         ) : (
@@ -109,12 +122,18 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
                 <div className="chips">{EXCEPTION_REASONS.map((r) => <button key={r} className={`chip ${exReason === r ? 'on' : ''}`} onClick={() => setExReason(r)}>{r}</button>)}</div>
                 <div className="row-actions">
                   <button className="btn" onClick={() => { setExOpen(false); setExReason(null); }}>Cancel</button>
-                  <button className="btn caution big" disabled={!exReason} onClick={() => { void finishSession(session.id, exReason, who); setExOpen(false); window.scrollTo({ top: 0 }); }}><Icon name="warn" />Confirm finish with exceptions</button>
+                  <button className="btn caution big" disabled={!exReason} onClick={() => { void finishSession(session.id, exReason, who, finalNote); setExOpen(false); window.scrollTo({ top: 0 }); }}><Icon name="warn" />Confirm finish with exceptions</button>
                 </div>
               </section>
             ) : null}
 
             {outcomes.some((o) => o.status !== 'not_topped_up') ? report : null}
+
+            <section className="note-box">
+              <label htmlFor="finish-note"><b>Comments for managers</b> <span className="muted">(optional)</span></label>
+              <p className="meta">{session.kind === 'full' ? 'Added to the email managers get when you finish.' : 'Saved with this restock for managers to see.'} For example: a broken fridge, a delivery that didn&rsquo;t arrive.</p>
+              <textarea id="finish-note" rows={3} maxLength={1000} value={note} onChange={(e) => editNote(e.target.value)} placeholder="Anything managers should know?" />
+            </section>
 
             <details className="sum-details">
               <summary><Icon name="list" />Show full summary</summary>
@@ -138,7 +157,7 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
           sub={ex.length ? 'Finish restock unlocks when everything is done' : 'Everything is checked and collected'}>
           <button className="btn" onClick={ctx.saveAndExit}><Icon name="save" />Save and exit</button>
           {ex.length ? <button className="btn caution big" onClick={() => { setExOpen(true); window.setTimeout(() => document.getElementById('expanel')?.scrollIntoView({ block: 'start' }), 50); }}>Finish with exceptions&hellip;</button> : null}
-          <button className="btn good big" disabled={ex.length > 0} onClick={() => { void finishSession(session.id, null, who); window.scrollTo({ top: 0 }); }}><Icon name="check" />Finish restock</button>
+          <button className="btn good big" disabled={ex.length > 0} onClick={() => { void finishSession(session.id, null, who, finalNote); window.scrollTo({ top: 0 }); }}><Icon name="check" />Finish restock</button>
         </Dock>
       )}
     </>

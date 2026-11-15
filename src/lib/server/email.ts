@@ -44,6 +44,8 @@ export interface RestockEmailInput {
   exceptionReason: string | null;
   outcomes: StockOutcome[];
   notChecked: string[];      // e.g. "Freezer 1 skipped (Ran out of time)"
+  /** Comments staff typed when finishing. */
+  note?: string | null;
   link: string | null;
 }
 
@@ -61,6 +63,7 @@ export function buildRestockEmail(i: RestockEmailInput): { subject: string; html
   const T: string[] = [`${i.departmentName}: full restock finished ${i.finishedLabel}`];
   if (i.people.length) T.push(`Staff: ${i.people.join(', ')}`);
   if (i.exceptionReason) T.push(`Finished with exceptions: ${i.exceptionReason}`);
+  if (i.note) T.push('', 'COMMENTS FROM STAFF', i.note);
   if (out.length) { T.push('', `OUT OF STOCK (${out.length})`); for (const o of out) { T.push(`- ${outLine(o)}`); if (o.affects.length) T.push(`  Set as sold out: ${o.affects.join(', ')}`); } }
   if (low.length) { T.push('', `RUNNING LOW (${low.length})`); for (const o of low) T.push(`- ${lowLine(o)}`); }
   if (!out.length && !low.length) T.push('', 'Nothing low or out of stock.');
@@ -84,6 +87,9 @@ export function buildRestockEmail(i: RestockEmailInput): { subject: string; html
       <div style="font-size:14px;opacity:.9;margin-top:4px">Full restock finished ${esc(i.finishedLabel)}${i.people.length ? ` &middot; ${esc(i.people.join(', '))}` : ''}</div>
     </div>
     ${i.exceptionReason ? `<div style="background:#FDF0DA;border-radius:12px;padding:10px 14px;margin-bottom:14px;color:#8A5300;font-size:14px"><b>Finished with exceptions:</b> ${esc(i.exceptionReason)}</div>` : ''}
+    ${i.note ? `<div style="background:#fff;border:2px solid #C9D6F5;border-radius:16px;padding:14px 18px;margin:0 0 14px">
+      <div style="font-size:15px;font-weight:700;color:#2446B8;margin:0 0 6px">Comments from staff</div>
+      <div style="font-size:15px;color:#17213B;white-space:pre-wrap;line-height:1.45">${esc(i.note)}</div></div>` : ''}
     ${out.length ? box('#FDE6E4', '#E0716A', '#9F2620', `Out of stock (${out.length})`, out.map((o) => item(o.productName, `None left in the storeroom${shelf(o)}`,
       o.affects.length ? `<div style="font-size:14px;color:#9F2620;margin-top:4px">Set as sold out: <b>${esc(o.affects.join(', '))}</b></div>` : '')).join('')) : ''}
     ${low.length ? box('#FFF1D6', '#F0A930', '#7A4300', `Running low (${low.length})`, low.map((o) => item(o.productName, `Storeroom had ${n(o.got)}, short ${n(o.short)} ${unit(o, o.short)}${shelf(o)}`)).join('')) : ''}
@@ -165,7 +171,7 @@ export async function processEmailOutbox(): Promise<void> {
 /** Send a test email straight away (Admin > Access & settings). */
 export async function sendTestEmail(to: string): Promise<void> {
   const m = buildRestockEmail({
-    departmentName: 'Test department', finishedLabel: 'just now', people: ['Test'], exceptionReason: null, notChecked: [], link: null,
+    departmentName: 'Test department', finishedLabel: 'just now', people: ['Test'], exceptionReason: null, notChecked: [], link: null, note: 'Example comment: the cool room door is sticking.',
     outcomes: [
       { productName: 'Example product', unitSingular: 'bottle', unitPlural: 'bottles', status: 'out', needed: 4, got: 0, short: 4, onShelf: 2, target: 6, reason: 'insufficient', flagged: false, affects: ['Example menu item'] },
       { productName: 'Another product', unitSingular: 'pack', unitPlural: 'packs', status: 'low', needed: 3, got: 1, short: 2, onShelf: 3, target: 5, reason: 'insufficient', flagged: false, affects: [] },

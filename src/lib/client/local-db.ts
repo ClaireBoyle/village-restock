@@ -23,6 +23,8 @@ export interface LocalSession {
   finishedAt: string | null;
   /** Quick Restock: the products (placements) staff picked. */
   selected: string[];
+  /** Comments for managers: a draft while open, then what was sent when finished. */
+  note?: string | null;
   /** The area this device last had open. */
   curAreaId: string | null;
   updatedAt: string;

@@ -30,6 +30,7 @@ export default async function RestockDetail({ params }: { params: Promise<{ id: 
         <span className={`badge ${st.cls}`}>{st.label}</span>
       </div>
       {s.exceptionReason ? <div className="banner s-warn"><Icon name="warn" /><div><b>Finished with exceptions</b><p>Reason: {String(s.exceptionReason)}</p></div></div> : null}
+      {s.finishNote ? <div className="banner s-info"><Icon name="info" /><div><b>Comments from staff</b><p style={{ whiteSpace: 'pre-wrap' }}>{String(s.finishNote)}</p></div></div> : null}
       {s.status === 'unfinished' ? <div className="banner s-bad"><Icon name="warn" /><div><b>Never finished</b><p>This restock was still open after the 5 am cut-off. Check what was left below.</p></div></div> : null}
 
       {s.kind === 'full' && r.view ? (

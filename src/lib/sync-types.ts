@@ -38,7 +38,9 @@ export const opSchema = z.discriminatedUnion('type', [
     ...base, type: z.literal('area.set'), sessionId: z.uuid(), areaId: z.uuid(),
     status: z.enum(['not_started', 'complete', 'skipped']), skipReason: z.string().trim().max(80).nullable(),
   }),
-  z.object({ ...base, type: z.literal('session.finish'), sessionId: z.uuid(), exceptionReason: z.string().trim().max(80).nullable() }),
+  z.object({ ...base, type: z.literal('session.finish'), sessionId: z.uuid(), exceptionReason: z.string().trim().max(80).nullable(),
+    /** Optional comments for managers (added to the email). */
+    note: z.string().trim().max(1000).nullable().optional() }),
   z.object({ ...base, type: z.literal('session.reopen'), sessionId: z.uuid() }),
 ]);
 
@@ -60,7 +62,7 @@ export interface SyncResponse { results: OpResult[]; serverTime: string }
 export interface RemoteSession {
   id: string; departmentId: string; kind: 'full' | 'quick'; tradingDate: string;
   status: 'open' | 'finished' | 'finished_exceptions' | 'unfinished';
-  exceptionReason: string | null; people: string[]; startedAt: string; finishedAt: string | null; updatedAt: string;
+  exceptionReason: string | null; note: string | null; people: string[]; startedAt: string; finishedAt: string | null; updatedAt: string;
   areas: { areaId: string; status: 'not_started' | 'in_progress' | 'complete' | 'skipped'; skipReason: string | null; updatedBy: string | null; updatedAt: string }[];
   items: ({ placementId: string; updatedBy: string | null; updatedAt: string; conflict: Conflict | null } & Required<ItemFields>)[];
 }

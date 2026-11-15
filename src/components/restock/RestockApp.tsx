@@ -84,12 +84,13 @@ export function RestockApp({ departmentId }: { departmentId: string }) {
   }, []);
   const go = useCallback((s: Step) => { setStep(s); setUrl(mode, s, quickId); window.scrollTo({ top: 0 }); }, [mode, setUrl, quickId]);
 
-  const begin = async (m: Mode) => {
+  /** `keep`: the step from the address after a refresh, so it doesn't jump back to the start. */
+  const begin = async (m: Mode, keep?: Step) => {
     if (!today) return;
     setOpening(true);
     try {
       let q: string | null = null;
-      let first: Step = 'check';
+      let first: Step = keep ?? 'check';
       if (m === 'full') {
         const s = await openFullSession(departmentId, today, who);
         if (s.status === 'finished' || s.status === 'finished_exceptions') first = 'finish'; // already done: show its summary
@@ -105,8 +106,8 @@ export function RestockApp({ departmentId }: { departmentId: string }) {
 
   // Opened from an address with ?mode=full but nothing on this device yet: set it up.
   useEffect(() => {
-    if (mode === 'full' && today && fullSession === null && !opening) void begin('full');
-    if (mode === 'quick' && today && quickSession === null && !opening && step === 'check') void begin('quick');
+    if (mode === 'full' && today && fullSession === null && !opening) void begin('full', step);
+    if (mode === 'quick' && today && quickSession === null && !opening && step === 'check') void begin('quick', step);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, today]);
 

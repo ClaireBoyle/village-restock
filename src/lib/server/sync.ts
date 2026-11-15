@@ -160,7 +160,7 @@ async function apply(tx: Tx, op: SyncOp, deviceId: string): Promise<{ mergedInto
 
     case 'session.finish': {
       const s = await sessionRow(tx, op.sessionId);
-      await finishSession(tx, { id: op.sessionId, departmentId: String(s.departmentId), kind: s.kind as 'full' | 'quick' }, op.exceptionReason, op.at, op.by);
+      await finishSession(tx, { id: op.sessionId, departmentId: String(s.departmentId), kind: s.kind as 'full' | 'quick' }, op.exceptionReason, op.at, op.by, op.note ?? null);
       await addPerson(tx, op.sessionId, op.by);
       return {};
     }
@@ -179,7 +179,18 @@ async function apply(tx: Tx, op: SyncOp, deviceId: string): Promise<{ mergedInto
  * outstanding it is recorded as "finished with exceptions" even if the device
  * said otherwise. Shortages (confirmed or flagged) are written for managers.
  */
-async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind: 'full' | 'quick' }, reason: string | null, at: string, by: string | null) {
+let hasNoteColumn: boolean | null = null;
+/** Migration 004 adds finish_note; until it's run, comments still go in the email. */
+async function noteColumn(tx: Tx): Promise<boolean> {
+  if (hasNoteColumn === null) {
+    const r = await tx`select 1 from information_schema.columns where table_name = 'restock_sessions' and column_name = 'finish_note'`;
+    hasNoteColumn = r.length > 0;
+  }
+  return hasNoteColumn;
+}
+
+async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind: 'full' | 'quick' }, reason: string | null, at: string, by: string | null, note: string | null) {
+  const comment = note?.trim() ? note.trim() : null;
   const cat = await loadCatalogue();
   const view = departmentView(cat, s.departmentId);
   const rows = await tx`select * from session_items where session_id = ${s.id}`;
@@ -213,6 +224,7 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
     }
   }
   await tx`update restock_sessions set status = ${status}, exception_reason = ${finalReason}, finished_at = ${at} where id = ${s.id}`;
+  if (await noteColumn(tx)) await tx`update restock_sessions set finish_note = ${comment} where id = ${s.id}`;
 
   // Full restocks: queue the manager email in this same transaction.
   if (s.kind === 'full' && view) {
@@ -235,7 +247,7 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
       departmentName: String(dept?.name ?? view.department.name),
       finishedLabel: `${new Date(at).toLocaleDateString('en-AU', { timeZone: cat.settings.timeZone, weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '')}, ${new Date(at).toLocaleTimeString('en-AU', { timeZone: cat.settings.timeZone, hour: 'numeric', minute: '2-digit' }).toLowerCase()}`,
       people: (row?.people as string[]) ?? [], exceptionReason: finalReason,
-      outcomes: stockOutcomes(lines, items, view.byId), notChecked,
+      outcomes: stockOutcomes(lines, items, view.byId), notChecked, note: comment,
       link: host ? `https://${host}/admin/restocks/${s.id}` : null,
     });
   }
@@ -249,7 +261,7 @@ function toRemote(s: Record<string, unknown>, areas: Record<string, unknown>[], 
   return {
     id: String(s.id), departmentId: String(s.departmentId), kind: s.kind as 'full' | 'quick',
     tradingDate: s.tradingDate instanceof Date ? s.tradingDate.toISOString().slice(0, 10) : String(s.tradingDate).slice(0, 10),
-    status: s.status as RemoteSession['status'], exceptionReason: (s.exceptionReason as string) ?? null,
+    status: s.status as RemoteSession['status'], exceptionReason: (s.exceptionReason as string) ?? null, note: (s.finishNote as string) ?? null,
     people: (s.people as string[]) ?? [], startedAt: iso(s.startedAt)!, finishedAt: iso(s.finishedAt), updatedAt: iso(s.updatedAt)!,
     areas: areas.map((a) => ({ areaId: String(a.checkAreaId), status: a.status as RemoteSession['areas'][number]['status'], skipReason: (a.skipReason as string) ?? null, updatedBy: (a.updatedBy as string) ?? null, updatedAt: iso(a.updatedAt)! })),
     items: items.map((r) => ({

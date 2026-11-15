@@ -28,4 +28,10 @@ describe('manager email', () => {
     const m = buildRestockEmail({ departmentName: 'A<b>', finishedLabel: 'now', people: [], exceptionReason: null, notChecked: [], link: null, outcomes: [] });
     expect(m.html).toContain('A&lt;b&gt;');
   });
+  it('includes staff comments, escaped', () => {
+    const m = buildRestockEmail({ departmentName: 'Bar', finishedLabel: 'now', people: [], exceptionReason: null, notChecked: [], link: null, outcomes: [], note: 'Fridge 2 <door> broken' });
+    expect(m.text).toContain('COMMENTS FROM STAFF\nFridge 2 <door> broken');
+    expect(m.html).toContain('Comments from staff');
+    expect(m.html).toContain('Fridge 2 &lt;door&gt; broken');
+  });
 });
