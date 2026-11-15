@@ -32,7 +32,7 @@ export default async function Settings() {
 
       <section className="panel" style={section}>
         <h2>Manager email</h2>
-        <p className="meta">Sent automatically every time a full restock is finished: what&rsquo;s out of stock (with menu items to mark sold out) and what&rsquo;s running low.</p>
+        <p className="meta">Sent automatically when a full restock is finished with something to act on: anything out of stock (with menu items to mark sold out) or running low, a staff comment, or work left unfinished. If everything was collected, no email is sent (the restock is still in Restocks).</p>
         {!transport ? (
           <div className="banner s-warn"><Icon name="warn" /><div><b>Email sending isn&rsquo;t set up yet</b>
             <p>Add <b>RESEND_API_KEY</b> (or <b>SMTP_USER</b> and <b>SMTP_PASS</b>) in Vercel &rarr; Settings &rarr; Environment Variables, then redeploy. Emails are kept and sent once it&rsquo;s set up.</p></div></div>
@@ -41,7 +41,7 @@ export default async function Settings() {
           <div style={row}>
             <div className="field" style={{ flex: '1 1 280px' }}><label htmlFor="mto">Managers&rsquo; email address</label>
               <input id="mto" name="to" type="email" defaultValue={mail.to} placeholder="e.g. managers@example.com" autoComplete="off" /></div>
-            <label className="check"><input type="checkbox" name="enabled" defaultChecked={mail.enabled} />Send after every finished full restock</label>
+            <label className="check"><input type="checkbox" name="enabled" defaultChecked={mail.enabled} />Send after finished full restocks that need attention</label>
             <SubmitButton>Save</SubmitButton>
           </div>
         </ActionForm>

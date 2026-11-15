@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildRestockEmail } from './email';
+import { needsManagerEmail, buildRestockEmail } from './email';
 import type { StockOutcome } from '@/lib/restock-logic';
 
 const o = (p: Partial<StockOutcome>): StockOutcome => ({
@@ -33,5 +33,14 @@ describe('manager email', () => {
     expect(m.text).toContain('COMMENTS FROM STAFF\nFridge 2 <door> broken');
     expect(m.html).toContain('Comments from staff');
     expect(m.html).toContain('Fridge 2 &lt;door&gt; broken');
+  });
+  it('only emails when there is something to act on', () => {
+    const clean = { departmentName: 'Candy Bar', finishedLabel: 'now', people: [], exceptionReason: null, notChecked: [], link: null, outcomes: [] };
+    expect(needsManagerEmail(clean)).toBe(false);
+    expect(needsManagerEmail({ ...clean, note: '  ' })).toBe(false);
+    expect(needsManagerEmail({ ...clean, note: 'Cup dispenser broken' })).toBe(true);
+    expect(needsManagerEmail({ ...clean, exceptionReason: 'Ran out of time' })).toBe(true);
+    expect(needsManagerEmail({ ...clean, notChecked: ['Freezer skipped'] })).toBe(true);
+    expect(needsManagerEmail({ ...clean, outcomes: [{ productName: 'Cups', unitSingular: 'sleeve', unitPlural: 'sleeves', status: 'low', needed: 3, got: 1, short: 2, onShelf: 1, target: 4, reason: 'insufficient', flagged: false, affects: [] }] })).toBe(true);
   });
 });

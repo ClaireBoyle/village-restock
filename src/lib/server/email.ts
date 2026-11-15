@@ -105,8 +105,18 @@ export function buildRestockEmail(i: RestockEmailInput): { subject: string; html
   return { subject, html, text: T.join('\n') };
 }
 
+/**
+ * Only email managers when there's something to act on: anything out of stock,
+ * running low or not topped up, a staff comment, or a restock finished with
+ * exceptions. A clean restock is still recorded in Admin > Restocks.
+ */
+export function needsManagerEmail(i: RestockEmailInput): boolean {
+  return i.outcomes.length > 0 || !!i.note?.trim() || !!i.exceptionReason || i.notChecked.length > 0;
+}
+
 /** Add the email to the outbox inside the finishing transaction. Only if switched on with an address. */
 export async function queueRestockEmail(tx: Tx, sessionId: string, finishedAt: string, input: RestockEmailInput) {
+  if (!needsManagerEmail(input)) return;
   const rows = await tx`select key, value from app_settings where key in ('manager_email', 'manager_email_enabled')`;
   const to = String(rows.find((r) => r.key === 'manager_email')?.value ?? '').trim();
   const enabled = rows.find((r) => r.key === 'manager_email_enabled')?.value === true;
