@@ -3,15 +3,13 @@ import { useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
   EXCEPTION_REASONS, EMPTY_ITEM, SHORT_REASONS, activePlacements, areaStatus, collectionLines, exceptions, isChecked,
-  lineGot, lineInfo, lineState, summaryText,
+  lineGot, lineInfo, lineState, outcomeLine, stockOutcomes, summaryText, type StockOutcome, type StockStatus,
 } from '@/lib/restock-logic';
 import { formatQty, round2 } from '@/lib/restock-math';
 import { finishSession, reopenSession, updateLocalSession } from '@/lib/client/restock-store';
 import { useSyncStatus } from '@/lib/client/hooks';
 import { AREA_BADGE, AREA_LABEL, Badge, Dock, plural, timeOf } from './shared';
 import type { RestockCtx } from './RestockApp';
-
-interface ShortRow { name: string; detail: string; flagged: boolean; confirmed: boolean }
 
 /**
  * Before finishing: only what needs doing, plus the shortages that will be
@@ -29,19 +27,14 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
 
   const covered = activePlacements(session.kind, placements, recorded);
   const lines = collectionLines(covered, items);
-  const shorts: ShortRow[] = [], notCollected: [string, string][] = [], collected: [string, string][] = [];
+  const notCollected: [string, string][] = [], collected: [string, string][] = [];
   for (const l of lines) {
     const st = lineState(l, items), info = lineInfo(l, items), got = lineGot(l, items);
     if (l.kind === 'task') { (st === 'done' ? collected : notCollected).push([l.productName, st === 'done' ? 'Done' : 'Task not done']); continue; }
     if (got > 0) collected.push([l.productName, formatQty(got, l.unitSingular, l.unitPlural)]);
-    const missing = formatQty(round2(l.total - got), l.unitSingular, l.unitPlural);
-    if (st === 'short' && info.reason === 'insufficient') {
-      shorts.push({ name: l.productName, detail: `Short ${missing} (needed ${l.total}, got ${got})`, flagged: info.flagged, confirmed: true });
-    } else {
-      if (st !== 'done') notCollected.push([l.productName, `${missing} not collected${info.reason ? ` (${SHORT_REASONS.find((r) => r[0] === info.reason)![1].toLowerCase()})` : ''}`]);
-      if (info.flagged) shorts.push({ name: l.productName, detail: st === 'done' ? 'Collected' : `${missing} not collected`, flagged: true, confirmed: false });
-    }
+    if (st !== 'done' && info.reason !== 'insufficient') notCollected.push([l.productName, `${formatQty(round2(l.total - got), l.unitSingular, l.unitPlural)} not collected${info.reason ? ` (${SHORT_REASONS.find((r) => r[0] === info.reason)![1].toLowerCase()})` : ''}`]);
   }
+  const outcomes = stockOutcomes(lines, items, view.byId);
   // Products nobody checked, grouped by area ("Fridge 2: Milk, Butter portions")
   const uncheckedByArea = new Map<string, string[]>();
   for (const p of covered) {
@@ -67,16 +60,7 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
     ctx.go(e.kind === 'collect' ? 'collect' : 'check');
   };
 
-  const shortagesCard = (
-    <section className="sum-card" style={{ borderColor: shorts.length ? 'var(--bad-line)' : undefined }}>
-      <h3 style={{ color: shorts.length ? 'var(--bad)' : undefined }}><Icon name="warn" />{finished ? 'Shortages reported to managers' : 'Shortages managers will see'}</h3>
-      {shorts.length ? (
-        <ul>{shorts.map((s) => (
-          <li key={s.name}><span>{s.name}{s.flagged ? <> <span className="badge s-bad" style={{ padding: '2px 8px 2px 6px', fontSize: 12.5 }}><Icon name="flag" />Flagged</span></> : null}</span><span>{s.detail}</span></li>
-        ))}</ul>
-      ) : <p className="muted">None.</p>}
-    </section>
-  );
+  const report = <StockReport outcomes={outcomes} finished={finished} />;
 
   const details = (
     <div className="sum">
@@ -105,16 +89,21 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
 
         {finished ? (
           <>
-            <div className={`banner ${session.status === 'finished_exceptions' ? 's-warn' : 's-ok'}`}><Icon name={session.status === 'finished_exceptions' ? 'warn' : 'check'} />
-              <div><b>{session.status === 'finished_exceptions' ? 'Finished with exceptions' : 'Restock complete'} at {timeOf(session.finishedAt)}</b>
-                <p>{session.exceptionReason ? `Reason: ${session.exceptionReason}. This record is shared with managers.` : 'Everything was checked and collected. This record is shared with managers.'}</p></div></div>
-            {shortagesCard}
-            {details}
-            <section className="sum-card"><h3><Icon name="copy" />Copy for managers</h3>
-              <textarea className="copybox" id="copybox" readOnly value={text} />
-              <div className="row-actions"><button className="btn primary" onClick={() => void copy()}><Icon name="copy" />Copy summary</button></div>
-              {copied ? <p className="meta" role="status">{copied}</p> : null}
-            </section>
+            <div className={`finish-meta ${session.status === 'finished_exceptions' ? 's-warn' : 's-ok'}`}>
+              <Icon name={session.status === 'finished_exceptions' ? 'warn' : 'check'} />
+              <span><b>{session.status === 'finished_exceptions' ? 'Finished with exceptions' : 'Restock complete'}</b> at {timeOf(session.finishedAt)}
+                {session.exceptionReason ? <> &middot; {session.exceptionReason}</> : null}
+                {session.people.length ? <> &middot; {session.people.join(', ')}</> : null}</span>
+            </div>
+            {report}
+            <details className="sum-details">
+              <summary><Icon name="list" />Show full record</summary>
+              {details}
+              <section className="sum-card" style={{ marginTop: 14 }}><h3><Icon name="copy" />Copy for managers</h3>
+                <textarea className="copybox" id="copybox" readOnly value={text} />
+              </section>
+            </details>
+            <div><button className="btn" onClick={() => void copy()}><Icon name="copy" />Copy for managers</button>{copied ? <span className="meta" role="status" style={{ marginLeft: 10 }}>{copied}</span> : null}</div>
           </>
         ) : (
           <>
@@ -145,7 +134,7 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
               </section>
             ) : null}
 
-            {shorts.length ? shortagesCard : null}
+            {outcomes.length ? report : null}
 
             <details className="sum-details">
               <summary><Icon name="list" />Show full summary</summary>
@@ -173,5 +162,45 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
         </Dock>
       )}
     </>
+  );
+}
+
+const GROUPS: { st: StockStatus; title: string; sub: string; cls: string }[] = [
+  { st: 'out', title: 'Out of stock', sub: 'The storeroom had none', cls: 's-bad' },
+  { st: 'low', title: 'Running low', sub: 'The storeroom only had some', cls: 's-warn' },
+  { st: 'not_topped_up', title: 'Not topped up', sub: 'Not collected for another reason', cls: 's-none' },
+];
+
+/** The heart of the summary: what we're now low on or out of, worst first. */
+function StockReport({ outcomes, finished }: { outcomes: StockOutcome[]; finished: boolean }) {
+  if (!outcomes.length) {
+    return (
+      <section className="stock-report all-good">
+        <Icon name="check" /><div><h2>Nothing low or out of stock</h2><p>Everything collected is back to its target.</p></div>
+      </section>
+    );
+  }
+  return (
+    <section className="stock-report">
+      <h2>{finished ? 'Stock after this restock' : 'Low or out of stock so far'}</h2>
+      {GROUPS.map((g) => {
+        const rows = outcomes.filter((o) => o.status === g.st);
+        if (!rows.length) return null;
+        return (
+          <div key={g.st} className={`stock-group ${g.cls}`}>
+            <div className="stock-group-h"><span className="badge"><Icon name={g.st === 'out' ? 'warn' : g.st === 'low' ? 'down' : 'circle'} />{g.title} &middot; {rows.length}</span><small>{g.sub}</small></div>
+            <ul>
+              {rows.map((o) => (
+                <li key={o.productName}>
+                  <span className="sp-name">{o.productName}{o.flagged ? <span className="badge s-bad flag-tag"><Icon name="flag" />Flagged</span> : null}</span>
+                  <span className="sp-detail">{outcomeLine(o).slice(o.productName.length + 2)}</span>
+                  {o.onShelf !== null && o.target ? <span className="sp-bar" aria-hidden="true"><i style={{ width: `${Math.min(100, (o.onShelf / o.target) * 100)}%` }} /></span> : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
+    </section>
   );
 }

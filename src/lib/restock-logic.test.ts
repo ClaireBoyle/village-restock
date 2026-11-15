@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Catalogue } from './catalogue-types';
 import {
   EMPTY_ITEM, areaStatus, cardState, isChecked, collectionLines, departmentView, exceptions, gotAllUpdates,
-  gotFewerUpdates, groupByStoreroom, lineGot, lineState, needOf, summaryText, type AreaStatus, type ItemState,
+  gotFewerUpdates, groupByStoreroom, lineGot, lineState, needOf, stockOutcomes, summaryText, type AreaStatus, type ItemState,
 } from './restock-logic';
 
 // A tiny catalogue: Kitchen with Fridge 1 + Dry shelf; Bar fridge + Back shelf sharing one beer.
@@ -141,6 +141,32 @@ describe('collecting (brief scenario 7: fewer than requested)', () => {
   });
 });
 
+describe('stock after the restock (what we are low on / out of)', () => {
+  const base = items({ 'p-beer-f': { currentQty: 6 }, 'p-beer-s': { currentQty: 1 } });
+  const line = collectionLines(bar.placements, base)[0];
+  const apply = (ups: { placementId: string; fields: Partial<ItemState> }[]) => {
+    const m = new Map(base);
+    for (const u of ups) m.set(u.placementId, { ...m.get(u.placementId)!, ...u.fields });
+    return m;
+  };
+  it('storeroom had none: out of stock, with what is left on the shelf', () => {
+    const [o] = stockOutcomes([line], apply(gotFewerUpdates(line, 0, 'insufficient', false)), bar.byId);
+    expect(o.status).toBe('out');
+    expect([o.onShelf, o.target]).toEqual([7, 18]);
+  });
+  it('storeroom had some: running low', () => {
+    const [o] = stockOutcomes([line], apply(gotFewerUpdates(line, 8, 'insufficient', true)), bar.byId);
+    expect([o.status, o.got, o.short, o.onShelf, o.flagged]).toEqual(['low', 8, 3, 15, true]);
+  });
+  it('ran out of time: not topped up (not a storeroom shortage)', () => {
+    const [o] = stockOutcomes([line], apply(gotFewerUpdates(line, 5, 'time', false)), bar.byId);
+    expect(o.status).toBe('not_topped_up');
+  });
+  it('fully collected lines are not listed', () => {
+    expect(stockOutcomes([line], apply(gotAllUpdates(line)), bar.byId)).toEqual([]);
+  });
+});
+
 describe('finishing', () => {
   const recorded = (o: Record<string, AreaStatus>) => new Map(Object.entries(o));
   it('lists incomplete areas and uncollected items as exceptions', () => {
@@ -156,7 +182,8 @@ describe('finishing', () => {
     expect(ex).toEqual([]);
     const text = summaryText({ departmentName: 'Kitchen', kind: 'full', finishedLabel: '11:40 pm', exceptionReason: null, people: ['Sam'],
       view: kitchen, placements: kitchen.placements, recordedAreas: recorded({ f1: 'complete', dry: 'complete' }), skipReasons: new Map(), items: m, dateLabel: 'Thu 12 Nov' });
-    expect(text).toContain('Tomatoes: short 2 tomatoes (needed 6, got 4)');
+    expect(text).toContain('RUNNING LOW (1)');
+    expect(text).toContain('Tomatoes: only 4 tomatoes in the storeroom, short 2 tomatoes · 6 of 8 on the shelf');
     expect(text).toContain('Status: Complete');
   });
   it('quick restock only needs its own list (scenario 9)', () => {

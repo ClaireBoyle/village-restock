@@ -300,3 +300,33 @@ button.pill:hover{background:var(--surface-2)}
 .unchecked-row:first-of-type{border-top:0}
 .unchecked-row b{font-weight:600}
 .sum-card li>span:first-child{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+/* "Fridge 2 complete" bar: tap the text to reopen the area */
+.banner-toggle{flex:1;min-width:200px;display:flex;gap:12px;align-items:center;text-align:left;background:none;border:0;padding:4px 0;border-radius:12px;color:inherit}
+.banner-toggle>.ic{color:var(--c);width:24px;height:24px}
+.banner-toggle b{font-weight:600}
+.banner-toggle p{font-size:14.5px;color:var(--ink-2)}
+.banner-toggle u{text-underline-offset:3px;color:var(--c)}
+.banner-toggle:active{opacity:.7}
+/* Finished screen: stock report first */
+.finish-meta{display:flex;gap:10px;align-items:center;font-size:15.5px;color:var(--ink-2)}
+.finish-meta .ic{color:var(--c);width:22px;height:22px}
+.finish-meta b{color:var(--ink);font-weight:600}
+.stock-report{background:var(--surface);border:1px solid var(--hair);border-radius:22px;padding:18px 20px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:16px}
+.stock-report>h2{font-size:22px;letter-spacing:-.02em}
+.stock-report.all-good{flex-direction:row;align-items:center;gap:14px;background:var(--ok-bg);border-color:transparent;box-shadow:none}
+.stock-report.all-good>.ic{color:var(--ok);width:34px;height:34px}
+.stock-report.all-good h2{font-size:21px;color:var(--ok)}
+.stock-report.all-good p{color:var(--ink-2)}
+.stock-group{display:flex;flex-direction:column;gap:6px}
+.stock-group-h{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.stock-group-h .badge{font-size:14.5px;padding:5px 12px 5px 9px}
+.stock-group-h small{color:var(--ink-2);font-size:14px}
+.stock-group ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.stock-group li{display:grid;grid-template-columns:minmax(150px,1fr) 2fr;gap:4px 16px;align-items:center;padding:10px 2px;border-top:1px solid var(--hair)}
+.stock-group li:first-child{border-top:0}
+.sp-name{font-family:var(--f-head);font-weight:700;font-size:18px;letter-spacing:-.015em;display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sp-detail{font-size:15px;color:var(--ink-2)}
+.sp-bar{grid-column:2;height:5px;border-radius:99px;background:var(--surface-2);overflow:hidden}
+.sp-bar i{display:block;height:100%;background:var(--c);border-radius:inherit}
+.flag-tag{padding:2px 8px 2px 6px!important;font-size:12.5px!important;font-family:var(--f-body)}
+@media (max-width:640px){.stock-group li{grid-template-columns:1fr}.sp-bar{grid-column:1}}

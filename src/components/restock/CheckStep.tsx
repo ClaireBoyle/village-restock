@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
-  EMPTY_ITEM, SKIP_REASONS, activePlacements, areaStatus, collectionLines, isChecked,
+  EMPTY_ITEM, SKIP_REASONS, type ItemState, activePlacements, areaStatus, collectionLines, isChecked,
 } from '@/lib/restock-logic';
 import { setArea, setItems, updateLocalSession } from '@/lib/client/restock-store';
 import { ProductCard } from './ProductCard';
@@ -33,6 +33,19 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
   const stores = new Set(lines.map((l) => l.locationId)).size;
   const allUnchecked = activePlacements('full', view.placements, recorded).filter((p) => !isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM)).length;
   const areasDone = view.areas.filter(({ area }) => ['complete', 'skipped'].includes(statusOf(area.id))).length;
+
+  // Save a product. If that was the last unchecked product in the area, the
+  // area completes by itself (only on that change, so a reopened area isn't
+  // snapped shut again while staff edit it).
+  const onItem = async (p: (typeof cur.placements)[number], fields: Partial<ItemState>, resolve?: boolean) => {
+    const before = cur.placements.every((x) => isChecked(x, items.get(x.placementId) ?? EMPTY_ITEM));
+    const old = items.get(p.placementId) ?? EMPTY_ITEM;
+    const updated: ItemState = { ...old, ...fields, conflict: resolve ? null : old.conflict ?? null };
+    const after = cur.placements.every((x) => isChecked(x, x.placementId === p.placementId ? updated : items.get(x.placementId) ?? EMPTY_ITEM));
+    await setItems(session.id, [{ placementId: p.placementId, fields }], who, resolve);
+    if (!before && after && st !== 'complete' && st !== 'skipped') { pin(); await setArea(session.id, cur.area.id, 'complete', null, who); }
+  };
+  const reopen = () => { pin(); void setArea(session.id, cur.area.id, 'not_started', null, who); };
 
   const nextBtn = next
     ? <button className="btn primary" onClick={() => goArea(next.area.id)}>Next: {next.area.name}<Icon name="next" /></button>
@@ -79,7 +92,7 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
             {cur.placements.length === 0 ? <p className="meta">No products in this area yet.</p> : null}
             {cur.placements.map((p) => (
               <ProductCard key={p.placementId} p={p} item={items.get(p.placementId) ?? EMPTY_ITEM}
-                onChange={(fields, resolve) => void setItems(session.id, [{ placementId: p.placementId, fields }], who, resolve)} />
+                onChange={(fields, resolve) => void onItem(p, fields, resolve)} />
             ))}
           </div>
 
@@ -87,7 +100,10 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
             <div className="banner s-skip"><Icon name="skip" /><div><b>{cur.area.name} skipped</b><p>{rec?.skipReason}{rec?.updatedBy ? ` · ${rec.updatedBy}` : ''} {timeOf(rec?.updatedAt)}</p></div>
               <button className="btn" onClick={() => void setArea(session.id, cur.area.id, 'not_started', null, who)}>Undo skip</button>{nextBtn}</div>
           ) : st === 'complete' ? (
-            <div className="banner s-ok"><Icon name="check" /><div><b>{cur.area.name} complete</b><p>{rec?.updatedBy ? `${rec.updatedBy}, ` : ''}{timeOf(rec?.updatedAt)}. Numbers can still be changed.</p></div>{nextBtn}</div>
+            <div className="banner s-ok">
+              <button className="banner-toggle" onClick={reopen} aria-label={`${cur.area.name} complete. Tap to reopen it`}>
+                <Icon name="check" /><span><b>{cur.area.name} complete</b><p>{rec?.updatedBy ? `${rec.updatedBy}, ` : ''}{timeOf(rec?.updatedAt)} &middot; <u>Tap to reopen</u></p></span>
+              </button>{nextBtn}</div>
           ) : unchecked.length ? (
             <div className="banner s-none"><Icon name="circle" /><div><b>{unchecked.length} still to check:</b> {unchecked.map((p) => p.productName).join(', ')}</div><button className="btn" disabled>Mark area complete</button></div>
           ) : (

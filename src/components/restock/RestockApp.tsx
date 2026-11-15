@@ -89,12 +89,16 @@ export function RestockApp({ departmentId }: { departmentId: string }) {
     setOpening(true);
     try {
       let q: string | null = null;
-      if (m === 'full') await openFullSession(departmentId, today, who);
+      let first: Step = 'check';
+      if (m === 'full') {
+        const s = await openFullSession(departmentId, today, who);
+        if (s.status === 'finished' || s.status === 'finished_exceptions') first = 'finish'; // already done: show its summary
+      }
       else {
         q = ((await findOpenQuickSession(departmentId)) ?? (await startSession(departmentId, 'quick', today, who))).id;
         setQuickId(q);
       }
-      setMode(m); setStep('check'); setUrl(m, 'check', q); window.scrollTo({ top: 0 });
+      setMode(m); setStep(first); setUrl(m, first, q); window.scrollTo({ top: 0 });
     } finally { setOpening(false); }
   };
   const showFullSummary = () => { setMode('full'); setStep('finish'); setUrl('full', 'finish'); };

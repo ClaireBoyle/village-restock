@@ -302,7 +302,64 @@ export function activePlacements(kind: 'full' | 'quick', placements: PlacementVi
   return kind === 'full' ? placements.filter((p) => recordedAreas.get(p.areaId) !== 'skipped') : placements;
 }
 
-/** The plain-text summary staff copy for managers. */
+// ---------------------------------------------------------------------------
+// Stock after the restock: what we're now low on or out of
+// ---------------------------------------------------------------------------
+export type StockStatus = 'out' | 'low' | 'not_topped_up';
+
+export interface StockOutcome {
+  productName: string; unitSingular: string; unitPlural: string;
+  status: StockStatus;
+  /** How much was needed, collected, and is still missing. */
+  needed: number; got: number; short: number;
+  /** For target-level products: what's now on the shelf vs the target (all areas added up). */
+  onShelf: number | null; target: number | null;
+  reason: ShortReason | null; flagged: boolean;
+}
+
+/**
+ * One entry per product that is still below target after collecting:
+ *   out           the storeroom had none (confirmed),
+ *   low           the storeroom only had some (confirmed),
+ *   not_topped_up not collected for another reason (time, access, not done).
+ * Worst first: out, then low, then not topped up.
+ */
+export function stockOutcomes(lines: CollectionLine[], items: Map<string, ItemState>, byId: Map<string, PlacementView>): StockOutcome[] {
+  const out: StockOutcome[] = [];
+  for (const l of lines) {
+    if (l.kind !== 'qty') continue;
+    const st = lineState(l, items);
+    if (st === 'done') continue;
+    const info = lineInfo(l, items), got = lineGot(l, items), short = round2(l.total - got);
+    let onShelf: number | null = 0, target: number | null = 0;
+    for (const part of l.parts) {
+      const p = byId.get(part.placementId), i = items.get(part.placementId) ?? EMPTY_ITEM;
+      if (!p || p.method !== 'par' || p.par === null || i.currentQty === null) { onShelf = null; target = null; break; }
+      const collected = i.collectedMode === 'all' ? part.need : i.collectedMode === 'partial' ? Math.min(i.collectedQty ?? 0, part.need) : 0;
+      onShelf = round2(onShelf! + i.currentQty + collected);
+      target = round2(target! + p.par);
+    }
+    const confirmed = info.reason === 'insufficient';
+    out.push({
+      productName: l.productName, unitSingular: l.unitSingular, unitPlural: l.unitPlural,
+      status: confirmed ? (got === 0 ? 'out' : 'low') : 'not_topped_up',
+      needed: l.total, got, short, onShelf, target, reason: info.reason, flagged: info.flagged,
+    });
+  }
+  const rank: Record<StockStatus, number> = { out: 0, low: 1, not_topped_up: 2 };
+  return out.sort((a, b) => rank[a.status] - rank[b.status] || a.productName.localeCompare(b.productName));
+}
+
+export function outcomeLine(o: StockOutcome): string {
+  const q = (n: number) => formatQty(n, o.unitSingular, o.unitPlural);
+  const shelf = o.onShelf !== null && o.target !== null ? ` \u00b7 ${round2(o.onShelf)} of ${round2(o.target)} on the shelf` : '';
+  if (o.status === 'out') return `${o.productName}: none in the storeroom (needed ${q(o.needed)})${shelf}`;
+  if (o.status === 'low') return `${o.productName}: only ${q(o.got)} in the storeroom, short ${q(o.short)}${shelf}`;
+  const why = o.reason === 'time' ? 'ran out of time' : o.reason === 'access' ? 'couldn\u2019t access the stock' : o.reason === 'other' ? 'other reason' : 'not collected';
+  return `${o.productName}: ${q(o.short)} not topped up (${why})${shelf}`;
+}
+
+/** The plain-text summary staff copy for managers. Leads with what we're low on or out of. */
 export function summaryText(args: {
   departmentName: string; kind: 'full' | 'quick'; finishedLabel: string | null; exceptionReason: string | null;
   people: string[]; view: DepartmentView; placements: PlacementView[]; recordedAreas: Map<string, AreaStatus>;
@@ -311,38 +368,44 @@ export function summaryText(args: {
   const { view, items, recordedAreas } = args;
   const L: string[] = [];
   L.push(`VILLAGE RESTOCK: ${args.departmentName}`);
-  L.push(`${args.kind === 'full' ? 'Full' : 'Quick'} restock · ${args.finishedLabel ? `finished ${args.finishedLabel}` : 'not finished'} · ${args.dateLabel}`);
+  L.push(`${args.kind === 'full' ? 'Full' : 'Quick'} restock \u00b7 ${args.finishedLabel ? `finished ${args.finishedLabel}` : 'not finished'} \u00b7 ${args.dateLabel}${args.people.length ? ` \u00b7 ${args.people.join(', ')}` : ''}`);
   L.push(`Status: ${!args.finishedLabel ? 'In progress' : args.exceptionReason ? `Finished with exceptions (${args.exceptionReason})` : 'Complete'}`);
-  if (args.people.length) L.push(`Staff: ${args.people.join(', ')}`);
-  if (args.kind === 'full') {
-    const st = view.areas.map(({ area, placements }) => ({ area, s: areaStatus(recordedAreas.get(area.id), placements, items) }));
-    L.push('');
-    L.push(`Areas complete: ${st.filter((x) => x.s === 'complete').map((x) => x.area.name).join(', ') || 'None'}`);
-    const sk = st.filter((x) => x.s === 'skipped');
-    if (sk.length) L.push(`Skipped: ${sk.map((x) => `${x.area.name} (${args.skipReasons.get(x.area.id) ?? 'no reason'})`).join(', ')}`);
-    const open = st.filter((x) => x.s === 'not_started' || x.s === 'in_progress');
-    if (open.length) L.push(`Not finished: ${open.map((x) => x.area.name).join(', ')}`);
-  }
+
   const lines = collectionLines(activePlacements(args.kind, args.placements, recordedAreas), items);
-  const shorts: string[] = [], flagged: string[] = [], notCollected: string[] = [], collected: string[] = [];
-  for (const l of lines) {
-    const st = lineState(l, items), info = lineInfo(l, items), got = lineGot(l, items);
-    if (l.kind === 'task') { (st === 'done' ? collected : notCollected).push(`${l.productName}${st === 'done' ? ' (done)' : ': task not done'}`); continue; }
-    if (got > 0) collected.push(`${l.productName} ${formatQty(got, l.unitSingular, l.unitPlural)}`);
-    if (st === 'short' && info.reason === 'insufficient') shorts.push(`${l.productName}: short ${formatQty(round2(l.total - got), l.unitSingular, l.unitPlural)} (needed ${l.total}, got ${got})`);
-    else if (st !== 'done') notCollected.push(`${l.productName}: ${formatQty(round2(l.total - got), l.unitSingular, l.unitPlural)} not collected`);
-    if (info.flagged) flagged.push(l.productName);
+  const outcomes = stockOutcomes(lines, items, view.byId);
+  const group = (st: StockStatus, title: string) => {
+    const g = outcomes.filter((o) => o.status === st);
+    if (g.length) { L.push(''); L.push(`${title} (${g.length})`); L.push(...g.map((o) => `- ${outcomeLine(o)}${o.flagged ? ' [flagged]' : ''}`)); }
+  };
+  if (!outcomes.length) { L.push(''); L.push('Nothing low or out of stock. Everything collected is back to target.'); }
+  group('out', 'OUT OF STOCK');
+  group('low', 'RUNNING LOW');
+  group('not_topped_up', 'NOT TOPPED UP');
+
+  const flaggedDone = lines.filter((l) => lineInfo(l, items).flagged && lineState(l, items) === 'done').map((l) => l.productName);
+  if (flaggedDone.length) { L.push(''); L.push(`FLAGGED FOR MANAGER: ${flaggedDone.join(', ')}`); }
+
+  const notChecked: string[] = [];
+  if (args.kind === 'full') {
+    for (const { area, placements } of view.areas) {
+      const st = areaStatus(recordedAreas.get(area.id), placements, items);
+      if (st === 'skipped') notChecked.push(`${area.name} skipped (${args.skipReasons.get(area.id) || 'no reason'})`);
+      else if (st !== 'complete') {
+        const un = placements.filter((p) => !isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM)).map((p) => p.productName);
+        if (un.length) notChecked.push(`${area.name}: ${un.join(', ')}`);
+      }
+    }
+  } else {
+    const un = args.placements.filter((p) => !isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM)).map((p) => p.productName);
+    if (un.length) notChecked.push(un.join(', '));
   }
-  L.push('');
-  L.push(`CONFIRMED SHORTAGES (${shorts.length})`);
-  L.push(...(shorts.length ? shorts.map((s) => `- ${s}`) : ['- None']));
-  if (flagged.length) { L.push(''); L.push('FLAGGED FOR MANAGER'); L.push(...flagged.map((s) => `- ${s}`)); }
-  const unchecked = args.placements.filter((p) => recordedAreas.get(p.areaId) !== 'skipped' && !isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM));
-  if (notCollected.length || unchecked.length) {
-    L.push(''); L.push('UNFINISHED');
-    L.push(...notCollected.map((s) => `- ${s}`));
-    if (unchecked.length) L.push(`- Not checked: ${unchecked.map((p) => p.productName).join(', ')}`);
-  }
+  if (notChecked.length) { L.push(''); L.push('NOT CHECKED'); L.push(...notChecked.map((s) => `- ${s}`)); }
+
+  const collected = lines.flatMap((l) => {
+    const got = lineGot(l, items);
+    if (l.kind === 'task') return lineState(l, items) === 'done' ? [`${l.productName} (done)`] : [];
+    return got > 0 ? [`${l.productName} ${formatQty(got, l.unitSingular, l.unitPlural)}`] : [];
+  });
   L.push(''); L.push(`Collected: ${collected.join('; ') || 'Nothing'}`);
   return L.join('\n');
 }
