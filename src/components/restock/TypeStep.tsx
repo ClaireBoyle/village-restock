@@ -45,7 +45,7 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
       )}
       <div className="types">
         <section className="type">
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="type-head vblock">
             <h2>Full Restock</h2>
             {finished ? (src!.status === 'finished_exceptions' ? <Badge st="warn" icon="warn">Finished with exceptions {timeOf(src!.finishedAt)}</Badge> : <Badge st="ok">Complete {timeOf(src!.finishedAt)}</Badge>)
               : src ? <Badge st="info">In progress since {timeOf(src.startedAt)}</Badge> : <Badge st="none">Not started tonight</Badge>}
@@ -62,7 +62,7 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
           </div>
         </section>
         <section className="type">
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="type-head vblock quick">
             <h2>Quick Restock</h2>{quickSession?.selected.length ? <Badge st="info">{quickSession.selected.length} on your list</Badge> : null}
           </div>
           <p className="lead">Only what&rsquo;s running low. For <b>short breaks between sessions</b>.</p>

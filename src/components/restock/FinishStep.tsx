@@ -87,11 +87,13 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
 
         {finished ? (
           <>
-            <div className={`finish-meta ${session.status === 'finished_exceptions' ? 's-warn' : 's-ok'}`}>
-              <Icon name={session.status === 'finished_exceptions' ? 'warn' : 'check'} />
-              <span><b>{session.status === 'finished_exceptions' ? 'Finished with exceptions' : 'Restock complete'}</b> at {timeOf(session.finishedAt)}
-                {session.exceptionReason ? <> &middot; {session.exceptionReason}</> : null}
-                {session.people.length ? <> &middot; {session.people.join(', ')}</> : null}</span>
+            <div className={`finish-meta vblock finish-hero ${session.status === 'finished_exceptions' ? 's-warn' : 's-ok'}`}>
+              <span className="fh-icon"><Icon name={session.status === 'finished_exceptions' ? 'warn' : 'check'} /></span>
+              <div>
+                <h2>{session.status === 'finished_exceptions' ? 'Finished with exceptions' : 'Restock complete'}</h2>
+                <p>Finished at {timeOf(session.finishedAt)}{session.people.length ? <> &middot; {session.people.join(', ')}</> : null}</p>
+                {session.exceptionReason ? <p className="fh-reason"><Icon name="warn" />{session.exceptionReason}</p> : null}
+              </div>
             </div>
             {session.note ? (
               <section className="note-sent"><h3><Icon name="list" />Comments{session.kind === 'full' ? ' sent to managers' : ''}</h3><p>{session.note}</p></section>
@@ -100,7 +102,7 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
           </>
         ) : (
           <>
-            <h2 className="finish-title">Finish restock</h2>
+            <div className="vblock block-head"><h2 className="finish-title">Finish restock</h2></div>
             {ex.length === 0 ? (
               <section className="ready s-ok"><h2><Icon name="check" />Ready to finish</h2><p>Every {session.kind === 'full' ? 'area is complete' : 'product has a number'} and every item is collected or recorded.</p></section>
             ) : (

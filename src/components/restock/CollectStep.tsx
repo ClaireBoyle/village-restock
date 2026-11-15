@@ -25,8 +25,8 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
     <>
       <main className="wrap restock-main">
         {ctx.header}
-        <div className="col-head"><h2>Collection list</h2>
-          <div className="progress"><b>{handled} of {lines.length} done{shorts ? <> &middot; <span style={{ color: 'var(--bad)' }}>{plural(shorts, 'shortage')}</span></> : null}</b>
+        <div className="col-head vblock block-head"><h2>Collection list</h2>
+          <div className="progress"><b>{handled} of {lines.length} done{shorts ? <> <span className="short-tag">{plural(shorts, 'shortage')}</span></> : null}</b>
             <div className="meter"><i style={{ width: `${lines.length ? Math.round((handled / lines.length) * 100) : 0}%` }} /></div></div>
         </div>
         {unchecked.length ? (
@@ -40,7 +40,7 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
               const left = g.lines.filter((l) => ['todo', 'part'].includes(lineState(l, items))).length;
               return (
                 <section key={g.name} className="room">
-                  <div className="room-h"><Icon name="box" /><h3>{g.name}</h3><small>{left ? `${left} to get` : 'All done'}</small></div>
+                  <div className="room-h vblock"><Icon name="box" /><h3>{g.name}</h3><small>{left ? `${left} to get` : 'All done'}</small></div>
                   <div className="room-lines">{g.lines.map((l) => <Line key={l.key} line={l} items={items} write={write} />)}</div>
                 </section>
               );
