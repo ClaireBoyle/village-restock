@@ -23,8 +23,19 @@ export function useSyncStatus(): SyncStatus {
 }
 
 /** The optional first name or initials shown next to work done on this device. */
+// Every screen part that shows or records the name updates together.
+const NAME_EVENT = 'vr-staff-name';
 export function useStaffName(): [string, (n: string) => void] {
   const [name, setName] = useState('');
-  useEffect(() => { void getStaffName().then(setName); }, []);
-  return [name, (n: string) => { setName(n); void setStaffName(n); }];
+  useEffect(() => {
+    void getStaffName().then(setName);
+    const on = (e: Event) => setName((e as CustomEvent<string>).detail);
+    window.addEventListener(NAME_EVENT, on);
+    return () => window.removeEventListener(NAME_EVENT, on);
+  }, []);
+  return [name, (n: string) => {
+    setName(n);
+    void setStaffName(n);
+    window.dispatchEvent(new CustomEvent(NAME_EVENT, { detail: n }));
+  }];
 }

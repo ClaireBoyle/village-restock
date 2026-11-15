@@ -8,7 +8,7 @@
 //
 // Restock entries are NOT handled here: they're saved in the device database
 // (IndexedDB) and uploaded by the app's own sync engine.
-const VERSION = 'v2';
+const VERSION = 'v3';
 const PAGES = `vr-pages-${VERSION}`;
 const STATIC = `vr-static-${VERSION}`;
 const PHOTOS = `vr-photos-${VERSION}`;

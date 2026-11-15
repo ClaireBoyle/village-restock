@@ -1,4 +1,5 @@
 'use client';
+import { createPortal } from 'react-dom';
 import { useEffect, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { timeLabel } from '@/components/TopBar';
@@ -43,13 +44,16 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
     window.addEventListener('keydown', k);
     return () => window.removeEventListener('keydown', k);
   }, [onClose]);
-  return (
+  // Drawn at the end of <body>: inside the blurred top bar, a fixed panel gets
+  // trapped in the bar's 68px and can't be used.
+  return createPortal(
     <div className="scrim" onClick={onClose}>
       <div className="sheet" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
         <div className="sheet-head"><h2>{title}</h2><button className="iconbtn" onClick={onClose} aria-label="Close"><Icon name="x" /></button></div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -85,10 +89,12 @@ export function NameSheet({ onClose }: { onClose: () => void }) {
     <Sheet title="Your name" onClose={onClose}>
       <div className="field">
         <label htmlFor="staffname">First name or initials</label>
-        <input id="staffname" value={draft ?? name} onChange={(e) => setDraft(e.target.value)} placeholder="e.g. Sam or SB" maxLength={30} autoComplete="off" />
+        <input id="staffname" value={draft ?? name} onChange={(e) => setDraft(e.target.value)} placeholder="e.g. Sam or SB" maxLength={30}
+          autoComplete="off" autoCapitalize="words" enterKeyHint="done" autoFocus
+          onKeyDown={(e) => { if (e.key === 'Enter') { if (draft !== null) setName(draft.trim()); onClose(); } }} />
         <small>Optional. Shown next to the work you do, so the next person knows who checked what. Change it when someone else picks up this device.</small>
       </div>
-      <button className="btn primary big" onClick={() => { if (draft !== null) setName(draft); onClose(); }}>Done</button>
+      <button className="btn primary big" onClick={() => { if (draft !== null) setName(draft.trim()); onClose(); }}>Done</button>
     </Sheet>
   );
 }
