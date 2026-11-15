@@ -22,6 +22,7 @@ export default async function EditProduct({ params, searchParams }: {
     id, name: String(p.name), categoryId: (p.categoryId as string) ?? null, unitSingular: String(p.unitSingular),
     unitPlural: String(p.unitPlural), method: p.method as ProductFormData['method'], allowDecimal: Boolean(p.allowDecimal),
     instructions: String(p.instructions), defaultLocationId: (p.defaultLocationId as string) ?? null,
+    affects: (p.affects as string[]) ?? [],
     placements: placements.map((r) => ({ areaId: String(r.checkAreaId), par: r.parLevel as number | null, locationId: (r.locationId as string) ?? null })),
   };
   const archived = p.status === 'archived';

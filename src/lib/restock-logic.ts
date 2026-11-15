@@ -42,6 +42,8 @@ export interface PlacementView {
   locationName: string | null;
   instructions: string;
   categoryName: string | null;
+  /** Menu items to mark as sold out if this product runs out. */
+  affects: string[];
 }
 
 /** What staff have recorded for one placement during a restock. Blank = not yet. */
@@ -94,6 +96,7 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
             locationName: locId ? locations.get(locId)?.name ?? null : null,
             instructions: pl.instructions ?? p.instructions,
             categoryName: p.categoryId ? categories.get(p.categoryId) ?? null : null,
+            affects: p.affects ?? [],
           };
         });
       return { area, placements };
@@ -315,6 +318,8 @@ export interface StockOutcome {
   /** For target-level products: what's now on the shelf vs the target (all areas added up). */
   onShelf: number | null; target: number | null;
   reason: ShortReason | null; flagged: boolean;
+  /** Menu items to mark as sold out (from the product's settings). */
+  affects: string[];
 }
 
 /**
@@ -344,6 +349,7 @@ export function stockOutcomes(lines: CollectionLine[], items: Map<string, ItemSt
       productName: l.productName, unitSingular: l.unitSingular, unitPlural: l.unitPlural,
       status: confirmed ? (got === 0 ? 'out' : 'low') : 'not_topped_up',
       needed: l.total, got, short, onShelf, target, reason: info.reason, flagged: info.flagged,
+      affects: byId.get(l.parts[0].placementId)?.affects ?? [],
     });
   }
   const rank: Record<StockStatus, number> = { out: 0, low: 1, not_topped_up: 2 };
@@ -375,7 +381,13 @@ export function summaryText(args: {
   const outcomes = stockOutcomes(lines, items, view.byId);
   const group = (st: StockStatus, title: string) => {
     const g = outcomes.filter((o) => o.status === st);
-    if (g.length) { L.push(''); L.push(`${title} (${g.length})`); L.push(...g.map((o) => `- ${outcomeLine(o)}${o.flagged ? ' [flagged]' : ''}`)); }
+    if (g.length) {
+      L.push(''); L.push(`${title} (${g.length})`);
+      for (const o of g) {
+        L.push(`- ${outcomeLine(o)}${o.flagged ? ' [flagged]' : ''}`);
+        if (o.affects.length && st === 'out') L.push(`    Set as sold out: ${o.affects.join(', ')}`);
+      }
+    }
   };
   if (!outcomes.length) { L.push(''); L.push('Nothing low or out of stock. Everything collected is back to target.'); }
   group('out', 'OUT OF STOCK');

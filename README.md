@@ -41,6 +41,7 @@ Access:
    - `DATABASE_URL`: from Supabase step 5.
    - `SESSION_SECRET`: a long random value.
    - `ADMIN_SETUP_CODE`: a long random value you'll type once.
+   - Optional, for the automatic manager email: either `RESEND_API_KEY` (from resend.com) or `SMTP_USER` + `SMTP_PASS` (an email account and its app password, e.g. Gmail). `EMAIL_FROM` sets the sender name and address. Then set the address and switch it on in Admin > Access & settings.
 3. Click **Deploy**. The app runs in Sydney (next to the database), set by `vercel.json`.
 
 ### 3. First sign-in
@@ -88,4 +89,5 @@ src/components/       Shared interface pieces
 - [x] **Phase 1 – Foundation**: database, staff and admin access, home screen, admin catalogue management, product data cached on the device.
 - [x] **Phase 2 – Core restocking**: Full and Quick Restock, area checking, collection list grouped by storeroom, shortages, Save and exit / Finish / Finish with exceptions, offline-first saving with an outbox, shared restocks across devices.
 - [x] **Phase 3 – Reliability**: clashing counts from two devices are kept and resolved by a person, supervisor Restocks and Shortages screens (resolve with a note, copyable low-stock list), restocks left open past the cut-off marked Unfinished.
+- [x] **Extras**: menu items to mark sold out per product; finished screen shows Out of stock / Running low; automatic manager email after each finished full restock.
 - [ ] **Phase 4 – Refinement**: reference photos, CSV import/export, installable offline app shell, iPad testing.

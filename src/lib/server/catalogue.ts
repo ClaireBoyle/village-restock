@@ -24,7 +24,9 @@ export async function loadCatalogue(): Promise<Catalogue> {
       select id, department_id, name, sort_order from categories where active order by sort_order, name`;
     const products = await tx`
       select p.id, p.department_id, p.category_id, p.name, p.unit_singular, p.unit_plural, p.method,
-             p.allow_decimal, p.instructions, p.default_location_id, p.sort_order
+             p.allow_decimal, p.instructions, p.default_location_id, p.sort_order,
+             -- read via jsonb so the app still works before migration 003 adds the column
+             coalesce(to_jsonb(p)->'affects', '[]'::jsonb) as affects
       from products p join departments d on d.id = p.department_id and d.active
       where p.status = 'active' order by p.sort_order, p.name`;
     const placements = await tx`

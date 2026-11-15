@@ -6,6 +6,7 @@ import { saveProduct } from '@/app/actions/admin';
 export interface ProductFormData {
   id?: string; name: string; categoryId: string | null; unitSingular: string; unitPlural: string;
   method: 'par' | 'manual' | 'routine'; allowDecimal: boolean; instructions: string; defaultLocationId: string | null;
+  affects: string[];
   placements: { areaId: string; par: number | null; locationId: string | null }[];
 }
 
@@ -59,6 +60,10 @@ export function ProductForm({ departmentId, product, areas, categories, location
         <div className="field"><label htmlFor="instructions">Instructions for staff (optional)</label>
           <textarea id="instructions" name="instructions" defaultValue={product?.instructions} maxLength={400}
             placeholder={method === 'routine' ? 'e.g. Bring out the choc-top flavour boxes and replenish the display.' : 'e.g. Check the use-by label. Rotate older stock to the front.'} /></div>
+        <div className="field"><label htmlFor="affects">Menu items affected if this runs out (optional)</label>
+          <textarea id="affects" name="affects" defaultValue={product?.affects.join('\n')} maxLength={800} style={{ minHeight: 70 }}
+            placeholder={'One per line, e.g.\nGolden Harvest Burger'} />
+          <small>Shown to staff and in the manager email as &ldquo;Set as sold out&rdquo; when this product is out of stock.</small></div>
       </section>
 
       <section className="panel" style={section}>

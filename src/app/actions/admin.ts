@@ -7,7 +7,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { db } from '@/lib/server/db';
+import { db, setSetting } from '@/lib/server/db';
 import { hashSecret, requireAdmin } from '@/lib/server/auth';
 
 export type ActionResult = { ok?: boolean; error?: string; message?: string } | undefined;
@@ -220,6 +220,9 @@ export async function saveProduct(_: ActionResult, form: FormData): Promise<Acti
     const loc = String(form.get(`loc_${areaId}`) ?? '');
     placements.push({ areaId, par: d.method === 'par' ? par : null, locationId: loc && uuid.safeParse(loc).success ? loc : null });
   }
+  const affects = [...new Set(String(form.get('affects') ?? '').split(/[\n,]/).map((x) => x.trim()).filter(Boolean))];
+  if (affects.length > 10) return { error: 'List at most 10 menu items.' };
+  if (affects.some((x) => x.length > 60)) return { error: 'Menu item names must be 60 characters or fewer.' };
   if (!d.defaultLocationId && placements.some((pl) => !pl.locationId)) {
     return { error: 'Choose where staff collect this product from (the storeroom).' };
   }
@@ -239,15 +242,15 @@ export async function saveProduct(_: ActionResult, form: FormData): Promise<Acti
       if (id) {
         const [row] = await tx`update products set category_id = ${d.categoryId}, name = ${d.name}, unit_singular = ${d.unitSingular},
           unit_plural = ${d.unitPlural}, method = ${d.method}, allow_decimal = ${d.allowDecimal}, instructions = ${d.instructions},
-          default_location_id = ${d.defaultLocationId}
+          default_location_id = ${d.defaultLocationId}, affects = ${affects}
           where id = ${id} and department_id = ${d.departmentId} returning id`;
         if (!row) throw Object.assign(new Error('not found'), { code: 'NOTFOUND' });
       } else {
         const [{ n }] = await tx`select coalesce(max(sort_order), 0) + 1 as n from products where department_id = ${d.departmentId}`;
         const [row] = await tx`insert into products (department_id, category_id, name, unit_singular, unit_plural, method, allow_decimal,
-          instructions, default_location_id, sort_order)
+          instructions, default_location_id, sort_order, affects)
           values (${d.departmentId}, ${d.categoryId}, ${d.name}, ${d.unitSingular}, ${d.unitPlural}, ${d.method}, ${d.allowDecimal},
-          ${d.instructions}, ${d.defaultLocationId}, ${Number(n)}) returning id`;
+          ${d.instructions}, ${d.defaultLocationId}, ${Number(n)}, ${affects}) returning id`;
         id = String(row.id);
       }
       await tx`delete from product_placements where product_id = ${id} and not (check_area_id in ${tx(areaIds)})`;
@@ -321,6 +324,33 @@ export async function resolveShortage(form: FormData): Promise<void> {
     await db()`update shortages set status = 'resolved', resolved_at = now(), resolved_by = ${me.name}, resolution_note = ${note} where id = ${id.data}`;
   }
   revalidatePath('/admin', 'layout');
+}
+
+// ---------------------------------------------------------------------------
+// Manager email
+// ---------------------------------------------------------------------------
+export async function saveManagerEmail(_: ActionResult, form: FormData): Promise<ActionResult> {
+  await requireAdmin();
+  const to = String(form.get('to') ?? '').trim();
+  const enabled = form.get('enabled') === 'on';
+  if (to && !z.email().safeParse(to).success) return { error: 'Enter a valid email address.' };
+  if (enabled && !to) return { error: 'Enter the managers\u2019 email address first.' };
+  await setSetting('manager_email', to);
+  await setSetting('manager_email_enabled', enabled);
+  return done(enabled ? `Emails will go to ${to} after every finished full restock.` : 'Manager emails are switched off.');
+}
+
+export async function sendTestEmailAction(_: ActionResult, form: FormData): Promise<ActionResult> {
+  await requireAdmin();
+  const to = String(form.get('to') ?? '').trim();
+  if (!z.email().safeParse(to).success) return { error: 'Save a valid email address first.' };
+  try {
+    const { sendTestEmail } = await import('@/lib/server/email');
+    await sendTestEmail(to);
+    return { ok: true, message: `Test email sent to ${to}. Check the inbox (and junk folder).` };
+  } catch (e) {
+    return { error: `Couldn\u2019t send: ${(e as Error).message}` };
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -20,6 +20,8 @@ export interface CatProduct {
   id: string; departmentId: string; categoryId: string | null; name: string;
   unitSingular: string; unitPlural: string; method: RestockMethod; allowDecimal: boolean;
   instructions: string; defaultLocationId: string | null; sortOrder: number;
+  /** Menu items to mark as sold out if this runs out. */
+  affects: string[];
 }
 export interface CatPlacement {
   id: string; productId: string; checkAreaId: string; parLevel: number | null;

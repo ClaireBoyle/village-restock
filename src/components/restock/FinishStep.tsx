@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
   EXCEPTION_REASONS, EMPTY_ITEM, SHORT_REASONS, activePlacements, areaStatus, collectionLines, exceptions, isChecked,
-  lineGot, lineInfo, lineState, outcomeLine, stockOutcomes, summaryText, type StockOutcome, type StockStatus,
+  lineGot, lineInfo, lineState, outcomeLine, stockOutcomes, type StockOutcome,
 } from '@/lib/restock-logic';
 import { formatQty, round2 } from '@/lib/restock-math';
 import { finishSession, reopenSession, updateLocalSession } from '@/lib/client/restock-store';
@@ -21,7 +21,6 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
   const sync = useSyncStatus();
   const [exOpen, setExOpen] = useState(false);
   const [exReason, setExReason] = useState<string | null>(null);
-  const [copied, setCopied] = useState('');
   const finished = session.status === 'finished' || session.status === 'finished_exceptions';
   const ex = finished ? [] : exceptions({ kind: session.kind, view, placements, recordedAreas: recorded, items });
 
@@ -42,17 +41,6 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
     uncheckedByArea.set(p.areaName, [...(uncheckedByArea.get(p.areaName) ?? []), p.productName]);
   }
 
-  const text = summaryText({
-    departmentName: view.department.name, kind: session.kind, finishedLabel: finished ? timeOf(session.finishedAt) : null,
-    exceptionReason: session.exceptionReason, people: session.people, view, placements, recordedAreas: recorded,
-    skipReasons: new Map([...areaRecords].map(([k, v]) => [k, v.skipReason ?? ''])), items,
-    dateLabel: new Date(session.startedAt).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }),
-  });
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(text); setCopied('Summary copied'); }
-    catch { const t = document.getElementById('copybox') as HTMLTextAreaElement | null; t?.focus(); t?.select(); setCopied('Text selected. Use Copy from the menu.'); }
-    window.setTimeout(() => setCopied(''), 2500);
-  };
   const list = (rows: [string, string][], empty: string) => rows.length
     ? <ul>{rows.map(([a, b]) => <li key={a + b}><span>{a}</span><span>{b}</span></li>)}</ul> : <p className="muted">{empty}</p>;
   const goTo = (e: (typeof ex)[number]) => {
@@ -96,14 +84,6 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
                 {session.people.length ? <> &middot; {session.people.join(', ')}</> : null}</span>
             </div>
             {report}
-            <details className="sum-details">
-              <summary><Icon name="list" />Show full record</summary>
-              {details}
-              <section className="sum-card" style={{ marginTop: 14 }}><h3><Icon name="copy" />Copy for managers</h3>
-                <textarea className="copybox" id="copybox" readOnly value={text} />
-              </section>
-            </details>
-            <div><button className="btn" onClick={() => void copy()}><Icon name="copy" />Copy for managers</button>{copied ? <span className="meta" role="status" style={{ marginLeft: 10 }}>{copied}</span> : null}</div>
           </>
         ) : (
           <>
@@ -134,7 +114,7 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
               </section>
             ) : null}
 
-            {outcomes.length ? report : null}
+            {outcomes.some((o) => o.status !== 'not_topped_up') ? report : null}
 
             <details className="sum-details">
               <summary><Icon name="list" />Show full summary</summary>
@@ -165,42 +145,56 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
   );
 }
 
-const GROUPS: { st: StockStatus; title: string; sub: string; cls: string }[] = [
-  { st: 'out', title: 'Out of stock', sub: 'The storeroom had none', cls: 's-bad' },
-  { st: 'low', title: 'Running low', sub: 'The storeroom only had some', cls: 's-warn' },
-  { st: 'not_topped_up', title: 'Not topped up', sub: 'Not collected for another reason', cls: 's-none' },
-];
-
-/** The heart of the summary: what we're now low on or out of, worst first. */
+/**
+ * What we're now low on or out of. Orange = running low, red = out of stock.
+ * "Not topped up" (ran out of time etc.) is a small note: the storeroom isn't short.
+ */
 function StockReport({ outcomes, finished }: { outcomes: StockOutcome[]; finished: boolean }) {
-  if (!outcomes.length) {
+  const low = outcomes.filter((o) => o.status === 'low');
+  const out = outcomes.filter((o) => o.status === 'out');
+  const other = outcomes.filter((o) => o.status === 'not_topped_up');
+  if (!low.length && !out.length) {
     return (
-      <section className="stock-report all-good">
-        <Icon name="check" /><div><h2>Nothing low or out of stock</h2><p>Everything collected is back to its target.</p></div>
-      </section>
+      <>
+        <section className="stock-panel all-good">
+          <Icon name="check" /><div><h2>Nothing low or out of stock</h2><p>{finished ? 'Everything collected is back to its target.' : 'So far, the storerooms had everything.'}</p></div>
+        </section>
+        {finished && other.length ? <OtherNote rows={other} /> : null}
+      </>
     );
   }
+  const row = (o: StockOutcome) => (
+    <li key={o.productName}>
+      <div className="sp-top">
+        <span className="sp-name">{o.productName}</span>
+        {o.flagged ? <span className="badge s-bad flag-tag"><Icon name="flag" />Flagged</span> : null}
+        {o.onShelf !== null && o.target ? <span className="sp-shelf">{fmt(o.onShelf)} of {fmt(o.target)} on the shelf</span> : null}
+      </div>
+      <span className="sp-detail">{o.status === 'out' ? `None left in the storeroom \u00b7 needed ${fmt(o.needed)} ${o.needed === 1 ? o.unitSingular : o.unitPlural}` : `Storeroom had ${fmt(o.got)}, short ${fmt(o.short)} ${o.short === 1 ? o.unitSingular : o.unitPlural}`}</span>
+      {o.status === 'out' && o.affects.length ? <span className="sp-affects"><Icon name="x" />Set as sold out: <b>{o.affects.join(', ')}</b></span> : null}
+    </li>
+  );
   return (
-    <section className="stock-report">
-      <h2>{finished ? 'Stock after this restock' : 'Low or out of stock so far'}</h2>
-      {GROUPS.map((g) => {
-        const rows = outcomes.filter((o) => o.status === g.st);
-        if (!rows.length) return null;
-        return (
-          <div key={g.st} className={`stock-group ${g.cls}`}>
-            <div className="stock-group-h"><span className="badge"><Icon name={g.st === 'out' ? 'warn' : g.st === 'low' ? 'down' : 'circle'} />{g.title} &middot; {rows.length}</span><small>{g.sub}</small></div>
-            <ul>
-              {rows.map((o) => (
-                <li key={o.productName}>
-                  <span className="sp-name">{o.productName}{o.flagged ? <span className="badge s-bad flag-tag"><Icon name="flag" />Flagged</span> : null}</span>
-                  <span className="sp-detail">{outcomeLine(o).slice(o.productName.length + 2)}</span>
-                  {o.onShelf !== null && o.target ? <span className="sp-bar" aria-hidden="true"><i style={{ width: `${Math.min(100, (o.onShelf / o.target) * 100)}%` }} /></span> : null}
-                </li>
-              ))}
-            </ul>
-          </div>
-        );
-      })}
-    </section>
+    <>
+      {out.length ? (
+        <section className="stock-panel out">
+          <h2><Icon name="warn" />Out of stock <span className="count">{out.length}</span></h2>
+          <ul>{out.map(row)}</ul>
+        </section>
+      ) : null}
+      {low.length ? (
+        <section className="stock-panel low">
+          <h2><Icon name="down" />Running low <span className="count">{low.length}</span></h2>
+          <ul>{low.map(row)}</ul>
+        </section>
+      ) : null}
+      {finished && other.length ? <OtherNote rows={other} /> : null}
+    </>
   );
 }
+
+function OtherNote({ rows }: { rows: StockOutcome[] }) {
+  return <p className="meta other-note"><b>Not topped up</b> (not a storeroom shortage): {rows.map((o) => outcomeLine(o)).join('; ')}</p>;
+}
+
+const fmt = (n: number) => String(round2(n));

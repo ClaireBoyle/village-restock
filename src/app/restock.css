@@ -330,3 +330,29 @@ button.pill:hover{background:var(--surface-2)}
 .sp-bar i{display:block;height:100%;background:var(--c);border-radius:inherit}
 .flag-tag{padding:2px 8px 2px 6px!important;font-size:12.5px!important;font-family:var(--f-body)}
 @media (max-width:640px){.stock-group li{grid-template-columns:1fr}.sp-bar{grid-column:1}}
+/* Low (orange) and Out (red) panels: the whole point of the finished screen */
+.stock-panel{border-radius:22px;padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.stock-panel h2{font-size:23px;letter-spacing:-.02em;display:flex;gap:10px;align-items:center}
+.stock-panel h2 .ic{width:26px;height:26px}
+.stock-panel .count{font-family:var(--f-body);font-size:14px;font-weight:700;padding:2px 10px;border-radius:999px;background:var(--surface)}
+.stock-panel.low{background:#FFF1D6;border:2px solid #F0A930;color:#7A4300}
+.stock-panel.out{background:#FDE6E4;border:2px solid #E0716A;color:#9F2620}
+.stock-panel ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.stock-panel li{background:var(--surface);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;color:var(--ink)}
+.sp-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.sp-name{font-family:var(--f-head);font-weight:700;font-size:19px;letter-spacing:-.015em}
+.sp-shelf{margin-left:auto;font-size:14px;font-weight:600;color:var(--ink-2)}
+.sp-detail{font-size:15px;color:var(--ink-2)}
+.sp-affects{display:flex;gap:6px;align-items:center;font-size:15px;color:#9F2620;font-weight:500;flex-wrap:wrap}
+.sp-affects .ic{width:17px;height:17px}
+.sp-affects b{font-weight:700}
+.stock-panel.all-good{flex-direction:row;align-items:center;gap:14px;background:var(--ok-bg);color:var(--ok)}
+.stock-panel.all-good>.ic{width:34px;height:34px}
+.stock-panel.all-good h2{font-size:21px}
+.stock-panel.all-good p{color:var(--ink-2)}
+.other-note{padding:0 4px}
+@media (prefers-color-scheme: dark){
+  .stock-panel.low{background:#2E220C;border-color:#9A6413;color:#F2B451}
+  .stock-panel.out{background:#371618;border-color:#83333A;color:#FF8E8E}
+  .sp-affects{color:#FF8E8E}
+}

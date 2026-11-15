@@ -4,12 +4,15 @@ import { ActionForm, SubmitButton } from '@/components/admin/ActionForm';
 import { removeSampleData } from '@/app/actions/admin';
 import { db, getSetting } from '@/lib/server/db';
 import { markUnfinished, serverToday } from '@/lib/server/restocks';
+import { processEmailOutbox } from '@/lib/server/email';
+import { after } from 'next/server';
 
 export default async function Overview({ searchParams }: { searchParams: Promise<{ removed?: string }> }) {
   const { removed } = await searchParams;
   const rm = removed?.match(/^(\d+)-(\d+)-(\d+)-(\d+)-(\d+)$/);
   const sql = db();
   await markUnfinished();
+  after(() => processEmailOutbox().catch(() => undefined)); // retry any manager emails that didn't send
   const today = await serverToday();
   const [w] = await sql`
     select

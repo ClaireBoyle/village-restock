@@ -1,8 +1,9 @@
 import type postgres from 'postgres';
 import { db } from './db';
 import { loadCatalogue } from './catalogue';
+import { queueRestockEmail } from './email';
 import {
-  CONFLICT_FIELDS, EMPTY_ITEM, activePlacements, type Conflict, collectionLines, departmentView, exceptions, lineGot, lineInfo, lineState,
+  CONFLICT_FIELDS, EMPTY_ITEM, activePlacements, areaStatus, isChecked, stockOutcomes, type Conflict, collectionLines, departmentView, exceptions, lineGot, lineInfo, lineState,
   type AreaStatus, type ItemState,
 } from '@/lib/restock-logic';
 import { opSchema, type ItemFields, type OpResult, type RemoteSession, type SyncOp } from '@/lib/sync-types';
@@ -212,6 +213,32 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
     }
   }
   await tx`update restock_sessions set status = ${status}, exception_reason = ${finalReason}, finished_at = ${at} where id = ${s.id}`;
+
+  // Full restocks: queue the manager email in this same transaction.
+  if (s.kind === 'full' && view) {
+    const [row] = await tx`select people from restock_sessions where id = ${s.id}`;
+    const [dept] = await tx`select name from departments where id = ${s.departmentId}`;
+    const notChecked: string[] = [];
+    for (const { area, placements: ps } of view.areas) {
+      const st = areaStatus(recorded.get(area.id), ps, items);
+      if (st === 'skipped') {
+        const [a] = await tx`select skip_reason from session_areas where session_id = ${s.id} and check_area_id = ${area.id}`;
+        notChecked.push(`${area.name} skipped (${a?.skipReason ?? 'no reason'})`);
+      } else if (st !== 'complete') {
+        const un = ps.filter((p) => !isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM)).map((p) => p.productName);
+        if (un.length) notChecked.push(`${area.name}: ${un.join(', ')}`);
+      }
+    }
+    const lines = collectionLines(activePlacements('full', view.placements, recorded), items);
+    const host = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+    await queueRestockEmail(tx, s.id, at, {
+      departmentName: String(dept?.name ?? view.department.name),
+      finishedLabel: `${new Date(at).toLocaleDateString('en-AU', { timeZone: cat.settings.timeZone, weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '')}, ${new Date(at).toLocaleTimeString('en-AU', { timeZone: cat.settings.timeZone, hour: 'numeric', minute: '2-digit' }).toLowerCase()}`,
+      people: (row?.people as string[]) ?? [], exceptionReason: finalReason,
+      outcomes: stockOutcomes(lines, items, view.byId), notChecked,
+      link: host ? `https://${host}/admin/restocks/${s.id}` : null,
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -1,12 +1,17 @@
 import { Icon } from '@/components/Icon';
 import { ActionForm, SubmitButton } from '@/components/admin/ActionForm';
-import { addAdmin, changeMyPassword, setAdminActive } from '@/app/actions/admin';
+import { addAdmin, changeMyPassword, saveManagerEmail, sendTestEmailAction, setAdminActive } from '@/app/actions/admin';
+import { emailSettings, emailTransport, recentEmails } from '@/lib/server/email';
 import { requireAdmin } from '@/lib/server/auth';
 import { db } from '@/lib/server/db';
 
 export default async function Settings() {
   const me = await requireAdmin();
   const admins = await db()`select id, display_name, email, active, last_login_at from admins order by created_at`;
+  const mail = await emailSettings();
+  const transport = emailTransport();
+  const emails = await recentEmails(5);
+  const when = (v: unknown) => (v ? new Date(v as string).toLocaleString('en-AU', { timeZone: 'Australia/Melbourne', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '');
   const row: React.CSSProperties = { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' };
   const section: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 12 };
 
@@ -23,6 +28,40 @@ export default async function Settings() {
             <p>Keep the web address private. The admin area has no visible link: press and hold the logo on the home screen for 2 seconds, or add <b>/admin</b> to the address. It always asks for an admin password.</p>
           </div>
         </div>
+      </section>
+
+      <section className="panel" style={section}>
+        <h2>Manager email</h2>
+        <p className="meta">Sent automatically every time a full restock is finished: what&rsquo;s out of stock (with menu items to mark sold out) and what&rsquo;s running low.</p>
+        {!transport ? (
+          <div className="banner s-warn"><Icon name="warn" /><div><b>Email sending isn&rsquo;t set up yet</b>
+            <p>Add <b>RESEND_API_KEY</b> (or <b>SMTP_USER</b> and <b>SMTP_PASS</b>) in Vercel &rarr; Settings &rarr; Environment Variables, then redeploy. Emails are kept and sent once it&rsquo;s set up.</p></div></div>
+        ) : <p className="meta">Sending with: <b>{transport === 'resend' ? 'Resend' : transport === 'smtp' ? 'email account (SMTP)' : 'test mode (not actually sent)'}</b></p>}
+        <ActionForm action={saveManagerEmail} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={row}>
+            <div className="field" style={{ flex: '1 1 280px' }}><label htmlFor="mto">Managers&rsquo; email address</label>
+              <input id="mto" name="to" type="email" defaultValue={mail.to} placeholder="e.g. managers@example.com" autoComplete="off" /></div>
+            <label className="check"><input type="checkbox" name="enabled" defaultChecked={mail.enabled} />Send after every finished full restock</label>
+            <SubmitButton>Save</SubmitButton>
+          </div>
+        </ActionForm>
+        {mail.to ? (
+          <ActionForm action={sendTestEmailAction} style={row}>
+            <input type="hidden" name="to" value={mail.to} />
+            <SubmitButton className="btn small" pendingText="Sending\u2026">Send a test email</SubmitButton>
+          </ActionForm>
+        ) : null}
+        {emails.length ? (
+          <div className="rows">
+            {emails.map((e, i) => (
+              <div key={i} className="row">
+                <div className="grow"><div className="title">{String(e.subject)}</div>
+                  <div className="meta">{when(e.createdAt)} &middot; to {String(e.recipient)}{e.lastError ? ` \u00b7 ${String(e.lastError)}` : ''}</div></div>
+                <span className={`badge ${e.status === 'sent' ? 's-ok' : e.status === 'failed' ? 's-bad' : 's-info'}`}>{e.status === 'sent' ? `Sent ${when(e.sentAt)}` : e.status === 'failed' ? `Not sent yet (${Number(e.attempts)} tries)` : 'Waiting to send'}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       <section className="panel" style={section}>
