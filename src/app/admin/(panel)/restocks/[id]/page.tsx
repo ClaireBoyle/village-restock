@@ -60,7 +60,7 @@ export default async function RestockDetail({ params }: { params: Promise<{ id: 
                 const notes: string[] = [];
                 if (i.conflict) notes.push('Two different counts (unresolved)');
                 if (i.shortfallReason) notes.push(REASON[String(i.shortfallReason)] ?? String(i.shortfallReason));
-                if (i.flagged) notes.push('Flagged for supervisor');
+                if (i.flagged) notes.push('Flagged for manager');
                 if (i.routineChoice) notes.push(i.routineChoice === 'needed' ? 'Task needed' : 'Task not needed');
                 return (
                   <tr key={String(i.placementId)} className={i.conflict || i.shortfallReason ? 'warn' : ''}>

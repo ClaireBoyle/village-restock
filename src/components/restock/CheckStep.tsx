@@ -20,7 +20,7 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
   const cur = view.areas.find((a) => a.area.id === curId);
 
   const goArea = (id: string) => { setSkipOpen(false); void updateLocalSession(session.id, { curAreaId: id }); window.scrollTo({ top: 0 }); };
-  if (!cur) return <main className="wrap restock-main">{ctx.header}<div className="banner s-none"><Icon name="info" /><div><b>This department has no areas yet</b><p>A supervisor can add them in Admin.</p></div></div></main>;
+  if (!cur) return <main className="wrap restock-main">{ctx.header}<div className="banner s-none"><Icon name="info" /><div><b>This department has no areas yet</b><p>An admin can add them in Admin.</p></div></div></main>;
 
   // Stay on this area after completing or skipping it, so staff see the confirmation and choose where to go next.
   const pin = () => { if (session.curAreaId !== cur.area.id) void updateLocalSession(session.id, { curAreaId: cur.area.id }); };

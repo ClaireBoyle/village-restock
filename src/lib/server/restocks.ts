@@ -1,4 +1,4 @@
-// Reading restocks and shortages for supervisors.
+// Reading restocks and shortages for managers.
 import { db } from './db';
 import { loadCatalogue } from './catalogue';
 import { tradingDate } from '@/lib/restock-math';
@@ -12,7 +12,7 @@ export async function serverToday(): Promise<string> {
 
 /**
  * Restocks still open from an earlier trading day were never finished.
- * Mark them "unfinished" so supervisors can see them. Cheap; safe to call often.
+ * Mark them "unfinished" so managers can see them. Cheap; safe to call often.
  */
 export async function markUnfinished(): Promise<void> {
   const today = await serverToday();

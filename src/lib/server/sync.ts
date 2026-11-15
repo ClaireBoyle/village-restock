@@ -176,7 +176,7 @@ async function apply(tx: Tx, op: SyncOp, deviceId: string): Promise<{ mergedInto
 /**
  * Finish a restock. The server re-checks the work itself: if anything is
  * outstanding it is recorded as "finished with exceptions" even if the device
- * said otherwise. Shortages (confirmed or flagged) are written for supervisors.
+ * said otherwise. Shortages (confirmed or flagged) are written for managers.
  */
 async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind: 'full' | 'quick' }, reason: string | null, at: string, by: string | null) {
   const cat = await loadCatalogue();
@@ -205,7 +205,7 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
       const st = lineState(line, items), info = lineInfo(line, items);
       const short = Math.round((line.total - lineGot(line, items)) * 100) / 100;
       if (!(st === 'short' || info.flagged) || short <= 0) continue;
-      if (info.reason !== 'insufficient' && !info.flagged) continue; // only confirmed shortages, or ones flagged for a supervisor
+      if (info.reason !== 'insufficient' && !info.flagged) continue; // only confirmed shortages, or ones flagged for a manager
       const productId = view.byId.get(line.parts[0].placementId)?.productId ?? null;
       await tx`insert into shortages (session_id, department_id, product_id, product_name, unit_plural, shortfall_qty, reason, flagged, reported_by)
         values (${s.id}, ${s.departmentId}, ${productId}, ${line.productName}, ${line.unitPlural}, ${short}, ${info.reason ?? 'other'}, ${info.flagged}, ${by})`;

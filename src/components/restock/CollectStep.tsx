@@ -91,9 +91,9 @@ function Line({ line, items, write }: { line: CollectionLine; items: Map<string,
           <span className="short-txt"><Icon name="warn" />Short {formatQty(short, line.unitSingular, line.unitPlural)}</span></div>
         <b>Why?</b>
         <div className="chips">{SHORT_REASONS.map(([v, l]) => <button key={v} className={`chip ${info.reason === v ? 'on' : ''}`} onClick={() => setFewerValues(got, v, info.flagged)}>{l}</button>)}</div>
-        {info.reason === 'insufficient' ? <p className="meta">Supervisors will see this as a confirmed shortage.</p> : info.reason ? <p className="meta">Recorded as not collected. No low-stock alert.</p> : null}
+        {info.reason === 'insufficient' ? <p className="meta">Managers will see this as a confirmed shortage.</p> : info.reason ? <p className="meta">Recorded as not collected. No low-stock alert.</p> : null}
         <button className={`flag ${info.flagged ? 'on' : ''}`} aria-pressed={info.flagged} onClick={() => setFewerValues(got, info.reason, !info.flagged)}>
-          <span className="box">{info.flagged ? <Icon name="check" /> : null}</span><Icon name="flag" />Flag for supervisor</button>
+          <span className="box">{info.flagged ? <Icon name="check" /> : null}</span><Icon name="flag" />Flag for manager</button>
         <button className="linkbtn" style={{ alignSelf: 'flex-start' }} onClick={() => { write(clearCollectedUpdates(line)); setFewer(false); }}>Cancel</button>
       </div>
     );

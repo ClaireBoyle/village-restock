@@ -18,7 +18,7 @@ export function AdminSignInForm() {
   return (
     <form onSubmit={onSubmit} className="auth-card">
       <span className="logo" style={{ width: 52, height: 52, borderRadius: 16 }} aria-hidden="true"><Icon name="lock" /></span>
-      <div><h1>Admin sign in</h1><p className="meta" style={{ marginTop: 4 }}>For supervisors who manage products and par levels.</p></div>
+      <div><h1>Admin sign in</h1><p className="meta" style={{ marginTop: 4 }}>For the people who look after products and par levels.</p></div>
       <ErrorBanner state={state} />
       <div className="field"><label htmlFor="email">Email</label><input id="email" name="email" type="email" autoComplete="username" required /></div>
       <div className="field"><label htmlFor="password">Password</label><input id="password" name="password" type="password" autoComplete="current-password" required /></div>

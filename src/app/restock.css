@@ -286,3 +286,17 @@ button.pill:hover{background:var(--surface-2)}
   .stage{padding:4px 10px 4px 4px;font-size:13.5px;min-height:38px}
   .stage .n{width:26px;height:26px}
 }
+/* Finish screen: compact "still to do" list and a collapsible full summary */
+.finish-title{font-size:28px;letter-spacing:-.025em;line-height:1.05}
+.exlist.compact li{padding:6px 6px 6px 14px;min-height:52px}
+.exlist.compact li>span{display:flex;flex-direction:column;gap:1px;align-items:flex-start}
+.exlist.compact b{font-weight:600;font-size:16px}
+.sum-details{border-radius:18px}
+.sum-details>summary{display:inline-flex;align-items:center;gap:8px;min-height:48px;padding:0 16px;border-radius:14px;background:var(--surface);box-shadow:var(--shadow-sm);font-weight:600;cursor:pointer;list-style:none}
+.sum-details>summary::-webkit-details-marker{display:none}
+.sum-details[open]>summary{margin-bottom:14px}
+.sum-details[open]>summary::after{content:"Hide";font-weight:500;color:var(--ink-2);margin-left:6px}
+.unchecked-row{font-size:15px;padding:8px 0;border-top:1px solid var(--hair)}
+.unchecked-row:first-of-type{border-top:0}
+.unchecked-row b{font-weight:600}
+.sum-card li>span:first-child{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}

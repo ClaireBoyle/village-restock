@@ -93,7 +93,7 @@ export function HomeScreen({ isAdmin }: { isAdmin: boolean }) {
             <div className="banner s-warn"><Icon name="wifioff" /><div><b>No product data on this device yet</b><p>{error}</p></div></div>
           ) : null}
           {catalogue && catalogue.departments.length === 0 ? (
-            <div className="banner s-none"><Icon name="info" /><div><b>No departments set up yet</b><p>A supervisor can add them in Admin.</p></div></div>
+            <div className="banner s-none"><Icon name="info" /><div><b>No departments set up yet</b><p>An admin can add them in Admin.</p></div></div>
           ) : null}
 
           <div className="dgrid">

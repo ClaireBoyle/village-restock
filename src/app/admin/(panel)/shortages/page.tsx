@@ -15,13 +15,13 @@ export default async function Shortages() {
   const lowStock = [
     `LOW STOCK (${confirmed.length})`,
     ...confirmed.map((r) => `- ${r.productName} (${r.departmentName}): short ${Number(r.shortfallQty)} ${r.unitPlural} · ${day(r.tradingDate)}`),
-    ...(open.some((r) => r.reason !== 'insufficient') ? ['', 'FLAGGED FOR SUPERVISOR', ...open.filter((r) => r.reason !== 'insufficient').map((r) => `- ${r.productName} (${r.departmentName}): ${REASON[r.reason]}`)] : []),
+    ...(open.some((r) => r.reason !== 'insufficient') ? ['', 'FLAGGED FOR MANAGER', ...open.filter((r) => r.reason !== 'insufficient').map((r) => `- ${r.productName} (${r.departmentName}): ${REASON[r.reason]}`)] : []),
   ].join('\n');
 
   return (
     <>
       <div className="page-head">
-        <div><h1>Shortages</h1><p>Products staff couldn&rsquo;t fully restock because the storeroom was short, or that they flagged for you. Nothing is ordered automatically.</p></div>
+        <div><h1>Shortages</h1><p>Products staff couldn&rsquo;t fully restock because the storeroom was short, or that they flagged for a manager. Nothing is ordered automatically.</p></div>
         {open.length ? <CopyButton text={lowStock} label="Copy low-stock list" /> : null}
       </div>
 

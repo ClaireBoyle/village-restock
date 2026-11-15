@@ -64,7 +64,7 @@ export function SyncSheet({ onClose, catalogueCheckedAt }: { onClose: () => void
       </div>
       {s.problems > 0 ? (
         <div className="banner s-bad"><Icon name="warn" /><div><b>{s.problems} change{s.problems === 1 ? '' : 's'} couldn&rsquo;t be saved to the server</b>
-          <p>Usually because a product was removed while you were working. They&rsquo;re kept on this device. Tell a supervisor.</p></div></div>
+          <p>Usually because a product was removed while you were working. They&rsquo;re kept on this device. Tell a manager.</p></div></div>
       ) : null}
       {s.lastError ? <p className="meta">{s.lastError}</p> : null}
       <p className="meta">{s.connection === 'offline'

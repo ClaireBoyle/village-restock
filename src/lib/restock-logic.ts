@@ -24,7 +24,7 @@ export const SHORT_REASONS: [ShortReason, string][] = [
   ['other', 'Other'],
 ];
 export const SKIP_REASONS = ['Being cleaned or defrosted', 'Another staff member is doing it', 'Ran out of time', 'Not in use tonight'];
-export const EXCEPTION_REASONS = ['Ran out of time before close', 'Stock or area unavailable', 'Supervisor approved', 'Other'];
+export const EXCEPTION_REASONS = ['Ran out of time before close', 'Stock or area unavailable', 'Manager approved', 'Other'];
 
 /** One product in one checking area, with everything a card needs. */
 export interface PlacementView {
@@ -262,7 +262,7 @@ export interface Exception { kind: 'area' | 'unchecked' | 'collect'; status: Are
 
 /**
  * Everything that stops a clean "Finish restock". A confirmed storeroom
- * shortage is NOT an exception: it's a recorded outcome supervisors act on.
+ * shortage is NOT an exception: it's a recorded outcome managers act on.
  */
 export function exceptions(args: {
   kind: 'full' | 'quick';
@@ -302,7 +302,7 @@ export function activePlacements(kind: 'full' | 'quick', placements: PlacementVi
   return kind === 'full' ? placements.filter((p) => recordedAreas.get(p.areaId) !== 'skipped') : placements;
 }
 
-/** The plain-text summary staff copy for supervisors. */
+/** The plain-text summary staff copy for managers. */
 export function summaryText(args: {
   departmentName: string; kind: 'full' | 'quick'; finishedLabel: string | null; exceptionReason: string | null;
   people: string[]; view: DepartmentView; placements: PlacementView[]; recordedAreas: Map<string, AreaStatus>;
@@ -336,7 +336,7 @@ export function summaryText(args: {
   L.push('');
   L.push(`CONFIRMED SHORTAGES (${shorts.length})`);
   L.push(...(shorts.length ? shorts.map((s) => `- ${s}`) : ['- None']));
-  if (flagged.length) { L.push(''); L.push('FLAGGED FOR SUPERVISOR'); L.push(...flagged.map((s) => `- ${s}`)); }
+  if (flagged.length) { L.push(''); L.push('FLAGGED FOR MANAGER'); L.push(...flagged.map((s) => `- ${s}`)); }
   const unchecked = args.placements.filter((p) => recordedAreas.get(p.areaId) !== 'skipped' && !isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM));
   if (notCollected.length || unchecked.length) {
     L.push(''); L.push('UNFINISHED');
