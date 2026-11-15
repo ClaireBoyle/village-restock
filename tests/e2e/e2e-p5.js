@@ -20,9 +20,9 @@ const FRIDGE = ['Fuze Peach Iced Tea', 'Monster Original', 'Monster White', 'Mon
   const b = await chromium.launch(); const errs = [];
   const ctx = await b.newContext({ ...devices['iPhone 13'] });
   const P = await ctx.newPage(); P.on('pageerror', (e) => errs.push(e.message));
-  await P.goto(B + '/'); await P.waitForSelector('.dcard');
-  await P.click('.who'); await P.fill('#staffname', 'Sam'); await P.click('text=Done');
-  await P.click('.dcard:has-text("Candy")'); await P.click('text=Start full restock'); await P.waitForSelector('article.prow');
+  await P.goto(B + '/'); await P.waitForSelector('.dcard2');
+  await P.click('.who'); await P.fill('#staffname', 'Sam'); await P.click('.sheet .btn.primary');
+  await P.click('.dcard2:has-text("Candy")'); await P.click('text=Start full restock'); await P.waitForSelector('article.prow');
 
   // ---- Physical order, not product/category order ----
   const stand = await names(P);
@@ -74,8 +74,8 @@ const FRIDGE = ['Fuze Peach Iced Tea', 'Monster Original', 'Monster White', 'Mon
   await P.screenshot({ path: out + 'p5-fridge.png' });
 
   // ---- Leave and resume keeps everything ----
-  await P.click('.dock .save-exit'); await P.waitForSelector('.dcard');
-  await P.click('.dcard:has-text("Candy")'); await P.click('text=Resume full restock'); await P.waitForSelector('article.prow');
+  await P.click('.dock .save-exit'); await P.waitForSelector('.dcard2');
+  await P.click('.dcard2:has-text("Candy")'); await P.click('text=Resume full restock'); await P.waitForSelector('article.prow');
   ok(await val(P, `${row('Mount Franklin Still Water')} .qty-input`, '12'), 'Save and exit, then resume: entries and area kept');
 
   // ---- Picking list ----
@@ -137,7 +137,7 @@ const FRIDGE = ['Fuze Peach Iced Tea', 'Monster Original', 'Monster White', 'Mon
   const fridgeRows = csv.split('\r\n').filter((l) => l.includes(',FOH drinks fridge,')).map((l) => l.split(',')[2].replace(/"/g, ''));
   ok(fridgeRows[fridgeRows.length - 1] === 'Soy Milk' && fridgeRows[0] === 'Fuze Peach Iced Tea', 'CSV export lists products in checking order');
   // Staff device picks up the new order
-  await P.goto(B + '/'); await P.waitForSelector('.dcard');
+  await P.goto(B + '/'); await P.waitForSelector('.dcard2');
   await P.evaluate(() => window.dispatchEvent(new Event('online')));
   await P.waitForTimeout(1500);
   ok(errs.length === 0, 'no page errors ' + JSON.stringify(errs));

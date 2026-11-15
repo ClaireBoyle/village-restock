@@ -93,9 +93,9 @@ const card = (name) => `article.card:has(h3:text-is("${name}"))`;
   const ctx = await b.newContext({ viewport: { width: 820, height: 1180 } });
   const P = await ctx.newPage();
   P.on('pageerror', (e) => errs.push('staff: ' + e.message));
-  await P.goto(B + '/'); await P.waitForSelector('.dcard');
+  await P.goto(B + '/'); await P.waitForSelector('.dcard2');
   await P.waitForFunction(() => navigator.serviceWorker && navigator.serviceWorker.controller, null, { timeout: 15000 }).catch(() => null);
-  if (!(await P.evaluate(() => !!navigator.serviceWorker.controller))) { await P.reload(); await P.waitForSelector('.dcard'); }
+  if (!(await P.evaluate(() => !!navigator.serviceWorker.controller))) { await P.reload(); await P.waitForSelector('.dcard2'); }
   ok(await P.evaluate(() => !!navigator.serviceWorker.controller), 'offline service worker is running');
   // wait for warming: department pages + photos cached
   const kid = String(kitch.id);
@@ -109,9 +109,9 @@ const card = (name) => `article.card:has(h3:text-is("${name}"))`;
   ok(man.status() === 200 && (await man.json()).display === 'standalone', 'installable app manifest');
 
   await ctx.setOffline(true);
-  await P.reload(); await P.waitForSelector('.dcard', { timeout: 15000 });
+  await P.reload(); await P.waitForSelector('.dcard2', { timeout: 15000 });
   ok(true, 'home screen opens with no connection');
-  await P.click('.dcard:has-text("Kitchen")');
+  await P.click('.dcard2:has-text("Kitchen")');
   await P.waitForSelector('text=Start full restock', { timeout: 15000 });
   await P.click('text=Start full restock');
   await P.waitForSelector(card('Tomatoes'));

@@ -24,9 +24,9 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
 
   // ---------- Device A: Sam starts tonight's Kitchen full restock ----------
   const A = await device('A');
-  await A.goto(B + '/'); await A.waitForSelector('.dcard');
-  await A.click('.who'); await A.fill('#staffname', 'Sam'); await A.click('text=Done');
-  await A.click('.dcard:has-text("Kitchen")'); await A.click('text=Start full restock');
+  await A.goto(B + '/'); await A.waitForSelector('.dcard2');
+  await A.click('.who'); await A.fill('#staffname', 'Sam'); await A.click('.sheet .btn.primary');
+  await A.click('.dcard2:has-text("Kitchen")'); await A.click('text=Start full restock');
   await A.waitForSelector(card('Tomatoes'));
   await A.fill(`${card('Tomatoes')} .qty-input`, '2');
   ok(await hasText(A, `${card('Tomatoes')} .ps`, '6'), 'scenario 1: 2 tomatoes vs target 8 -> collect 6');
@@ -54,15 +54,15 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
 
   // Save and exit
   await A.click('button:has-text("Save and exit")'); await A.waitForSelector('text=Saved. Anyone can carry on');
-  ok(await hasText(A, '.dcard:nth-child(2)', '1 of 4 areas'), 'home shows Kitchen in progress, 1 of 4 areas');
+  ok(await hasText(A, '.dcard2:nth-child(2)', '1 of 4 areas'), 'home shows Kitchen in progress, 1 of 4 areas');
 
   // ---------- Device B: Jess continues on another iPad (scenario 5) ----------
   const Bp = await device('B');
-  await Bp.goto(B + '/'); await Bp.waitForSelector('.dcard');
-  await Bp.click('.who'); await Bp.fill('#staffname', 'Jess'); await Bp.click('text=Done');
-  await Bp.waitForFunction(() => document.querySelector('.dcard:nth-child(2)')?.textContent?.includes('1 of 4 areas') ?? false, null, { timeout: 15000 });
+  await Bp.goto(B + '/'); await Bp.waitForSelector('.dcard2');
+  await Bp.click('.who'); await Bp.fill('#staffname', 'Jess'); await Bp.click('.sheet .btn.primary');
+  await Bp.waitForFunction(() => document.querySelector('.dcard2:nth-child(2)')?.textContent?.includes('1 of 4 areas') ?? false, null, { timeout: 15000 });
   ok(true, 'second device home sees the restock started on the first device');
-  await Bp.click('.dcard:has-text("Kitchen")');
+  await Bp.click('.dcard2:has-text("Kitchen")');
   await Bp.waitForSelector('button:has-text("Resume full restock")'); ok(true, 'second device offers Resume, not Start');
   await Bp.click('button:has-text("Resume full restock")');
   await Bp.waitForSelector('.area-btn:has-text("Fridge 1") >> text=Complete');
@@ -77,7 +77,7 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
   ok(s1.people.includes('Sam') && s1.people.includes('Jess'), 'both staff recorded on the restock: ' + s1.people.join(', '));
 
   // Device A picks up Jess's work
-  await A.click('.dcard:has-text("Kitchen")'); await A.click('button:has-text("Resume full restock")');
+  await A.click('.dcard2:has-text("Kitchen")'); await A.click('button:has-text("Resume full restock")');
   await A.waitForSelector('.area-btn:has-text("Fridge 2") >> text=Complete', { timeout: 30000 });
   ok(true, 'first device sees Fridge 2 completed by the other device');
 
@@ -139,9 +139,9 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
   await A.screenshot({ path: out + 'p2-summary.png', fullPage: true });
 
   // ---------- Quick restock in Candy Bar (scenario 9) ----------
-  await A.click('.dock button:has-text("Back to home")'); await A.waitForSelector('.dcard');
-  ok(await hasText(A, '.dcard:nth-child(2)', 'Finished with exceptions'), 'home shows Kitchen finished with exceptions');
-  await A.click('.dcard:has-text("Candy Bar")'); await A.click('text=Start quick restock');
+  await A.click('.dock button:has-text("Back to home")'); await A.waitForSelector('.dcard2');
+  ok(await hasText(A, '.dcard2:nth-child(2)', 'Finished with exceptions'), 'home shows Kitchen finished with exceptions');
+  await A.click('.dcard2:has-text("Candy Bar")'); await A.click('text=Start quick restock');
   await A.fill('#qsearch', 'large'); await A.click('.qrow:has-text("Large cups") button:has-text("Add")');
   await A.waitForSelector(card('Large cups')); await A.fill(`${card('Large cups')} .qty-input`, '1');
   await A.click('.dock button:has-text("Collection list")'); await A.waitForSelector('.line:has-text("Large cups")');

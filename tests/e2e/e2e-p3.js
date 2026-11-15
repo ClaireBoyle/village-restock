@@ -17,15 +17,15 @@ const hasText = (p, sel, t, timeout = 10000) => p.locator(sel).filter({ hasText:
   const device = async (name, staff) => {
     const p = await (await b.newContext({ viewport: { width: 1180, height: 820 } })).newPage();
     p.on('pageerror', (e) => errs.push(`${name}: ${e.message}`));
-    await p.goto(B + '/'); await p.waitForSelector('.dcard');
-    await p.click('.who'); await p.fill('#staffname', staff); await p.click('text=Done');
+    await p.goto(B + '/'); await p.waitForSelector('.dcard2');
+    await p.click('.who'); await p.fill('#staffname', staff); await p.click('.sheet .btn.primary');
     return p;
   };
   const A = await device('A', 'Sam');
-  await A.click('.dcard:has-text("Kitchen")'); await A.click('text=Start full restock'); await A.waitForSelector(card('Tomatoes'));
+  await A.click('.dcard2:has-text("Kitchen")'); await A.click('text=Start full restock'); await A.waitForSelector(card('Tomatoes'));
   await waitSynced(A);
   const Bp = await device('B', 'Jess');
-  await Bp.click('.dcard:has-text("Kitchen")'); await Bp.click('button:has-text("Resume full restock")'); await Bp.waitForSelector(card('Tomatoes'));
+  await Bp.click('.dcard2:has-text("Kitchen")'); await Bp.click('button:has-text("Resume full restock")'); await Bp.waitForSelector(card('Tomatoes'));
 
   // Same device editing quickly is never a clash
   await A.fill(`${card('Lemons')} .qty-input`, '3');

@@ -8,9 +8,9 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   const b = await chromium.launch(); const errs = [];
   const p = await (await b.newContext({ viewport: { width: 820, height: 1180 }, deviceScaleFactor: 2 })).newPage();
   p.on('pageerror', (e) => errs.push(e.message));
-  await p.goto(B + '/'); await p.waitForSelector('.dcard');
-  await p.click('.who'); await p.fill('#staffname', 'Sam'); await p.click('text=Done');
-  await p.click('.dcard:has-text("Kitchen")'); await p.click('text=Start full restock');
+  await p.goto(B + '/'); await p.waitForSelector('.dcard2');
+  await p.click('.who'); await p.fill('#staffname', 'Sam'); await p.click('.sheet .btn.primary');
+  await p.click('.dcard2:has-text("Kitchen")'); await p.click('text=Start full restock');
   await p.waitForSelector('article.card');
   console.log(p.url()); await p.click('.stages .stage:has-text("Finish")');
   await p.waitForSelector('#finish-note');
