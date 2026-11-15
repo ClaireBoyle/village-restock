@@ -54,13 +54,13 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
 
   // Save and exit
   await A.click('button:has-text("Save and exit")'); await A.waitForSelector('text=Saved. Anyone can carry on');
-  ok(await hasText(A, '.dcard2:nth-child(2)', '1 of 4 areas'), 'home shows Kitchen in progress, 1 of 4 areas');
+  ok(await hasText(A, '.lane:nth-child(2)', '1 of 4 areas'), 'home shows Kitchen in progress, 1 of 4 areas');
 
   // ---------- Device B: Jess continues on another iPad (scenario 5) ----------
   const Bp = await device('B');
   await Bp.goto(B + '/'); await Bp.waitForSelector('.dcard2');
   await Bp.click('.who'); await Bp.fill('#staffname', 'Jess'); await Bp.click('.sheet .btn.primary');
-  await Bp.waitForFunction(() => document.querySelector('.dcard2:nth-child(2)')?.textContent?.includes('1 of 4 areas') ?? false, null, { timeout: 15000 });
+  await Bp.waitForFunction(() => document.querySelector('.lane:nth-child(2)')?.textContent?.includes('1 of 4 areas') ?? false, null, { timeout: 15000 });
   ok(true, 'second device home sees the restock started on the first device');
   await Bp.click('.dcard2:has-text("Kitchen")');
   await Bp.waitForSelector('button:has-text("Resume full restock")'); ok(true, 'second device offers Resume, not Start');
@@ -140,7 +140,7 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
 
   // ---------- Quick restock in Candy Bar (scenario 9) ----------
   await A.click('.dock button:has-text("Back to home")'); await A.waitForSelector('.dcard2');
-  ok(await hasText(A, '.dcard2:nth-child(2)', 'Finished with exceptions'), 'home shows Kitchen finished with exceptions');
+  ok(await hasText(A, '.lane:nth-child(2)', 'Finished with exceptions'), 'home shows Kitchen finished with exceptions');
   await A.click('.dcard2:has-text("Candy Bar")'); await A.click('text=Start quick restock');
   await A.fill('#qsearch', 'large'); await A.click('.qrow:has-text("Large cups") button:has-text("Add")');
   await A.waitForSelector(card('Large cups')); await A.fill(`${card('Large cups')} .qty-input`, '1');

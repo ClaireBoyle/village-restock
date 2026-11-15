@@ -88,13 +88,7 @@ export function HomeScreen({ isAdmin }: { isAdmin: boolean }) {
     local.find((s) => s.departmentId === d.id && s.kind === 'full' && s.tradingDate === day), localAreas,
     remote.find((r) => r.departmentId === d.id),
     local.find((s) => s.departmentId === d.id && s.kind === 'quick' && s.status === 'open'))) : [];
-  // The one thing to do next: the most recently worked-on restock that isn't finished.
-  const next = [...states].filter((s) => s.kind === 'active' || s.kind === 'quick').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
-  const counts = {
-    active: states.filter((s) => s.kind === 'active').length,
-    idle: states.filter((s) => s.kind === 'idle' || s.kind === 'quick').length,
-    done: states.filter((s) => s.kind === 'done' || s.kind === 'exceptions').length,
-  };
+  const doneCount = states.filter((s) => s.kind === 'done' || s.kind === 'exceptions').length;
 
   return (
     <div className="theme-navy">
@@ -110,27 +104,18 @@ export function HomeScreen({ isAdmin }: { isAdmin: boolean }) {
           </div>
         ) : null}
 
-        <section className="shift" aria-label="Tonight">
+        {/* Tonight's restocking: every department side by side, equally. Each closer finds their own. */}
+        <section className="shift" aria-labelledby="tonight-h">
           <div className="shift-top">
-            <p className="shift-eyebrow"><Icon name="moon" />Tonight &middot; {dateLabel}</p>
-            {states.length ? (
-              <ul className="shift-tally" aria-label="Departments tonight">
-                <li className={`t-active ${counts.active ? '' : 'zero'}`}><b>{counts.active}</b> in progress</li>
-                <li className={`t-idle ${counts.idle ? '' : 'zero'}`}><b>{counts.idle}</b> to start</li>
-                <li className={`t-done ${counts.done ? '' : 'zero'}`}><b>{counts.done}</b> done</li>
-              </ul>
-            ) : null}
+            <p className="shift-eyebrow"><Icon name="moon" />{dateLabel}</p>
+            {states.length && doneCount === states.length ? <p className="shift-done"><Icon name="check" />All finished</p> : null}
           </div>
-          <h1 className="shift-title">
-            {!states.length ? 'Restocking'
-              : next ? (next.kind === 'quick' ? 'Pick up where you left off' : 'Restock in progress')
-              : counts.done === states.length ? 'Everything is restocked for tomorrow'
-              : counts.done ? `${counts.idle} ${counts.idle === 1 ? 'department' : 'departments'} still to restock`
-              : 'Ready for the close'}
-          </h1>
-          {next ? <NextUp s={next} /> : states.length && counts.done === states.length
-            ? <p className="shift-sub"><Icon name="check" />All {states.length} departments finished. Nice work.</p>
-            : states.length ? <p className="shift-sub">Choose a department below to start a full or quick restock.</p> : null}
+          <h1 className="shift-title" id="tonight-h">Restocking</h1>
+          {states.length ? (
+            <ul className="lanes">
+              {states.map((s) => <Lane key={s.d.id} s={s} />)}
+            </ul>
+          ) : null}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="shift-mark" src="/brand/village-v-white.png" alt="" aria-hidden="true" />
         </section>
@@ -145,7 +130,7 @@ export function HomeScreen({ isAdmin }: { isAdmin: boolean }) {
             <div className="banner s-none"><Icon name="info" /><div><b>No departments set up yet</b><p>An admin can add them in Admin.</p></div></div>
           ) : null}
           <div className="dgrid">
-            {states.map((s) => <DepartmentCard key={s.d.id} s={s} featured={s === next} />)}
+            {states.map((s) => <DepartmentCard key={s.d.id} s={s} />)}
           </div>
         </section>
       </main>
@@ -164,40 +149,42 @@ function AreaMeter({ segs, label }: { segs: Seg[]; label: string }) {
   );
 }
 
-function NextUp({ s }: { s: DeptState }) {
-  const gold = s.d.theme === 'gold';
-  const isQuick = s.kind === 'quick';
+const STATUS: Record<DeptState['kind'], { icon: 'half' | 'bolt' | 'check' | 'warn' | 'circle'; text: string }> = {
+  active: { icon: 'half', text: 'In progress' },
+  quick: { icon: 'bolt', text: 'Quick restock saved' },
+  done: { icon: 'check', text: 'Restocked' },
+  exceptions: { icon: 'warn', text: 'Finished with exceptions' },
+  idle: { icon: 'circle', text: 'Not started' },
+};
+
+/** One department's line in tonight's overview: status, area progress, who and when. */
+function Lane({ s }: { s: DeptState }) {
+  const st = STATUS[s.kind];
+  const detail = s.kind === 'active' ? `${s.doneAreas} of ${s.segs.length} areas${s.people.length ? ` · ${s.people.join(', ')}` : ''}${s.startedAt ? ` · since ${t(s.startedAt)}` : ''}`
+    : s.kind === 'quick' ? `${s.quickCount} on the list · full restock not started`
+    : s.kind === 'done' ? `Finished ${t(s.finishedAt)}${s.people.length ? ` · ${s.people.join(', ')}` : ''}`
+    : s.kind === 'exceptions' ? `${t(s.finishedAt)}${s.reason ? ` · ${s.reason}` : ''}`
+    : `${s.segs.length} areas · ${s.products} products`;
   return (
-    <Link href={`/d/${s.d.id}`} className={`nextup ${gold ? 'gold' : ''}`}>
-      <span className="nu-icon" aria-hidden="true"><Icon name={s.d.icon} /></span>
-      <span className="nu-body">
-        <span className="nu-label"><span className="live" aria-hidden="true" />{isQuick ? 'Quick restock saved' : 'Next up'}</span>
-        <b className="nu-name">{s.d.name}</b>
-        {isQuick ? <span className="nu-meta">{s.quickCount} {s.quickCount === 1 ? 'product' : 'products'} on the list</span> : (
-          <>
-            <AreaMeter segs={s.segs} label={`${s.doneAreas} of ${s.segs.length} areas done`} />
-            <span className="nu-meta"><b>{s.doneAreas} of {s.segs.length} areas</b>{s.people.length ? ` · ${s.people.join(', ')}` : ''}{s.startedAt ? ` · since ${t(s.startedAt)}` : ''}</span>
-          </>
-        )}
-      </span>
-      <span className="nu-go">{isQuick ? 'Continue' : 'Resume'}<Icon name="play" /></span>
-    </Link>
+    <li className={`lane k-${s.kind} ${s.d.theme === 'gold' ? 'gold' : 'village'}`}>
+      <div className="ln-head">
+        <span className="ln-icon" aria-hidden="true"><Icon name={s.d.icon} /></span>
+        <span className="ln-name">{s.d.groupLabel ? <small>{s.d.groupLabel}</small> : null}<b>{s.d.shortName}</b></span>
+      </div>
+      <p className="ln-st"><span className={`ln-dot ${s.kind === 'active' ? 'live' : ''}`} aria-hidden="true"><Icon name={st.icon} /></span>{st.text}</p>
+      <AreaMeter segs={s.segs} label={`${s.doneAreas} of ${s.segs.length} areas done`} />
+      <p className="ln-meta">{detail}</p>
+    </li>
   );
 }
 
-function DepartmentCard({ s, featured }: { s: DeptState; featured: boolean }) {
+/** A department's way in: its colour block and the one action that applies tonight. */
+function DepartmentCard({ s }: { s: DeptState }) {
   const { d } = s;
   const gold = d.theme === 'gold';
-  const status = {
-    active: { icon: 'half', text: 'In progress', sub: `${s.doneAreas} of ${s.segs.length} areas${s.people.length ? ` · ${s.people.join(', ')}` : ''}`, action: 'Resume' },
-    quick: { icon: 'bolt', text: 'Quick restock saved', sub: `${s.quickCount} on the list · full restock not started`, action: 'Continue' },
-    done: { icon: 'check', text: 'Restocked', sub: `Finished ${t(s.finishedAt)}${s.people.length ? ` · ${s.people.join(', ')}` : ''}`, action: 'View' },
-    exceptions: { icon: 'warn', text: 'Finished with exceptions', sub: `${t(s.finishedAt)}${s.reason ? ` · ${s.reason}` : ''}`, action: 'View' },
-    idle: { icon: 'circle', text: 'Not started', sub: `${s.segs.length} areas · ${s.products} products`, action: 'Start' },
-  }[s.kind] as { icon: 'half' | 'bolt' | 'check' | 'warn' | 'circle'; text: string; sub: string; action: string };
+  const action = { active: 'Resume restock', quick: 'Continue quick restock', done: 'View summary', exceptions: 'View summary', idle: 'Start restock' }[s.kind];
   return (
-    <Link href={`/d/${d.id}`} className={`dcard2 k-${s.kind} ${gold ? 'gold' : 'village'} ${featured ? 'featured' : ''}`}
-      aria-label={`${d.name}. ${status.text}. ${status.sub}. ${status.action}.`}>
+    <Link href={`/d/${d.id}`} className={`dcard2 k-${s.kind} ${gold ? 'gold' : 'village'}`} aria-label={`${d.name}: ${STATUS[s.kind].text}. ${action}.`}>
       {/* The colour-block title, as staff know it: Village blue, or Gold Class gold */}
       <span className="dc2-block">
         <span className="dc2-title">
@@ -207,12 +194,7 @@ function DepartmentCard({ s, featured }: { s: DeptState; featured: boolean }) {
         <span className="dc2-icon" aria-hidden="true"><Icon name={s.kind === 'done' ? 'check' : d.icon} /></span>
       </span>
       {d.description ? <span className="dc2-desc">{d.description}</span> : null}
-      <span className="dc2-status">
-        <span className="dc2-st"><span className={`dc2-dot ${s.kind === 'active' ? 'live' : ''}`} aria-hidden="true"><Icon name={status.icon} /></span>{status.text}</span>
-        <AreaMeter segs={s.segs} label={`${s.doneAreas} of ${s.segs.length} areas done`} />
-        <span className="dc2-sub">{status.sub}</span>
-      </span>
-      <span className="dc2-go">{status.action}<Icon name="next" /></span>
+      <span className="dc2-go">{action}<Icon name="next" /></span>
     </Link>
   );
 }
