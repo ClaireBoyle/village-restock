@@ -20,7 +20,8 @@ const ok = (c, m) => { if (!c) throw new Error('FAIL: ' + m); console.log('PASS:
   for (let k = 0; k < 40 && !people.includes('Jess'); k++) { [{ people } = { people: [] }] = await pg`select people from restock_sessions`; await p.waitForTimeout(250); }
   await pg.end();
   ok(people.includes('Jess'), 'the restock is recorded under the new name');
-  await p.click('.who'); await p.fill('#staffname', 'Alex'); await p.waitForTimeout(300); await p.keyboard.press('Enter');
+  await p.waitForSelector('.pill.ok', { timeout: 20000 });
+  await p.click('.who'); await p.waitForSelector('#staffname'); await p.fill('#staffname', 'Alex'); await p.waitForTimeout(300); await p.keyboard.press('Enter');
   await p.waitForSelector('.who .avatar:has-text("A")');
   ok(await p.locator('.sheet').count() === 0, 'Enter on the keyboard saves and closes');
   await p.click('.pill'); await p.waitForSelector('.sheet:has-text("Sync status")');

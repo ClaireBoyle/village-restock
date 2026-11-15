@@ -21,5 +21,6 @@ node tests/e2e/e2e-p2.js
 | `e2e-p5.js` | Redesign on a realistic Candy Bar layout. **First run** `psql "$E2E_DATABASE_URL" -f tests/e2e/candy-fixture.sql` after the reset. Physical order, area notes, zero vs unchecked, progress, picking list, admin arrange |
 | `e2e-note.js` | Comments for managers (set `manager_email` + `manager_email_enabled` in app_settings first) |
 | `name-test.js` | Staff name panel on a phone |
+| `e2e-stuck-lock.js` | A hung database connection holding a lock: the app says "Sync needs attention" (not "Offline") and uploads by itself once it clears |
 
 Screenshots go to `tests/e2e/out/` (not committed).

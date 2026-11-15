@@ -25,7 +25,7 @@ const emit = (patch: Partial<SyncStatus>) => {
 export const getSyncStatus = () => status;
 export const subscribeSync = (l: () => void) => { listeners.add(l); return () => listeners.delete(l); };
 
-const BATCH = 50;
+const BATCH = 20; // small enough to finish well inside the server's time limit
 let running: Promise<void> | null = null;
 let timer: number | null = null;
 let inFlightMax = 0;
@@ -53,12 +53,18 @@ export function syncNow(): Promise<void> {
   running = (async () => {
     emit({ syncing: true });
     try {
-      await push();
+      const held = await push();
       await pull();
-      emit({ connection: 'online', lastSyncAt: new Date().toISOString(), lastError: null });
+      emit({ connection: 'online', lastSyncAt: held ? status.lastSyncAt : new Date().toISOString(), lastError: held });
     } catch (e) {
-      const offline = e instanceof TypeError || (e as Error)?.name === 'AbortError';
-      emit({ connection: offline ? 'offline' : status.connection, lastError: offline ? null : (e as Error).message });
+      // Only a failed network request means "offline". A slow or failing server is shown as
+      // "needs attention" with the reason, so staff aren't told they're offline when they aren't.
+      const offline = e instanceof NetworkError || (typeof navigator !== 'undefined' && navigator.onLine === false);
+      const slow = (e as Error)?.name === 'AbortError';
+      emit({
+        connection: offline ? 'offline' : 'online',
+        lastError: offline ? null : slow ? 'The server is slow to respond. Changes are safe on this device and will keep retrying.' : (e as Error).message,
+      });
     } finally {
       inFlightMax = 0;
       await refreshCounts();
@@ -69,11 +75,21 @@ export function syncNow(): Promise<void> {
   return running;
 }
 
+class NetworkError extends Error {}
+
+/** fetch, but a request that never reached the server is a NetworkError (= offline). */
+async function request(url: string, init?: RequestInit): Promise<Response> {
+  try { return await fetch(url, init); } catch (e) {
+    if ((e as Error)?.name === 'AbortError') throw e;
+    throw new NetworkError((e as Error)?.message ?? 'Network error');
+  }
+}
+
 async function post<T>(url: string, body: unknown): Promise<T> {
   const ctrl = new AbortController();
-  const t = window.setTimeout(() => ctrl.abort(), 15000);
+  const t = window.setTimeout(() => ctrl.abort(), 30000);
   try {
-    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ctrl.signal, cache: 'no-store' });
+    const res = await request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ctrl.signal, cache: 'no-store' });
     if (!res.ok) throw new Error(`The server replied ${res.status}. Changes are safe on this device and will be retried.`);
     return (await res.json()) as T;
   } finally {
@@ -81,22 +97,24 @@ async function post<T>(url: string, body: unknown): Promise<T> {
   }
 }
 
-async function push() {
+/** Upload waiting changes. Returns why some had to wait (server busy), or null if all went up. */
+async function push(): Promise<string | null> {
   const db = localDb();
   const device = await deviceId();
   for (;;) {
     const batch = await db.outbox.orderBy('seq').limit(BATCH).toArray();
     if (!batch.length) {
       // Nothing to send: still confirm we can reach the server.
-      const res = await fetch('/api/health', { cache: 'no-store' });
+      const res = await request('/api/health', { cache: 'no-store' });
       if (!res.ok) throw new Error('Server not reachable');
-      return;
+      return null;
     }
     inFlightMax = batch[batch.length - 1].seq!;
     const { results } = await post<SyncResponse>('/api/sync', { deviceId: device, ops: batch.map((r) => r.op) });
     emit({ connection: 'online' });
     const byId = new Map<string, OpResult>(results.map((r) => [r.opId, r]));
     let stop = false;
+    let held: string | null = null;
     for (const row of batch) {
       const r = byId.get(row.opId);
       if (!r) { stop = true; break; }
@@ -111,13 +129,14 @@ async function push() {
         });
       } else {
         await db.outbox.update(row.seq!, { attempts: row.attempts + 1 });
+        held = `The server couldn’t save some changes yet (${r.error}). They’re safe on this device and will keep retrying.`;
         stop = true; // keep order: try again next round
         break;
       }
     }
     inFlightMax = 0;
     await refreshCounts();
-    if (stop) return;
+    if (stop) return held;
   }
 }
 
@@ -126,7 +145,7 @@ async function pull() {
   const db = localDb();
   const open = (await db.sessions.toArray()).filter((s) => s.kind === 'full' && s.status === 'open');
   for (const s of open) {
-    const res = await fetch(`/api/sessions/${s.id}`, { cache: 'no-store' });
+    const res = await request(`/api/sessions/${s.id}`, { cache: 'no-store' });
     if (res.status === 404) continue; // not uploaded yet
     if (!res.ok) throw new Error(`The server replied ${res.status}`);
     await importRemote((await res.json()) as RemoteSession);

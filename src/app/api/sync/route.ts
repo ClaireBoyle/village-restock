@@ -4,6 +4,8 @@ import { applyOps } from '@/lib/server/sync';
 import { syncRequestSchema, type SyncResponse } from '@/lib/sync-types';
 
 export const dynamic = 'force-dynamic';
+// A batch of changes can take a few seconds on a busy night.
+export const maxDuration = 30;
 
 // POST /api/sync  { deviceId, ops: [...] }
 // Applies each change once, in order, and reports what happened to each.

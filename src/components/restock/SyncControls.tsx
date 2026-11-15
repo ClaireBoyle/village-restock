@@ -17,6 +17,7 @@ export function StatusPill({ onOpen, catalogueCheckedAt }: { onOpen: () => void;
   let cls = 'warn', text = 'Checking…', short = 'Checking';
   if (s.problems > 0) { cls = 'off'; text = `Sync needs attention (${s.problems})`; short = 'Needs attention'; }
   else if (s.connection === 'offline') { cls = 'off'; text = s.pending ? `Offline · ${s.pending} saved on device` : 'Offline · changes save on device'; short = s.pending ? `Offline · ${s.pending}` : 'Offline'; }
+  else if (s.pending > 0 && s.lastError) { cls = 'off'; text = `Sync needs attention · ${s.pending} saved on device`; short = `Retrying ${s.pending}`; }
   else if (s.pending > 0) { cls = 'warn'; text = `Syncing ${s.pending}…`; short = `Syncing ${s.pending}`; }
   else if (s.connection === 'online') { cls = 'ok'; text = 'All changes synced'; short = 'Synced'; }
   return (

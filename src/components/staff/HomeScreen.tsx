@@ -198,13 +198,13 @@ function DepartmentCard({ s, featured }: { s: DeptState; featured: boolean }) {
   return (
     <Link href={`/d/${d.id}`} className={`dcard2 k-${s.kind} ${gold ? 'gold' : 'village'} ${featured ? 'featured' : ''}`}
       aria-label={`${d.name}. ${status.text}. ${status.sub}. ${status.action}.`}>
-      <span className="dc2-top">
-        <span className="dc2-icon" aria-hidden="true"><Icon name={d.icon} /></span>
+      {/* The colour-block title, as staff know it: Village blue, or Gold Class gold */}
+      <span className="dc2-block">
         <span className="dc2-title">
           {d.groupLabel ? <span className="dc2-group">{d.groupLabel}</span> : null}
           <b className="dc2-name">{d.shortName}</b>
         </span>
-        {s.kind === 'done' ? <span className="dc2-seal" aria-hidden="true"><Icon name="check" /></span> : null}
+        <span className="dc2-icon" aria-hidden="true"><Icon name={s.kind === 'done' ? 'check' : d.icon} /></span>
       </span>
       {d.description ? <span className="dc2-desc">{d.description}</span> : null}
       <span className="dc2-status">

@@ -39,6 +39,9 @@ export async function applyOps(deviceId: string, rawOps: unknown[]): Promise<OpR
 async function applyOne(deviceId: string, op: SyncOp): Promise<OpResult> {
   try {
     return await db().begin(async (tx) => {
+      // A stuck connection holding a lock must not freeze every upload: give up quickly and retry later.
+      await tx`set local lock_timeout = '4s'`;
+      await tx`set local statement_timeout = '15s'`;
       // Already applied? Return what happened the first time.
       const [seen] = await tx`select result from sync_ops where op_id = ${op.opId}`;
       if (seen) return seen.result as OpResult;
