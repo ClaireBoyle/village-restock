@@ -159,14 +159,15 @@ const STATUS: Record<DeptState['kind'], { icon: 'half' | 'bolt' | 'check' | 'war
 
 /** One department's line in tonight's overview: status, area progress, who and when. */
 function Lane({ s }: { s: DeptState }) {
-  const st = STATUS[s.kind];
-  const detail = s.kind === 'active' ? `${s.doneAreas} of ${s.segs.length} areas${s.people.length ? ` · ${s.people.join(', ')}` : ''}${s.startedAt ? ` · since ${t(s.startedAt)}` : ''}`
+  const unset = s.kind === 'idle' && s.segs.length === 0;
+  const st = unset ? { icon: 'info' as const, text: 'Not set up yet' } : STATUS[s.kind];
+  const detail = unset ? 'An admin can add its areas and products' : s.kind === 'active' ? `${s.doneAreas} of ${s.segs.length} areas${s.people.length ? ` · ${s.people.join(', ')}` : ''}${s.startedAt ? ` · since ${t(s.startedAt)}` : ''}`
     : s.kind === 'quick' ? `${s.quickCount} on the list · full restock not started`
     : s.kind === 'done' ? `Finished ${t(s.finishedAt)}${s.people.length ? ` · ${s.people.join(', ')}` : ''}`
     : s.kind === 'exceptions' ? `${t(s.finishedAt)}${s.reason ? ` · ${s.reason}` : ''}`
     : `${s.segs.length} areas · ${s.products} products`;
   return (
-    <li className={`lane k-${s.kind} ${s.d.theme === 'gold' ? 'gold' : 'village'}`}>
+    <li className={`lane k-${unset ? 'unset' : s.kind} ${s.d.theme === 'gold' ? 'gold' : 'village'}`}>
       <div className="ln-head">
         <span className="ln-icon" aria-hidden="true"><Icon name={s.d.icon} /></span>
         <span className="ln-name">{s.d.groupLabel ? <small>{s.d.groupLabel}</small> : null}<b>{s.d.shortName}</b></span>
@@ -182,9 +183,10 @@ function Lane({ s }: { s: DeptState }) {
 function DepartmentCard({ s }: { s: DeptState }) {
   const { d } = s;
   const gold = d.theme === 'gold';
-  const action = { active: 'Resume restock', quick: 'Continue quick restock', done: 'View summary', exceptions: 'View summary', idle: 'Start restock' }[s.kind];
+  const unset = s.kind === 'idle' && s.segs.length === 0;
+  const action = unset ? 'Not set up yet' : { active: 'Resume restock', quick: 'Continue quick restock', done: 'View summary', exceptions: 'View summary', idle: 'Start restock' }[s.kind];
   return (
-    <Link href={`/d/${d.id}`} className={`dcard2 k-${s.kind} ${gold ? 'gold' : 'village'}`} aria-label={`${d.name}: ${STATUS[s.kind].text}. ${action}.`}>
+    <Link href={`/d/${d.id}`} className={`dcard2 k-${unset ? 'unset' : s.kind} ${gold ? 'gold' : 'village'}`} aria-label={`${d.name}: ${unset ? 'Not set up yet' : `${STATUS[s.kind].text}. ${action}`}.`}>
       {/* The colour-block title, as staff know it: Village blue, or Gold Class gold */}
       <span className="dc2-block">
         <span className="dc2-title">
