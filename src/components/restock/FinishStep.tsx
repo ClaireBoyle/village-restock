@@ -155,8 +155,8 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
       ) : (
         <Dock icon={ex.length ? 'warn' : 'check'} title={ex.length ? 'Not finished yet' : 'Ready to finish'}
           sub={ex.length ? 'Finish restock unlocks when everything is done' : 'Everything is checked and collected'}>
-          <button className="btn" onClick={ctx.saveAndExit}><Icon name="save" />Save and exit</button>
-          {ex.length ? <button className="btn caution big" onClick={() => { setExOpen(true); window.setTimeout(() => document.getElementById('expanel')?.scrollIntoView({ block: 'start' }), 50); }}>Finish with exceptions&hellip;</button> : null}
+          <button className="btn save-exit" onClick={ctx.saveAndExit} aria-label="Save and exit"><Icon name="save" /><span className="lg">Save and exit</span><span className="sm">Save &amp; exit</span></button>
+          {ex.length ? <button className="btn caution big" onClick={() => { setExOpen(true); window.setTimeout(() => document.getElementById('expanel')?.scrollIntoView({ block: 'start' }), 50); }}><span className="lg">Finish with exceptions&hellip;</span><span className="sm">With exceptions&hellip;</span></button> : null}
           <button className="btn good big" disabled={ex.length > 0} onClick={() => { void finishSession(session.id, null, who, finalNote); window.scrollTo({ top: 0 }); }}><Icon name="check" />Finish restock</button>
         </Dock>
       )}

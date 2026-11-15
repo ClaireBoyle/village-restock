@@ -36,13 +36,13 @@ export function DeptBand({ d, sub, right }: { d: CatDepartment; sub?: React.Reac
 export type Step = 'check' | 'collect' | 'finish';
 
 export function Stages({ kind, current, onGo }: { kind: 'full' | 'quick'; current: Step; onGo: (s: Step) => void }) {
-  const labels: [Step, string][] = [['check', kind === 'full' ? 'Check stock' : 'Pick products'], ['collect', 'Collect'], ['finish', 'Finish']];
+  const labels: [Step, string, string][] = [['check', kind === 'full' ? 'Check stock' : 'Pick products', kind === 'full' ? 'Check' : 'Pick'], ['collect', 'Collect', 'Collect'], ['finish', 'Finish', 'Finish']];
   const idx = labels.findIndex(([s]) => s === current);
   return (
     <nav className="stages" aria-label="Restock steps">
-      {labels.map(([s, l], i) => (
+      {labels.map(([s, l, sm], i) => (
         <button key={s} className={`stage ${i === idx ? 'on' : i < idx ? 'done' : ''}`} onClick={() => onGo(s)} aria-current={i === idx ? 'step' : undefined}>
-          <span className="n">{i < idx ? <Icon name="check" /> : i + 1}</span>{l}
+          <span className="n">{i < idx ? <Icon name="check" /> : i + 1}</span><span className="lg">{l}</span><span className="sm">{sm}</span>
         </button>
       ))}
     </nav>

@@ -76,7 +76,7 @@ export function QuickStep({ ctx }: { ctx: RestockCtx }) {
         </div>
       </main>
       <Dock icon="list" title={`${placements.length} on your list · ${lines.length} to collect`} sub={unchecked ? `${unchecked} still need a number` : placements.length ? 'Ready to collect' : 'Add products to start'}>
-        <button className="btn" onClick={ctx.saveAndExit}><Icon name="save" />Save and exit</button>
+        <button className="btn save-exit" onClick={ctx.saveAndExit} aria-label="Save and exit"><Icon name="save" /><span className="lg">Save and exit</span><span className="sm">Save &amp; exit</span></button>
         <button className="btn primary big" onClick={() => ctx.go('collect')} disabled={!lines.length}>Collection list<Icon name="next" /></button>
       </Dock>
     </>

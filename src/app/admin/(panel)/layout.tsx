@@ -16,7 +16,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         crumbs={`Signed in as ${me.name}`}
         right={
           <>
-            <Link className="pill" href="/"><Icon name="home" />Staff app</Link>
+            <Link className="pill" href="/"><Icon name="home" /><span className="lg">Staff app</span><span className="sm">Staff</span></Link>
             <form action={adminSignOut}><button className="pill"><Icon name="out" />Sign out</button></form>
           </>
         }

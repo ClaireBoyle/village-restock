@@ -12,15 +12,16 @@ import { initials } from './shared';
  */
 export function StatusPill({ onOpen, catalogueCheckedAt }: { onOpen: () => void; catalogueCheckedAt?: string | null }) {
   const s = useSyncStatus();
-  let cls = 'warn', text = 'Checking…';
-  if (s.problems > 0) { cls = 'off'; text = `${s.problems} not saved to server`; }
-  else if (s.connection === 'offline') { cls = 'off'; text = s.pending ? `Offline · ${s.pending} saved on device` : 'Offline'; }
-  else if (s.pending > 0) { cls = 'warn'; text = `Syncing ${s.pending}…`; }
-  else if (s.connection === 'online') { cls = 'ok'; text = 'All changes synced'; }
+  // `short` is shown on phones, where the full wording doesn't fit.
+  let cls = 'warn', text = 'Checking…', short = 'Checking';
+  if (s.problems > 0) { cls = 'off'; text = `${s.problems} not saved to server`; short = `${s.problems} not saved`; }
+  else if (s.connection === 'offline') { cls = 'off'; text = s.pending ? `Offline · ${s.pending} saved on device` : 'Offline'; short = s.pending ? `Offline · ${s.pending}` : 'Offline'; }
+  else if (s.pending > 0) { cls = 'warn'; text = `Syncing ${s.pending}…`; short = `Syncing ${s.pending}`; }
+  else if (s.connection === 'online') { cls = 'ok'; text = 'All changes synced'; short = 'Synced'; }
   return (
     <button className={`pill ${cls}`} onClick={onOpen} aria-label={`Sync status: ${text}. Open details`}
       title={catalogueCheckedAt ? `Product data checked ${timeLabel(catalogueCheckedAt)}` : undefined}>
-      <span className="dot" aria-hidden="true" /><span className="ptxt">{text}</span>
+      <span className="dot" aria-hidden="true" /><span className="ptxt lg">{text}</span><span className="ptxt sm" aria-hidden="true">{short}</span>
       {s.syncing ? <Icon name="sync" className="spin" /> : null}
     </button>
   );

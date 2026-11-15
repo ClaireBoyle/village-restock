@@ -248,3 +248,47 @@ a { color: inherit; }
 .csv-preview ul { margin: 6px 0 0; padding-left: 20px; line-height: 1.55; }
 .steps-list { margin: 0; padding-left: 22px; line-height: 1.7; list-style: decimal; }
 .csv-preview ul, .panel details ul { list-style: disc; }
+
+/* ---------- Phones ---------- */
+/* .lg = full wording, .sm = short wording for small screens */
+.sm { display: none; }
+@media (max-width: 640px) {
+  .lg { display: none !important; }
+  .sm { display: inline !important; }
+  .wrap { padding-inline: 14px; }
+  .top-in { min-height: 60px; gap: 10px; padding-block: 8px; }
+  .brand b { font-size: 16.5px; }
+  .pill { min-height: 38px; padding: 0 10px; gap: 7px; }
+  .top-right { gap: 2px; }
+
+  /* Department cards: icon beside the name, much shorter cards */
+  .dcard { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 14px; row-gap: 12px; padding: 16px; min-height: 0; border-radius: 20px; }
+  .dcard .dc-top { grid-row: 1; }
+  .dcard .dicon { width: 48px; height: 48px; border-radius: 15px; }
+  .dcard .dicon .ic { width: 24px; height: 24px; }
+  .dcard h3 { font-size: 22px; margin-top: 2px; }
+  .dc-desc { font-size: 14px; }
+  .dc-foot { grid-column: 1 / -1; padding-top: 12px; gap: 10px; }
+  .dc-go { width: 42px; height: 42px; }
+
+  /* Department header on restock screens */
+  .dband { padding: 12px; gap: 12px; border-radius: 18px; }
+  .dband .dicon { width: 44px; height: 44px; border-radius: 14px; }
+  .dband .dicon .ic { width: 22px; height: 22px; }
+  .dband h1 { font-size: 22px; }
+  .dband .dt { min-width: 0; }
+}
+@media (max-width: 380px) {
+  .brand b { font-size: 15px; }
+  .pill .ic { display: none; }
+}
+@media (max-width: 640px) {
+  /* Smaller welcome banner */
+  .welcome { padding: 18px 20px; border-radius: 20px; }
+  .welcome h1 { font-size: 28px; margin-top: 2px; }
+  .welcome .tagline { font-size: 15px; margin-top: 4px; }
+  /* Admin lists: badges and buttons drop below the name instead of squashing it */
+  .row { flex-wrap: wrap; row-gap: 8px; }
+  .row .grow { flex: 1 1 100%; }
+  .badge { white-space: normal; }
+}

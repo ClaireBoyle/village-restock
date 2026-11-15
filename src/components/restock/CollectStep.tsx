@@ -49,8 +49,8 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
         )}
       </main>
       <Dock icon={handled === lines.length ? 'check' : 'list'} title={lines.length - handled ? `${plural(lines.length - handled, 'item')} still to collect` : 'Collection done'} sub="Review before finishing">
-        <button className="btn" onClick={ctx.saveAndExit}><Icon name="save" />Save and exit</button>
-        <button className="btn primary big" onClick={() => ctx.go('finish')}>Review and finish<Icon name="next" /></button>
+        <button className="btn save-exit" onClick={ctx.saveAndExit} aria-label="Save and exit"><Icon name="save" /><span className="lg">Save and exit</span><span className="sm">Save &amp; exit</span></button>
+        <button className="btn primary big" onClick={() => ctx.go('finish')}><span className="lg">Review and finish</span><span className="sm">Review</span><Icon name="next" /></button>
       </Dock>
     </>
   );
