@@ -97,7 +97,7 @@ export function HomeScreen({ isAdmin }: { isAdmin: boolean }) {
   };
 
   return (
-    <>
+    <div className="theme-navy">
       <TopBar logo={<HoldLogo />} crumbs="Staff restocking" right={<TopControls catalogueCheckedAt={checkedAt} />} />
       <OfflineBanner />
       <main className="wrap home">
@@ -150,7 +150,7 @@ export function HomeScreen({ isAdmin }: { isAdmin: boolean }) {
         </section>
       </main>
       {toast ? <div className="toast" role="status">{toast}</div> : null}
-    </>
+    </div>
   );
 }
 

@@ -137,7 +137,7 @@ export function RestockApp({ departmentId }: { departmentId: string }) {
 
   if (!mode) {
     return (
-      <div className={gold ? 'gc' : ''}>{top}
+      <div className={`theme-navy ${gold ? 'gc' : ''}`}>{top}
         <TypeStep view={view} fullSession={fullSession} remoteFull={remoteFull} quickSession={quickSession} opening={opening}
           onStart={(m) => void begin(m)} onSummary={showFullSummary} />
       </div>
