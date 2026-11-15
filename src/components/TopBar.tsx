@@ -18,7 +18,12 @@ export function TopBar({ title = 'Village Restock', crumbs, backHref, right, log
         {backHref ? (
           <Link className="iconbtn" href={backHref} aria-label="Back"><Icon name="back" /></Link>
         ) : (
-          logo ?? <span className="logo" aria-hidden="true"><Icon name="logo" /></span>
+          logo ?? (
+            <span className="logo" aria-hidden="true">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img className="logo-mark" src="/brand/village-v-white.png" alt="" />
+            </span>
+          )
         )}
         <div className="brand">
           <b>{title}</b>

@@ -292,3 +292,72 @@ a { color: inherit; }
   .row .grow { flex: 1 1 100%; }
   .badge { white-space: normal; }
 }
+
+/* =============================================================================
+   Village brand layer: bold colour blocks, sweeping curves, heavy uppercase
+   headlines (after Village's in-cinema poster style). Working parts of the app
+   (product cards, numbers, statuses) stay plain for clarity.
+   ========================================================================== */
+:root {
+  --v-grad: linear-gradient(125deg, #0B1A6B 0%, #1F55E0 55%, #14A3F7 100%);
+  --gc-grad: linear-gradient(125deg, #2B2418 0%, #6E5E3A 45%, #B9A26A 100%);
+  --swoosh-blue: radial-gradient(120% 120% at 100% 0%, rgba(95,214,255,.55) 0 34%, rgba(95,214,255,0) 34.4%);
+  --swoosh-gold: radial-gradient(120% 120% at 100% 0%, rgba(240,220,170,.45) 0 34%, rgba(240,220,170,0) 34.4%);
+}
+.logo { background: var(--v-grad); }
+.logo-mark { width: 64%; height: auto; display: block; pointer-events: none; user-select: none; -webkit-user-drag: none; }
+
+/* Home banner */
+.welcome { background: var(--v-grad); align-items: center; min-height: 128px; }
+.welcome::before { width: auto; height: auto; inset: 0; right: 0; top: 0; border-radius: 0; background: var(--swoosh-blue); opacity: .9; }
+.welcome::after { content: ""; position: absolute; left: -12%; bottom: -150%; width: 70%; height: 200%; border-radius: 50%; border: 22px solid rgba(255,255,255,.07); pointer-events: none; }
+.welcome .date { text-transform: uppercase; letter-spacing: .14em; font-size: 12.5px; font-weight: 600; }
+.welcome h1 { text-transform: uppercase; font-weight: 800; letter-spacing: -.01em; font-size: clamp(32px, 5vw, 46px); }
+.welcome-mark { width: 92px; height: auto; opacity: .95; flex: none; }
+
+/* Department cards: a colour block on top, status underneath */
+.dcard { padding: 0; gap: 0; min-height: 0; overflow: hidden; }
+.dcard.gc { background: var(--surface); }
+.dcard.gc::before { display: none; }
+.dc-head { position: relative; display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 20px 20px 18px; min-height: 128px; background: var(--v-grad); color: #fff; overflow: hidden; }
+.dc-head::before { content: ""; position: absolute; inset: 0; background: var(--swoosh-blue); pointer-events: none; }
+.gc .dc-head { background: var(--gc-grad); }
+.gc .dc-head::before { background: var(--swoosh-gold); }
+.dc-head > * { position: relative; }
+.dc-titles { min-width: 0; }
+.dcard .eyebrow, .gc .dcard .eyebrow, .dcard.gc .eyebrow { color: rgba(255,255,255,.88); }
+.dcard.gc .eyebrow::before { background: rgba(255,255,255,.7); }
+.dcard h3 { color: #fff; text-transform: uppercase; font-weight: 800; letter-spacing: -.01em; font-size: 28px; margin-top: 4px; }
+.dcard .dicon, .dcard.gc .dicon { background: rgba(255,255,255,.16); color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,.3); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.dcard .dc-desc { padding: 14px 20px 0; margin: 0; }
+.dcard .dc-foot { margin: 14px 20px 18px; padding-top: 14px; }
+
+/* Department header on restock screens */
+.dband { position: relative; overflow: hidden; background: var(--v-grad); border: 0; color: #fff; }
+.gc .dband { background: var(--gc-grad); }
+.dband::before { content: ""; position: absolute; inset: 0; background: var(--swoosh-blue); pointer-events: none; }
+.gc .dband::before { background: var(--swoosh-gold); }
+.dband > * { position: relative; }
+.dband h1 { color: #fff; text-transform: uppercase; font-weight: 800; letter-spacing: -.01em; }
+.dband .eyebrow, .gc .dband .eyebrow { color: rgba(255,255,255,.88); }
+.gc .dband .eyebrow::before { background: rgba(255,255,255,.7); }
+.dband .dsub { color: rgba(255,255,255,.85) !important; }
+.dband .dicon, .gc .dband .dicon { background: rgba(255,255,255,.16); color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,.3); }
+.dband .stages, .gc .dband .stages { background: rgba(255,255,255,.14); }
+.dband .stage { color: rgba(255,255,255,.88); }
+.dband .stage .n { background: rgba(255,255,255,.2); color: #fff; }
+.dband .stage.on { background: #fff; color: var(--ink); }
+.dband .stage.on .n, .gc .dband .stage.on .n { background: #0B1A6B; color: #fff; }
+.gc .dband .stage.on .n { background: var(--espresso); color: var(--champagne); }
+.dband .stage.done .n { background: rgba(255,255,255,.92); color: var(--ok); }
+
+@media (max-width: 640px) {
+  .welcome { min-height: 0; }
+  .welcome-mark { width: 64px; }
+  .dcard { display: flex; padding: 0; border-radius: 20px; }
+  .dc-head { min-height: 96px; padding: 16px; }
+  .dcard h3 { font-size: 24px; }
+  .dcard .dicon { width: 44px; height: 44px; border-radius: 14px; }
+  .dcard .dc-desc { padding: 12px 16px 0; font-size: 14px; }
+  .dcard .dc-foot { margin: 12px 16px 14px; padding-top: 12px; grid-column: auto; }
+}

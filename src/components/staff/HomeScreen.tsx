@@ -79,6 +79,8 @@ export function HomeScreen({ isAdmin }: { isAdmin: boolean }) {
             <p className="date">{dateLabel}</p>
             <h1>Restocking</h1>
           </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="welcome-mark" src="/brand/village-v-white.png" alt="" aria-hidden="true" />
         </section>
 
         <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -114,12 +116,14 @@ export function HomeScreen({ isAdmin }: { isAdmin: boolean }) {
 function DepartmentCard({ d, status }: { d: CatDepartment; status: DeptStatus }) {
   return (
     <Link href={`/d/${d.id}`} className={`dcard ${d.theme === 'gold' ? 'gc' : ''}`} aria-label={`${d.name}. ${status.text}. ${status.action}.`}>
-      <div className="dc-top"><span className="dicon" aria-hidden="true"><Icon name={d.icon} /></span></div>
-      <div>
-        {d.groupLabel ? <p className="eyebrow">{d.groupLabel}</p> : null}
-        <h3>{d.shortName}</h3>
-        {d.description ? <p className="dc-desc">{d.description}</p> : null}
+      <div className="dc-head">
+        <div className="dc-titles">
+          {d.groupLabel ? <p className="eyebrow">{d.groupLabel}</p> : null}
+          <h3>{d.shortName}</h3>
+        </div>
+        <span className="dicon" aria-hidden="true"><Icon name={d.icon} /></span>
       </div>
+      {d.description ? <p className="dc-desc">{d.description}</p> : null}
       <div className="dc-foot">
         <div className={`dc-status s-${status.st}`}>
           <span className="st"><span className="dot" aria-hidden="true" />{status.text}</span>

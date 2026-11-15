@@ -1,7 +1,6 @@
 'use client';
 import { useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Icon } from '@/components/Icon';
 
 const HOLD_MS = 2000;
 
@@ -30,7 +29,8 @@ export function HoldLogo() {
       onContextMenu={(e) => e.preventDefault()}
       style={{ touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
     >
-      <Icon name="logo" />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img className="logo-mark" src="/brand/village-v-white.png" alt="" draggable={false} />
     </span>
   );
 }
