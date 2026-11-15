@@ -54,7 +54,9 @@ export function buildRestockEmail(i: RestockEmailInput): { subject: string; html
   const out = i.outcomes.filter((o) => o.status === 'out');
   const low = i.outcomes.filter((o) => o.status === 'low');
   const other = i.outcomes.filter((o) => o.status === 'not_topped_up');
-  const subject = `${i.departmentName} restock: ${out.length ? `${out.length} out of stock` : low.length ? `${low.length} running low` : 'all stocked'}${out.length && low.length ? `, ${low.length} running low` : ''}`;
+  // The finish time in the subject gives every restock its own email in Gmail/Outlook.
+  // With the same subject they get grouped, and repeated sections are hidden behind "...".
+  const subject = `${i.departmentName} restock ${i.finishedLabel}: ${out.length ? `${out.length} out of stock` : low.length ? `${low.length} running low` : 'all stocked'}${out.length && low.length ? `, ${low.length} running low` : ''}`;
 
   const shelf = (o: StockOutcome) => (o.onShelf !== null && o.target ? ` (${n(o.onShelf)} of ${n(o.target)} on the shelf)` : '');
   const outLine = (o: StockOutcome) => `${o.productName}: none left in the storeroom${shelf(o)}`;
@@ -71,9 +73,11 @@ export function buildRestockEmail(i: RestockEmailInput): { subject: string; html
   if (i.notChecked.length) T.push('', `Not checked: ${i.notChecked.join('; ')}`);
   if (i.link) T.push('', `Details: ${i.link}`);
 
+  // Invisible, different in every email: stops Gmail hiding sections that match an earlier email.
+  const uniq = `<span style="display:none;font-size:0;max-height:0;overflow:hidden">${esc(i.finishedLabel)} ${Date.now().toString(36)}</span>`;
   const box = (bg: string, border: string, color: string, title: string, rows: string) =>
     `<div style="background:${bg};border:2px solid ${border};border-radius:16px;padding:16px 18px;margin:0 0 14px">
-      <div style="font-size:19px;font-weight:700;color:${color};margin:0 0 10px">${title}</div>${rows}</div>`;
+      <div style="font-size:19px;font-weight:700;color:${color};margin:0 0 10px">${title}</div>${rows}${uniq}</div>`;
   const item = (name: string, detail: string, extra = '') =>
     `<div style="background:#fff;border-radius:12px;padding:10px 12px;margin:0 0 8px">
       <div style="font-size:16px;font-weight:700;color:#17213B">${esc(name)}</div>
@@ -89,11 +93,11 @@ export function buildRestockEmail(i: RestockEmailInput): { subject: string; html
     ${i.exceptionReason ? `<div style="background:#FDF0DA;border-radius:12px;padding:10px 14px;margin-bottom:14px;color:#8A5300;font-size:14px"><b>Finished with exceptions:</b> ${esc(i.exceptionReason)}</div>` : ''}
     ${i.note ? `<div style="background:#fff;border:2px solid #C9D6F5;border-radius:16px;padding:14px 18px;margin:0 0 14px">
       <div style="font-size:15px;font-weight:700;color:#2446B8;margin:0 0 6px">Comments from staff</div>
-      <div style="font-size:15px;color:#17213B;white-space:pre-wrap;line-height:1.45">${esc(i.note)}</div></div>` : ''}
+      <div style="font-size:15px;color:#17213B;white-space:pre-wrap;line-height:1.45">${esc(i.note)}</div>${uniq}</div>` : ''}
     ${out.length ? box('#FDE6E4', '#E0716A', '#9F2620', `Out of stock (${out.length})`, out.map((o) => item(o.productName, `None left in the storeroom${shelf(o)}`,
       o.affects.length ? `<div style="font-size:14px;color:#9F2620;margin-top:4px">Set as sold out: <b>${esc(o.affects.join(', '))}</b></div>` : '')).join('')) : ''}
     ${low.length ? box('#FFF1D6', '#F0A930', '#7A4300', `Running low (${low.length})`, low.map((o) => item(o.productName, `Storeroom had ${n(o.got)}, short ${n(o.short)} ${unit(o, o.short)}${shelf(o)}`)).join('')) : ''}
-    ${!out.length && !low.length ? `<div style="background:#E1F2E8;border-radius:16px;padding:16px 18px;margin-bottom:14px;color:#177245;font-size:17px;font-weight:700">Nothing low or out of stock</div>` : ''}
+    ${!out.length && !low.length ? `<div style="background:#E1F2E8;border-radius:16px;padding:16px 18px;margin-bottom:14px;color:#177245;font-size:17px;font-weight:700">Nothing low or out of stock${uniq}</div>` : ''}
     ${other.length ? `<p style="font-size:13px;color:#56607A;margin:0 0 8px"><b>Not topped up</b> (not a storeroom shortage): ${esc(other.map((o) => o.productName).join(', '))}</p>` : ''}
     ${i.notChecked.length ? `<p style="font-size:13px;color:#56607A;margin:0 0 8px"><b>Not checked:</b> ${esc(i.notChecked.join('; '))}</p>` : ''}
     ${i.link ? `<p style="font-size:13px;margin:14px 0 0"><a href="${esc(i.link)}" style="color:#2446B8">View this restock</a></p>` : ''}
