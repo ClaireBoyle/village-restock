@@ -112,6 +112,8 @@ export function RestockApp({ departmentId }: { departmentId: string }) {
   }, [mode, today]);
 
   const gold = view?.department.theme === 'gold';
+  // Each department has its own backdrop: deep navy (Village) or dark gold (Gold Class).
+  const themeCls = `theme-navy ${gold ? 'theme-gold gc' : ''}`;
   const activeSession = mode === 'full' ? fullSession : mode === 'quick' ? quickSession : null;
   const top = (
     <>
@@ -127,7 +129,7 @@ export function RestockApp({ departmentId }: { departmentId: string }) {
 
   if (!catalogue || !view) {
     return (
-      <div className={gold ? 'gc' : ''}>{top}
+      <div className={themeCls}>{top}
         <main className="wrap restock-main">
           {!catalogue ? <p className="meta">Loading&hellip;</p> : <div className="banner s-warn"><Icon name="warn" /><div><b>Department not found</b><p>It may have been hidden by an admin.</p></div></div>}
         </main>
@@ -137,14 +139,14 @@ export function RestockApp({ departmentId }: { departmentId: string }) {
 
   if (!mode) {
     return (
-      <div className={`theme-navy ${gold ? 'gc' : ''}`}>{top}
+      <div className={themeCls}>{top}
         <TypeStep view={view} fullSession={fullSession} remoteFull={remoteFull} quickSession={quickSession} opening={opening}
           onStart={(m) => void begin(m)} onSummary={showFullSummary} />
       </div>
     );
   }
 
-  if (!session) return <div className={gold ? 'gc' : ''}>{top}<main className="wrap restock-main"><p className="meta">Opening restock&hellip;</p></main></div>;
+  if (!session) return <div className={themeCls}>{top}<main className="wrap restock-main"><p className="meta">Opening restock&hellip;</p></main></div>;
 
   const items = new Map<string, ItemState>(itemRows.map((r) => [r.placementId, { ...EMPTY_ITEM, ...r }]));
   const areaRecords = new Map(areaRows.map((a) => [a.areaId, a]));
@@ -160,7 +162,7 @@ export function RestockApp({ departmentId }: { departmentId: string }) {
   };
 
   return (
-    <div className={gold ? 'gc' : ''}>
+    <div className={themeCls}>
       {top}
       {step === 'check' ? (session.kind === 'full' ? <CheckStep ctx={ctx} /> : <QuickStep ctx={ctx} />)
         : step === 'collect' ? <CollectStep ctx={ctx} /> : <FinishStep ctx={ctx} />}

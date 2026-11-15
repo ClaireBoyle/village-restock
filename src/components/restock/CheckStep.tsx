@@ -5,6 +5,7 @@ import {
   EMPTY_ITEM, SKIP_REASONS, type ItemState, activePlacements, areaNotes, areaStatus, collectionLines, isChecked,
 } from '@/lib/restock-logic';
 import { setArea, setItems, updateLocalSession } from '@/lib/client/restock-store';
+import { localDb } from '@/lib/client/local-db';
 import { PhotoZoom, ProductRow } from './ProductCard';
 import { AREA_BADGE, Badge, Dock, Ring, plural, timeOf } from './shared';
 import type { RestockCtx } from './RestockApp';
@@ -49,12 +50,16 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
   // area completes by itself (only on that change, so a reopened area isn't
   // snapped shut again while staff edit it).
   const onItem = async (p: (typeof cur.placements)[number], fields: Partial<ItemState>, resolve?: boolean) => {
-    const before = cur.placements.every(chk);
-    const old = items.get(p.placementId) ?? EMPTY_ITEM;
-    const updated: ItemState = { ...old, ...fields, conflict: resolve ? null : old.conflict ?? null };
-    const after = cur.placements.every((x) => isChecked(x, x.placementId === p.placementId ? updated : items.get(x.placementId) ?? EMPTY_ITEM));
+    // Read the latest saved values from the device (not this screen's last render), so two quick
+    // taps in a row can't each miss the other and leave a fully checked area open.
+    const fresh = async () => new Map((await localDb().items.where('sessionId').equals(session.id).toArray()).map((r) => [r.placementId, { ...EMPTY_ITEM, ...r }]));
+    const allChecked = (m: Map<string, ItemState>) => cur.placements.every((x) => isChecked(x, m.get(x.placementId) ?? EMPTY_ITEM));
+    const before = allChecked(await fresh());
     await setItems(session.id, [{ placementId: p.placementId, fields }], who, resolve);
-    if (!before && after && st !== 'complete' && st !== 'skipped') { pin(); await setArea(session.id, cur.area.id, 'complete', null, who); }
+    const after = allChecked(await fresh());
+    const rec = await localDb().areas.get([session.id, cur.area.id]);
+    const closed = rec?.status === 'complete' || rec?.status === 'skipped';
+    if (!before && after && !closed) { pin(); await setArea(session.id, cur.area.id, 'complete', null, who); }
   };
   const reopen = () => { pin(); void setArea(session.id, cur.area.id, 'not_started', null, who); };
   const firstUnchecked = () => {

@@ -662,7 +662,7 @@ body:has(.theme-navy) { background: #0A1233; }
 .theme-navy .type.k-active { box-shadow: 0 0 0 2px #4588F4, 0 18px 36px -22px rgba(0,0,0,.8); }
 .theme-navy.gc .type.k-active { box-shadow: 0 0 0 2px var(--champagne), 0 18px 36px -22px rgba(0,0,0,.8); }
 .theme-navy .banner { color: var(--ink); }
-.theme-navy > main .meta { color: rgba(255,255,255,.6); }
+.theme-navy .home .sec-h .meta, .theme-navy .restock-main > .meta { color: rgba(255,255,255,.6); }
 .theme-navy .type .meta, .theme-navy .how .meta, .theme-navy .banner .meta { color: var(--ink-2); }
 .theme-navy .top-right, .theme-navy .toast, .theme-navy .sheet { color: var(--ink); }
 
@@ -731,3 +731,153 @@ body:has(.theme-navy) { background: #0A1233; }
 .lane.k-unset .ln-dot { background: transparent; box-shadow: inset 0 0 0 1px rgba(255,255,255,.3); }
 .dcard2.k-unset .dc2-go { background: transparent; box-shadow: inset 0 0 0 1px var(--line); color: var(--ink-2); }
 .dcard2.k-unset .dc2-block { filter: saturate(.55); }
+
+/* =============================================================================
+   Department backdrops: deep navy for Village departments, dark gold for Gold Class.
+   Rows, cards and panels stay white so counts and buttons stay easy to read.
+   ========================================================================== */
+body:has(.theme-gold) { background: #17130E; }
+.theme-gold { background: radial-gradient(90% 50% at 50% -10%, rgba(201,166,107,.28), rgba(201,166,107,0) 70%), #17130E; }
+.theme-gold .top { background: rgba(23,19,14,.85); }
+.theme-gold .dhero { box-shadow: inset 0 0 0 1px rgba(235,214,171,.18), 0 20px 40px -28px rgba(0,0,0,.8); }
+.theme-gold .restock-main > .linkbtn { color: #E4CC9C; }
+
+/* Text and controls that sit directly on the dark backdrop */
+.theme-navy .rbar .stages { background: rgba(255,255,255,.08); box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); }
+.theme-navy .rbar .stage { color: rgba(255,255,255,.75); }
+.theme-navy .rbar .stage .n { background: rgba(255,255,255,.14); color: #fff; }
+.theme-navy .rbar .stage.on { background: #fff; color: var(--ink); }
+.theme-navy .rbar .stage.done .n { background: rgba(73,196,138,.25); color: #8BE0B5; }
+.theme-navy.theme-gold .rbar .stage.on .n { background: var(--espresso); color: var(--champagne); }
+.theme-navy .area-head h2, .theme-navy .finish-title, .theme-navy .picked h2, .theme-navy .col-sum h2 { color: #fff; }
+.theme-navy .ah-sub, .theme-navy .ah-sub b { color: rgba(255,255,255,.75); }
+.theme-navy .area-btn { box-shadow: none; }
+.theme-navy .area-btn:not(.cur) { background: rgba(255,255,255,.95); }
+/* Storeroom headings are pinned over the page, so they take the backdrop colour */
+.theme-navy button.room-h { background: #0A1233; color: #fff; border-bottom-color: rgba(255,255,255,.12); }
+.theme-gold button.room-h { background: #17130E; }
+.theme-navy button.room-h h3 { color: #fff; }
+.theme-navy .room-n { color: rgba(255,255,255,.7); }
+.theme-navy .room-bar { background: rgba(255,255,255,.18); }
+.theme-navy button.room-h > .ic:last-child { color: rgba(255,255,255,.7); }
+.theme-navy button.room-h > .ic:first-child { background: rgba(255,255,255,.12); color: #fff; }
+.theme-navy .room.complete button.room-h h3 { color: rgba(255,255,255,.6); }
+.theme-navy .room.complete button.room-h > .ic:first-child { background: rgba(73,196,138,.25); color: #8BE0B5; }
+.theme-navy .col-note { border-color: rgba(255,255,255,.25); }
+.theme-navy .line, .theme-navy .card.prow { border-color: transparent; }
+/* Finish screen */
+.theme-navy .sum-details > summary { color: var(--ink); }
+.theme-navy .finish-meta, .theme-navy .exlist, .theme-navy .stock-panel, .theme-navy .note-box, .theme-navy .ready, .theme-navy .expanel, .theme-navy .sum, .theme-navy .note-sent { color: var(--ink); }
+.theme-navy .other-note { color: rgba(255,255,255,.7); }
+.theme-navy .other-note b { color: #fff; }
+/* Bottom bar: dark glass, white text */
+.theme-navy .dock { background: rgba(10,18,51,.9); border-top-color: rgba(255,255,255,.1); }
+.theme-gold .dock { background: rgba(23,19,14,.92); }
+.theme-navy .dock-txt, .theme-navy .dock-txt b { color: #fff; }
+.theme-navy .dock-txt small, .theme-navy .dock-2 { color: rgba(255,255,255,.65); }
+.theme-navy .dock-txt > .ic { color: #9EC1FF; }
+.theme-gold .dock-txt > .ic { color: #E4CC9C; }
+.theme-navy .dock-bar { background: rgba(255,255,255,.1); }
+.theme-navy .dock .btn:not(.primary):not(.good):not(.caution) { background: rgba(255,255,255,.1); color: #fff; border-color: rgba(255,255,255,.18); box-shadow: none; }
+/* Gold Class: the main button uses champagne on the dark gold backdrop */
+.theme-gold .dock .btn.primary { background: linear-gradient(135deg, #EBD6AB, #C9A66B); color: #29241F; border-color: transparent; }
+
+/* =============================================================================
+   Glass: on the dark backdrops, panels are frosted glass instead of white.
+   Colours come from the app's dark-mode palette so statuses stay readable.
+   ========================================================================== */
+.theme-navy {
+  color-scheme: dark;
+  --surface: rgba(255,255,255,.075); --surface-2: rgba(255,255,255,.11); --have-bg: rgba(255,255,255,.06);
+  --ink: #F2F5FC; --ink-2: rgba(232,238,255,.68); --line: rgba(255,255,255,.2); --hair: rgba(255,255,255,.13);
+  --topbg: rgba(10,18,51,.8);
+  --shadow-sm: 0 1px 0 rgba(255,255,255,.04) inset; --shadow-md: 0 18px 36px -22px rgba(0,0,0,.8);
+  --accent: #4588F4; --accent-ink: #fff; --accent-soft: rgba(69,136,244,.22);
+  --ok: #6CD39A; --ok-bg: rgba(108,211,154,.15); --ok-line: rgba(108,211,154,.5);
+  --warn: #F6C26B; --warn-fill: #E79A22; --warn-bg: rgba(242,180,81,.15); --warn-line: rgba(242,180,81,.55);
+  --bad: #FF9A9A; --bad-bg: rgba(255,142,142,.15); --bad-line: rgba(255,142,142,.5);
+  --info: #9EC1FF; --info-bg: rgba(141,177,255,.15); --info-line: rgba(141,177,255,.45);
+  --skip: #C9B8F5; --skip-bg: rgba(188,168,240,.14); --skip-line: rgba(188,168,240,.5);
+  --none: rgba(232,238,255,.6); --none-bg: rgba(255,255,255,.08); --none-line: rgba(255,255,255,.28);
+  --d-accent: #8DB1FF; --d-soft: rgba(69,136,244,.16); --d-ink: #DDE6FF;
+}
+.theme-navy.theme-gold { --d-accent: #E4CC9C; --d-soft: rgba(201,166,107,.16); --d-ink: #F5EFE3; --accent-soft: rgba(201,166,107,.2); }
+
+/* The frosted panels */
+.theme-navy :is(.dcard2, .type, .how, .card.prow, .line, .area-btn, .aguide, .col-note, .qpanel, .note-box, .exlist li, .sum-card, .sum-details > summary,
+  .fewer, .skip-panel, .expanel, .ready, .stock-panel, .note-sent, .finish-hero, .banner, .top-right, .empty, .dock) {
+  -webkit-backdrop-filter: blur(16px) saturate(1.3); backdrop-filter: blur(16px) saturate(1.3);
+}
+.theme-navy :is(.dcard2, .type, .how, .card.prow, .line, .area-btn, .col-note, .qpanel, .note-box, .sum-card, .empty) {
+  background: rgba(255,255,255,.075); border: 1px solid rgba(255,255,255,.13); box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+}
+.theme-navy .top-right { background: rgba(255,255,255,.08); box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); color: var(--ink); }
+.theme-navy .dcard2 { color: var(--ink); }
+.theme-navy .dcard2:hover { background: rgba(255,255,255,.1); }
+.theme-navy .dcard2.k-done { background: rgba(255,255,255,.045); }
+.theme-navy .area-btn:not(.cur) { background: rgba(255,255,255,.075); }
+.theme-navy .area-btn.cur { background: var(--d-soft); border-color: var(--d-accent); }
+.theme-navy .rbar .stage.on { background: rgba(255,255,255,.18); color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,.2); }
+.theme-navy .card.prow { border-left: 4px solid var(--none-line); }
+.theme-navy .card.prow.s-warn { border-left-color: var(--warn-fill); background: rgba(242,180,81,.1); }
+.theme-navy .card.prow.s-ok { border-left-color: var(--ok); }
+.theme-navy .card.prow.s-bad { border-left-color: var(--bad); }
+.theme-navy .line { border-left: 4px solid var(--warn-fill); }
+.theme-navy .line.done { border-left-color: var(--ok); background: rgba(255,255,255,.045); }
+.theme-navy .line.short { border-left-color: var(--bad); background: rgba(255,142,142,.1); }
+/* Inputs and small controls */
+.theme-navy .pstep button { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.14); color: #fff; }
+.theme-navy .pstep .qty-input { background: rgba(0,0,0,.18); border-color: rgba(255,255,255,.22); color: #fff; }
+.theme-navy .pquick { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.16); color: rgba(255,255,255,.8); }
+.theme-navy .pquick.on, .theme-navy .pseg button.on { background: #2E9E68; border-color: #2E9E68; color: #fff; }
+.theme-navy .pseg { background: rgba(255,255,255,.08); }
+.theme-navy .btn.good { background: #2E9E68; border-color: #2E9E68; color: #fff; }
+.theme-navy .l-done span .ic { background: #2E9E68; color: #fff; }
+.theme-navy .l-few { color: rgba(255,255,255,.8); }
+.theme-navy .s-warn > .pi { background: var(--warn-fill); color: #fff; }
+.theme-navy .ag-text { color: var(--ink); }
+.theme-navy .chip { background: rgba(255,255,255,.1); color: var(--ink); }
+.theme-navy .chip.on { background: var(--accent); color: #fff; }
+.theme-gold .chip.on { background: var(--champagne); color: #29241F; }
+.theme-navy .dc2-go { background: rgba(255,255,255,.1); color: #fff; }
+.theme-navy .dcard2.k-active .dc2-go { background: var(--accent); }
+.theme-navy .dcard2.gold.k-active .dc2-go { background: linear-gradient(135deg, #EBD6AB, #C9A66B); color: #29241F; }
+.theme-navy .dcard2.k-done .dc2-go, .theme-navy .dcard2.k-exceptions .dc2-go, .theme-navy .dcard2.k-unset .dc2-go { background: transparent; box-shadow: inset 0 0 0 1px rgba(255,255,255,.22); color: rgba(255,255,255,.8); }
+.theme-navy .dc2-desc { color: rgba(232,238,255,.7); }
+.theme-navy .type .btn.primary { background: var(--accent); color: #fff; }
+.theme-gold .type .btn.primary, .theme-navy.gc .type .btn.primary { background: linear-gradient(135deg, #EBD6AB, #C9A66B); color: #29241F; }
+.theme-navy .type-icon { background: rgba(69,136,244,.2); color: #BFD5FF; }
+.theme-gold .type-icon, .theme-navy.gc .type-icon { background: rgba(201,166,107,.2); color: #EBD6AB; }
+.theme-navy .how .n { background: rgba(255,255,255,.12); color: #fff; }
+.theme-navy .linkbtn { color: #9EC1FF; }
+.theme-gold .linkbtn { color: #E4CC9C; }
+.theme-navy .badge { background: var(--cb); color: var(--c); }
+.theme-navy .type .meta, .theme-navy .how .meta, .theme-navy .banner .meta, .theme-navy .note-box .meta { color: var(--ink-2); }
+/* Bottom bar and pinned storeroom headings: frosted over the page */
+.theme-navy .dock { background: rgba(10,18,51,.72); }
+.theme-gold .dock { background: rgba(23,19,14,.75); }
+.theme-navy button.room-h { background: rgba(10,18,51,.82); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.theme-gold button.room-h { background: rgba(23,19,14,.85); }
+/* Warmer, clearly gold backdrop for Gold Class */
+body:has(.theme-gold) { background: #241B10; }
+.theme-gold { background: radial-gradient(100% 55% at 50% -10%, rgba(201,166,107,.42), rgba(201,166,107,0) 70%), linear-gradient(180deg, #2E2314 0%, #1E170E 100%); background-attachment: fixed; }
+.theme-gold .top { background: rgba(40,30,18,.82); }
+.theme-gold .dock { background: rgba(36,27,16,.78); }
+.theme-gold button.room-h { background: rgba(36,27,16,.88); }
+/* Gold Class accents are champagne, not blue */
+.theme-gold { --accent: #C9A66B; --accent-soft: rgba(201,166,107,.22); --info: #E4CC9C; --info-bg: rgba(201,166,107,.15); --info-line: rgba(201,166,107,.45); }
+.theme-gold .avatar { background: rgba(201,166,107,.2); color: #EBD6AB; }
+.theme-gold .col-go, .theme-gold .linkbtn, .theme-gold .ag-more { color: #E4CC9C; }
+.theme-gold .pnote .ic, .theme-gold .aguide > .ic { color: #E4CC9C; }
+.theme-navy .avatar { background: rgba(69,136,244,.22); color: #BFD5FF; }
+/* "N still to check": one compact line on the dark pages */
+.theme-navy .banner.area-end { padding: 10px 12px; gap: 10px; align-items: center; }
+.theme-navy .banner.area-end p { font-size: 13px; }
+@media (max-width: 640px) {
+  .banner.area-end p { display: none; }
+  .banner.area-end { flex-wrap: wrap; }
+  .banner.area-end .btn { min-height: 40px; flex: 1 1 auto; }
+}
+.theme-navy.theme-gold .avatar { background: rgba(201,166,107,.22); color: #EBD6AB; }
+.theme-navy .ready.s-warn { background: rgba(242,180,81,.1); border: 1px solid rgba(242,180,81,.3); }
+.theme-navy .exlist li { background: rgba(255,255,255,.07); }
