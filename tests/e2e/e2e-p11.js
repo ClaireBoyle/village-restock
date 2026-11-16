@@ -102,6 +102,19 @@ const BEER = ['Heineken Zero', 'James Squire Ginger Beer', 'Little Creatures Rog
   const [first] = await sql`select p.name, pl.heading from product_placements pl join products p on p.id = pl.product_id where pl.check_area_id = ${areaId} order by pl.sort_order limit 1`;
   ok(first.name === 'Apple Juice' && first.heading === 'Mixers, Water & Milk', 'saving in Arrange moves the first subheading to the top product');
 
+  // ---- Products page arrows reorder within an area ----
+  const order = async () => (await sql`select p.name from product_placements pl join products p on p.id = pl.product_id
+    where pl.check_area_id = ${areaId} and p.status = 'active' order by pl.sort_order, pl.created_at`).map((r) => r.name);
+  const o1 = await order(); const k = o1.indexOf('Orange Juice'); const below = o1[k + 1];
+  const [{ id: deptId }] = await sql`select id from departments where name = 'Gold Class Bar'`;
+  await A.goto(`${B}/admin/products?dept=${deptId}`); await A.click('button[aria-label="Move Orange Juice down"] >> nth=0');
+  const o2 = await waitDb(order, (o) => o.indexOf('Orange Juice') === k + 1, 15000);
+  ok(o2.indexOf('Orange Juice') === k + 1 && o2.indexOf(below) === k, `Products page: the down arrow swaps Orange Juice with ${below}`);
+  await A.waitForSelector('button[aria-label="Move Orange Juice up"]:not([disabled]):not(.pending)');
+  await A.click('button[aria-label="Move Orange Juice up"] >> nth=0');
+  const o3 = await waitDb(order, (o) => o.indexOf('Orange Juice') === k, 15000);
+  ok(JSON.stringify(o3) === JSON.stringify(o1), 'and the up arrow puts it back');
+
   // ---- Admin can delete a product; history keeps it ----
   const [oj] = await sql`select p.id from products p join departments d on d.id = p.department_id where d.name = 'Gold Class Bar' and p.name = 'Orange Juice'`;
   const [{ n: histBefore }] = await waitDb(() => sql`select count(*)::int as n from session_items where product_name = 'Orange Juice'`, (r) => r[0].n > 0);

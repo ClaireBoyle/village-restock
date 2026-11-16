@@ -962,3 +962,5 @@ body:has(.theme-gold) { background: #241B10; }
 .danger-zone { margin-top: 18px; border-color: var(--bad-line); }
 .danger-zone > summary { display: inline-flex; gap: 8px; align-items: center; min-height: 40px; cursor: pointer; font-weight: 600; color: var(--bad); list-style: none; }
 .danger-zone > summary .ic { width: 18px; height: 18px; }
+.move button.pending .ic { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }

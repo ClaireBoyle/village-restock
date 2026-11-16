@@ -198,9 +198,9 @@ export async function moveItem(form: FormData): Promise<void> {
     const j = p.data.dir === 'up' ? i - 1 : i + 1;
     if (i < 0 || j < 0 || j >= ids.length) return;
     [ids[i], ids[j]] = [ids[j], ids[i]];
-    for (let k = 0; k < ids.length; k++) {
-      await tx`update ${tx(table)} set sort_order = ${k + 1} where id = ${ids[k]}`;
-    }
+    // One statement for the whole list (a round trip per row was several seconds on the live database).
+    await tx`update ${tx(table)} t set sort_order = x.k from unnest(${ids}::uuid[]) with ordinality as x(id, k)
+      where t.id = x.id and t.sort_order is distinct from x.k`;
   });
   revalidatePath('/admin', 'layout');
 }
@@ -517,13 +517,14 @@ export async function saveAreaOrder(areaId: string, placementIds: string[], head
     if (placementIds.some((id) => !inArea.includes(id))) return 'changed';
     // The new order first; anything not shown (archived products) keeps its place after them.
     const order = [...placementIds, ...inArea.filter((id) => !placementIds.includes(id))];
-    for (let k = 0; k < order.length; k++) await tx`update product_placements set sort_order = ${k + 1} where id = ${order[k]}`;
+    // One statement each for the order and the subheadings (not a round trip per product).
+    await tx`update product_placements t set sort_order = x.k from unnest(${order}::uuid[]) with ordinality as x(id, k)
+      where t.id = x.id and t.sort_order is distinct from x.k`;
     // Subheadings (migration 011): blank removes one.
     if (headings && (await tx`select 1 from information_schema.columns where table_name = 'product_placements' and column_name = 'heading'`).length) {
-      for (const id of placementIds) {
-        const h = typeof headings[id] === 'string' ? headings[id]!.trim().slice(0, 40) : '';
-        await tx`update product_placements set heading = ${h || null} where id = ${id}`;
-      }
+      const hs = placementIds.map((id) => (typeof headings[id] === 'string' ? headings[id]!.trim().slice(0, 40) : '') || '');
+      await tx`update product_placements t set heading = nullif(x.h, '') from unnest(${placementIds}::uuid[], ${hs}::text[]) as x(id, h)
+        where t.id = x.id and t.heading is distinct from nullif(x.h, '')`;
     }
     return 'ok';
   });
