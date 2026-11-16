@@ -3,7 +3,7 @@
 -- Only touches the Gold Class Bar "Walk in fridge" checking area.
 --
 --   Top shelf · Fruit & Juices:  Maraschino Cherries, Orange / Pineapple / Apple / Cranberry Juice,
---                                Limes, Lemons, Oranges, Strawberries, Passionfruit
+--                                Limes, Lemons (both counted in boxes), Oranges, Strawberries, Passionfruit
 --   Middle shelf · Wine:         Moscato, Chandon NV, Redbank Prosecco, Cloudy Bay Sauvignon Blanc,
 --                                Red Claw Pinot Gris, Red Claw Chardonnay, Mt Yengo Pinot Grigio,
 --                                Alexander Hill Rosé, Alexander Hill Sauvignon Blanc, Alexander Hill Brut Cuvée
@@ -27,8 +27,8 @@ declare
     ['Pineapple Juice', 'bottle', 'bottles', 'Juices & Water'],
     ['Apple Juice', 'bottle', 'bottles', 'Juices & Water'],
     ['Cranberry Juice', 'bottle', 'bottles', 'Juices & Water'],
-    ['Limes', 'lime', 'limes', 'Fresh Produce'],
-    ['Lemons', 'lemon', 'lemons', 'Fresh Produce'],
+    ['Limes', 'box', 'boxes', 'Fresh Produce'],
+    ['Lemons', 'box', 'boxes', 'Fresh Produce'],
     ['Oranges', 'orange', 'oranges', 'Fresh Produce'],
     ['Strawberries', 'punnet', 'punnets', 'Fresh Produce'],
     ['Passionfruit', 'passionfruit', 'passionfruit', 'Fresh Produce'],
@@ -70,6 +70,9 @@ begin
     else
       update products set status = 'active', method = 'manual', category_id = coalesce(category_id, cat),
         default_location_id = coalesce(default_location_id, walkin) where id = p;
+      -- Lemons and limes are counted in boxes (if they were set up as single fruit by an earlier run).
+      update products set unit_singular = 'box', unit_plural = 'boxes'
+        where id = p and lower(name) in ('lemons', 'limes') and lower(unit_singular) in ('lemon', 'lime');
     end if;
     pl := (select id from product_placements where product_id = p and check_area_id = area limit 1);
     if pl is null then insert into product_placements (product_id, check_area_id, sort_order) values (p, area, 0) returning id into pl; end if;
