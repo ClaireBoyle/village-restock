@@ -1,4 +1,5 @@
--- Gold Class Bar: BOH bar fridge in physical order (top to bottom, left to right), 24 products,
+-- Gold Class Bar: BOH bar fridge in physical order (top to bottom, left to right), 25 products
+-- (the 24 listed plus Whipping Cream beside Whipped Cream),
 -- with two subheadings. Run AFTER db/migrations/011_placement_headings.sql. Safe to run more than once.
 --
 -- * Existing products are updated, never duplicated (matched by name within Gold Class Bar);
@@ -23,6 +24,7 @@ declare
     ['Kirks Indian Tonic Water', 'bottle', 'bottles', 'w', ''],
     ['Kirks Dry Ginger Ale', 'bottle', 'bottles', 'w', ''],
     ['Whipped Cream', 'can', 'cans', 'w', ''],
+    ['Whipping Cream', 'carton', 'cartons', 'w', ''],
     ['Oat Milk', 'container', 'containers', 'w', ''],
     ['Soy Milk', 'container', 'containers', 'w', ''],
     ['Mount Franklin Sparkling Water 330ml', 'bottle', 'bottles', 'w', ''],

@@ -309,6 +309,24 @@ export async function setProductStatus(form: FormData): Promise<void> {
   revalidatePath('/admin', 'layout');
 }
 
+/**
+ * Permanently delete a product (admins only). It disappears from every checking area and from
+ * staff devices on their next catalogue update. Past restocks, shortages and reports keep their
+ * own copy of the name and amounts, so history is unchanged. Its photo goes too if nothing else uses it.
+ */
+export async function deleteProduct(_: ActionResult, form: FormData): Promise<ActionResult> {
+  await requireAdmin();
+  const id = uuid.safeParse(form.get('id'));
+  if (!id.success) return { error: 'Something went wrong. Reload and try again.' };
+  if (form.get('understand') !== 'on') return { error: 'Tick the box to confirm you want to delete this product permanently.' };
+  const [p] = await db()`delete from products where id = ${id.data} returning name, photo_path, department_id`;
+  if (!p) return { error: 'That product no longer exists.' };
+  const { deletePhotoIfUnused } = await import('@/lib/server/photos');
+  await deletePhotoIfUnused((p.photoPath as string) ?? null).catch(() => undefined);
+  revalidatePath('/admin', 'layout');
+  redirect(`/admin/products?dept=${String(p.departmentId)}&deleted=${encodeURIComponent(String(p.name))}`);
+}
+
 // ---------------------------------------------------------------------------
 // Sample data
 // ---------------------------------------------------------------------------

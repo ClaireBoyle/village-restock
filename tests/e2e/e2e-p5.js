@@ -101,11 +101,10 @@ const FRIDGE = ['Fuze Peach Iced Tea', 'Monster Original', 'Monster White', 'Mon
   const order2 = await P.$$eval('.line', (els) => els.map((e) => e.dataset.line));
   ok(JSON.stringify(order1) === JSON.stringify(order2), 'Undo works and rows never jump around');
   await P.click('.line[data-line="Mount Franklin Still Water"] .l-few');
-  await P.click('.line[data-line="Mount Franklin Still Water"] .chip:has-text("Confirmed")');
-  ok(await has(P, '.line[data-line="Mount Franklin Still Water"] .short-txt', 'Short 1'), 'Got fewer: actual amount + reason, shortfall shown');
-  await P.click('.line[data-line="Mount Franklin Still Water"] .flag'); 
-  await P.click('.line[data-line="Mount Franklin Still Water"] .fw-foot button:has-text("Done")');
-  ok(await has(P, '.line[data-line="Mount Franklin Still Water"]', 'Got 11'), 'partial line folds to a one-line summary');
+  ok(await has(P, '.line[data-line="Mount Franklin Still Water"] .short-txt', 'Short 1'), 'Got fewer: actual amount, shortfall shown');
+  await P.click('.line[data-line="Mount Franklin Still Water"] .flag');
+  await P.click('.line[data-line="Mount Franklin Still Water"] .fw-ok');
+  ok(await has(P, '.line[data-line="Mount Franklin Still Water"]', '11 of 12'), 'partial line folds to a one-line summary');
   ok(await has(P, '.dock', '1 of'), 'bottom bar: collected count');
   while (await P.$('.line.todo .l-all')) { await P.click('.line.todo .l-all >> nth=0'); await P.waitForTimeout(100); }
   ok(await P.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'no sideways scrolling on a phone (collect)');

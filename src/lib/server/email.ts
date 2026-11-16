@@ -69,7 +69,7 @@ export function buildRestockEmail(i: RestockEmailInput): { subject: string; html
   if (out.length) { T.push('', `OUT OF STOCK (${out.length})`); for (const o of out) { T.push(`- ${outLine(o)}`); if (o.affects.length) T.push(`  Set as sold out: ${o.affects.join(', ')}`); } }
   if (low.length) { T.push('', `RUNNING LOW (${low.length})`); for (const o of low) T.push(`- ${lowLine(o)}`); }
   if (!out.length && !low.length) T.push('', 'Nothing low or out of stock.');
-  if (other.length) T.push('', `Not topped up (not a storeroom shortage): ${other.map((o) => o.productName).join(', ')}`);
+  if (other.length) T.push('', `Collection incomplete (not a storeroom shortage): ${other.map((o) => o.productName).join(', ')}`);
   if (i.notChecked.length) T.push('', `Not checked: ${i.notChecked.join('; ')}`);
   if (i.link) T.push('', `Details: ${i.link}`);
 
@@ -98,7 +98,7 @@ export function buildRestockEmail(i: RestockEmailInput): { subject: string; html
       o.affects.length ? `<div style="font-size:14px;color:#9F2620;margin-top:4px">Set as sold out: <b>${esc(o.affects.join(', '))}</b></div>` : '')).join('')) : ''}
     ${low.length ? box('#FFF1D6', '#F0A930', '#7A4300', `Running low (${low.length})`, low.map((o) => item(o.productName, `Storeroom had ${n(o.got)}, short ${n(o.short)} ${unit(o, o.short)}${shelf(o)}`)).join('')) : ''}
     ${!out.length && !low.length ? `<div style="background:#E1F2E8;border-radius:16px;padding:16px 18px;margin-bottom:14px;color:#177245;font-size:17px;font-weight:700">Nothing low or out of stock${uniq}</div>` : ''}
-    ${other.length ? `<p style="font-size:13px;color:#56607A;margin:0 0 8px"><b>Not topped up</b> (not a storeroom shortage): ${esc(other.map((o) => o.productName).join(', '))}</p>` : ''}
+    ${other.length ? `<p style="font-size:13px;color:#56607A;margin:0 0 8px"><b>Collection incomplete</b> (not a storeroom shortage): ${esc(other.map((o) => o.productName).join(', '))}</p>` : ''}
     ${i.notChecked.length ? `<p style="font-size:13px;color:#56607A;margin:0 0 8px"><b>Not checked:</b> ${esc(i.notChecked.join('; '))}</p>` : ''}
     ${i.link ? `<p style="font-size:13px;margin:14px 0 0"><a href="${esc(i.link)}" style="color:#2446B8">View this restock</a></p>` : ''}
   </div></body></html>`;

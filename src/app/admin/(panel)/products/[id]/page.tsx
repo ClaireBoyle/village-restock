@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { Icon } from '@/components/Icon';
 import { PhotoField } from '@/components/admin/PhotoField';
 import { ProductForm, type ProductFormData } from '@/components/admin/ProductForm';
+import { ProductDelete } from '@/components/admin/ProductDelete';
 import { setProductStatus } from '@/app/actions/admin';
 import { db } from '@/lib/server/db';
 import { loadFormOptions } from '../load-form-options';
@@ -17,7 +18,7 @@ export default async function EditProduct({ params, searchParams }: {
   const [p] = await sql`
     select p.*, d.name as department_name from products p join departments d on d.id = p.department_id where p.id = ${id}`;
   if (!p) notFound();
-  const placements = await sql`select check_area_id, par_level, location_id from product_placements where product_id = ${id}`;
+  const placements = await sql`select pl.check_area_id, pl.par_level, pl.location_id, a.name as area_name from product_placements pl join check_areas a on a.id = pl.check_area_id where pl.product_id = ${id}`;
   const opts = await loadFormOptions(String(p.departmentId));
   const product: ProductFormData = {
     id, name: String(p.name), categoryId: (p.categoryId as string) ?? null, unitSingular: String(p.unitSingular),
@@ -50,6 +51,7 @@ export default async function EditProduct({ params, searchParams }: {
           hint="Shown on the product card so staff can spot the right item. On an iPad you can take the photo straight away." />
       </section>
       <ProductForm departmentId={String(p.departmentId)} product={product} {...opts} />
+      <ProductDelete id={id} name={product.name} areas={placements.map((r) => String(r.areaName))} />
     </>
   );
 }

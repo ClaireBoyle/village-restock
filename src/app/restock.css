@@ -990,3 +990,57 @@ button.pnote.open span{display:block}
 .prows>.phead::after{content:"";flex:1;height:1px;background:var(--hair)}
 .theme-navy .prows>.phead::after{background:rgba(255,255,255,.12)}
 .gc .prows>.phead{color:color-mix(in srgb,var(--d-accent) 75%,var(--ink-2))}
+/* Collect: compact shortfall editor (Got [−n+] of 3 · Short 1 · Other reason · Flag · Confirm) */
+.line.editing .fewer{padding:8px 10px;gap:6px}
+.fewer .fw-row{gap:8px;row-gap:6px}
+.fewer .fw-row>b{font-size:14px;color:var(--ink-2)}
+.fewer .pstep button{width:44px;height:44px}
+.fewer .pstep .qty-input{width:52px;height:44px}
+.fw-of{font-size:15px;color:var(--ink-2)}
+.fewer .short-txt{margin-left:auto;font-size:14.5px}
+.fewer .short-txt .ic{width:16px;height:16px}
+.fw-foot .linkbtn{min-height:44px;padding:0 6px}
+.fw-other{display:inline-flex;gap:4px;align-items:center;font-size:14px}
+.fw-other .ic{width:14px;height:14px}
+.fewer .flag{min-height:40px;padding:0 10px;gap:6px;font-size:14px;border-radius:10px}
+.fewer .flag .ic{width:16px;height:16px}
+.fw-ok{min-height:44px;padding:0 16px}
+.fw-reasons .chip{min-height:38px;font-size:13.5px}
+.l-why{color:var(--bad)!important;font-weight:600}
+.line.short.op .l-why{color:var(--ink-2)!important}
+.l-done.short.op{color:var(--ink-2)}
+.l-done.short.op span .ic{background:var(--ink-2)}
+.theme-navy .line.short.op{border-left-color:var(--ink-2);background:rgba(255,255,255,.05)}
+@media (max-width:640px){
+  .fewer .short-txt{margin-left:0;flex-basis:100%}
+  .fewer .flag span{display:none}
+}
+/* Finish: compact, readable shortage rows (no big coloured panels) */
+.sreport{display:flex;flex-direction:column;gap:6px}
+.sreport h3{display:flex;align-items:center;gap:8px;font-size:15px;font-family:var(--f-body);font-weight:700;color:var(--ink)}
+.sreport h3 .count{font-size:12px;font-weight:700;min-width:22px;height:22px;padding:0 7px;border-radius:999px;display:inline-grid;place-items:center;background:var(--surface-2);color:var(--ink)}
+.sreport ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.sr-row{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--hair)}
+.theme-navy .sr-row{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1)}
+.sr-dot{flex:none;width:10px;height:10px;border-radius:50%;margin-top:6px;background:var(--ink-2)}
+.sr-row.k-out .sr-dot{background:#E5484D}
+.sr-row.k-low .sr-dot{background:#F2A93B}
+.sr-t{display:flex;flex-direction:column;gap:1px;min-width:0}
+.sr-t b{font-size:15.5px;font-weight:600;color:var(--ink);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sr-t small{font-size:13.5px;color:var(--ink-2);line-height:1.35}
+.sr-row.k-out .sr-t small:first-of-type{color:color-mix(in srgb,#E5484D 70%,var(--ink))}
+.sr-row.k-low .sr-t small:first-of-type{color:color-mix(in srgb,#F2A93B 65%,var(--ink))}
+.sr-affects b{display:inline;font-size:inherit}
+.sr-flag{display:inline-flex;gap:3px;align-items:center;font-size:11.5px;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--bad-bg);color:var(--bad)}
+.sr-flag .ic{width:12px;height:12px}
+.note-box textarea{min-height:64px}
+/* A long group's subheading can fold it away */
+.prows>.phead.fold{width:100%;min-height:40px;padding:0 2px;border:0;background:none;cursor:pointer;text-align:left}
+.prows>.phead.fold>span{flex:none}
+.prows>.phead.fold>small{flex:none;font-weight:600;letter-spacing:0;text-transform:none;font-size:12.5px;color:var(--ink-2);order:3}
+.prows>.phead.fold::after{order:2}
+.prows>.phead.fold>.ic{order:4;width:16px;height:16px;flex:none}
+.fewer .fw-x{margin-left:auto;min-height:44px;padding:0 6px;font-size:14px}
+.fewer .short-txt{flex-basis:100%;margin-left:0}
+.fw-foot{flex-wrap:nowrap}
+@media (max-width:640px){ .fewer .flag{width:44px;justify-content:center;padding:0} }

@@ -959,3 +959,6 @@ body:has(.theme-gold) { background: #241B10; }
 .arr-head input { flex: 1; min-height: 38px; font-weight: 700; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; }
 .arr-hbtn .ic { width: 16px; height: 16px; }
 @media (max-width: 640px) { .arr-hbtn .lg { display: none; } }
+.danger-zone { margin-top: 18px; border-color: var(--bad-line); }
+.danger-zone > summary { display: inline-flex; gap: 8px; align-items: center; min-height: 40px; cursor: pointer; font-weight: 600; color: var(--bad); list-style: none; }
+.danger-zone > summary .ic { width: 18px; height: 18px; }

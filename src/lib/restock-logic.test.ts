@@ -199,6 +199,19 @@ describe('finishing', () => {
     expect(text).toContain('Tomatoes: only 4 tomatoes in the storeroom, short 2 tomatoes · 6 of 8 on the shelf');
     expect(text).toContain('Status: Complete');
   });
+  it('a recorded "couldn\'t access stock" result does not block finishing and is not a stock shortage', () => {
+    const base = items({ 'p-tom': { currentQty: 2 }, 'p-cloth': { requestedQty: 0 }, 'p-sauce': { currentQty: 4 } });
+    const line = collectionLines(kitchen.placements, base)[0];
+    const m = new Map(base);
+    for (const u of gotFewerUpdates(line, 1, 'access', false)) m.set(u.placementId, { ...m.get(u.placementId)!, ...u.fields });
+    expect(exceptions({ kind: 'full', view: kitchen, placements: kitchen.placements, recordedAreas: recorded({ f1: 'complete', dry: 'complete' }), items: m })).toEqual([]);
+    const o = stockOutcomes(collectionLines(kitchen.placements, m), m, kitchen.byId);
+    expect(o.map((x) => x.status)).toEqual(['not_topped_up']);
+    // Fewer collected but not confirmed yet: still outstanding, and never a shortage on its own
+    const n = new Map(base);
+    for (const u of gotFewerUpdates(line, 1, null, false)) n.set(u.placementId, { ...n.get(u.placementId)!, ...u.fields });
+    expect(exceptions({ kind: 'full', view: kitchen, placements: kitchen.placements, recordedAreas: recorded({ f1: 'complete', dry: 'complete' }), items: n }).map((e) => e.kind)).toEqual(['collect']);
+  });
   it('quick restock only needs its own list (scenario 9)', () => {
     const quick = [P(kitchen, 'p-tom')];
     expect(exceptions({ kind: 'quick', view: kitchen, placements: quick, recordedAreas: recorded({}), items: items({}) })[0].text)

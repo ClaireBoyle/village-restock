@@ -9,9 +9,10 @@ const OUT = process.env.E2E_OUT || 'tests/e2e/out';
 const sql = postgres(process.env.E2E_DATABASE_URL || 'postgres://vr:vr@localhost:5432/village_restock', { onnotice: () => {}, transform: postgres.camel });
 const ok = (c, m) => { if (!c) throw new Error('FAIL: ' + m); console.log('PASS:', m); };
 const has = (p, sel, t, ms = 8000) => p.locator(sel).filter({ hasText: t }).first().waitFor({ timeout: ms }).then(() => true, () => false);
+const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; for (;;) { const r = await q(); if (check(r)) return r; if (Date.now() > end) return r; await new Promise((res) => setTimeout(res, 300)); } };
 const row = (n) => `article.prow:has(h3:text-is("${n}"))`;
 const MIX = ['Cranberry Juice', 'Orange Juice', 'Apple Juice', 'Pineapple Juice', 'Mount Franklin Sparkling Water 750ml', 'Skinny Milk', 'Kirks Indian Tonic Water',
-  'Kirks Dry Ginger Ale', 'Whipped Cream', 'Oat Milk', 'Soy Milk', 'Mount Franklin Sparkling Water 330ml'];
+  'Kirks Dry Ginger Ale', 'Whipped Cream', 'Whipping Cream', 'Oat Milk', 'Soy Milk', 'Mount Franklin Sparkling Water 330ml'];
 const BEER = ['Heineken Zero', 'James Squire Ginger Beer', 'Little Creatures Rogers', 'Hahn Superdry 3.5', 'Guinness', 'Stone & Wood Pacific Ale',
   'Little Creatures Pipsqueak Cider', 'James Boags Premium', 'Kirin Ichiban', 'Heineken', 'Furphy', 'Suntory -196 Lemon'];
 
@@ -27,17 +28,17 @@ const BEER = ['Heineken Zero', 'James Squire Ginger Beer', 'Little Creatures Rog
     join departments d on d.id = a.department_id left join storage_locations l on l.id = coalesce(pl.location_id, p.default_location_id)
     where d.name = 'Gold Class Bar' and a.name = 'BOH bar fridge' order by pl.sort_order`;
   const names = rows.map((r) => r.name);
-  ok(JSON.stringify(names.slice(0, 24)) === JSON.stringify([...MIX, ...BEER].map((n) => (n === 'Whipped Cream' ? 'Whipped cream' : n))), 'all 24 products in the exact order (existing names kept): ' + names.slice(0, 24).join(', '));
-  ok(names[24] === 'Old Mixer' && rows.length === 25, 'a product already in the fridge that is not on the list is kept, after the 24');
-  ok(rows[0].heading === 'Mixers, Water & Milk' && rows[12].heading === 'Beer, Cider & Hard Soda' && rows.filter((r) => r.heading).length === 2, 'exactly two subheadings, on Cranberry Juice and Heineken Zero');
-  ok(rows.slice(0, 12).every((r) => r.loc === 'Walk in fridge(Downstairs)') && rows.slice(12, 24).every((r) => /alcohol storeroom/i.test(r.loc)), 'collected from the walk-in fridge (mixers) and the Alcohol storeroom (beer)');
-  ok(rows.slice(0, 24).every((r) => r.method === 'manual' && r.parLevel === null && r.status === 'active'), 'all staff-entered, no target levels, all active');
-  ok(rows.slice(12, 24).every((r) => r.unitPlural === 'packs'), 'beer and cider keep their pack units');
+  ok(JSON.stringify(names.slice(0, 25)) === JSON.stringify([...MIX, ...BEER].map((n) => (n === 'Whipped Cream' ? 'Whipped cream' : n))), 'all 24 products plus Whipping Cream in the exact order (existing names kept): ' + names.slice(0, 25).join(', '));
+  ok(names[25] === 'Old Mixer' && rows.length === 26, 'a product already in the fridge that is not on the list is kept, after the list');
+  ok(rows[0].heading === 'Mixers, Water & Milk' && rows[13].heading === 'Beer, Cider & Hard Soda' && rows.filter((r) => r.heading).length === 2, 'exactly two subheadings, on Cranberry Juice and Heineken Zero');
+  ok(rows.slice(0, 13).every((r) => r.loc === 'Walk in fridge(Downstairs)') && rows.slice(13, 25).every((r) => /alcohol storeroom/i.test(r.loc)), 'collected from the walk-in fridge (mixers) and the Alcohol storeroom (beer)');
+  ok(rows.slice(0, 25).every((r) => r.method === 'manual' && r.parLevel === null && r.status === 'active'), 'all staff-entered, no target levels, all active');
+  ok(rows.slice(13, 25).every((r) => r.unitPlural === 'packs'), 'beer and cider keep their pack units');
   const hk = rows.find((r) => r.name === 'Heineken');
   ok(hk.id === before.id && hk.photoPath === before.photoPath, 'existing product kept its id and photo');
   ok(rows.find((r) => /whipped cream/i.test(r.name)).status === 'active', 'archived Whipped cream was brought back instead of a duplicate');
   const [{ n: productsAfter }] = await sql`select count(*)::int as n from products`;
-  ok(productsAfter - productsBefore === 11, `11 missing products added (Whipped cream reused) (no duplicates): ${productsAfter - productsBefore}`);
+  ok(productsAfter - productsBefore === 12, `12 missing products added (incl. Whipping Cream; Whipped cream reused) (no duplicates): ${productsAfter - productsBefore}`);
   const dupes = await sql`select lower(p.name) as n, count(*) from products p join departments d on d.id = p.department_id where d.name = 'Gold Class Bar' group by 1 having count(*) > 1`;
   ok(dupes.length === 0, 'no duplicate product names in Gold Class Bar');
   const [area] = await sql`select guide_text from check_areas a join departments d on d.id = a.department_id where d.name = 'Gold Class Bar' and a.name = 'BOH bar fridge'`;
@@ -49,10 +50,10 @@ const BEER = ['Heineken Zero', 'James Squire Ginger Beer', 'Little Creatures Rog
     const c = await b.newContext(opts); const P = await c.newPage(); P.on('pageerror', (e) => errs.push(e.message));
     await P.goto(B + '/'); await P.waitForSelector('.dcard2');
     await P.click('.dcard2:has-text("Bar") >> nth=0'); await P.click('.type-full button.btn.primary'); await P.waitForSelector('article.prow');
-    const seq = await P.$$eval('.area > .prows > *', (els) => els.map((e) => (e.tagName === 'H3' ? `# ${e.textContent}` : e.querySelector('h3')?.textContent)));
+    const seq = await P.$$eval('.area > .prows > *', (els) => els.map((e) => (e.classList.contains('phead') ? `# ${e.textContent}` : e.querySelector('h3')?.textContent)));
     if (name === 'phone') {
-      ok(seq[0] === '# Mixers, Water & Milk' && seq[13] === '# Beer, Cider & Hard Soda' && seq.filter((x) => x.startsWith('#')).length === 2, 'two small subheadings in the one list');
-      ok(JSON.stringify(seq.filter((x) => !x.startsWith('#')).slice(0, 24)) === JSON.stringify([...MIX, ...BEER].map((n) => (n === 'Whipped Cream' ? 'Whipped cream' : n))), 'staff see all 24 in the physical order');
+      ok(seq[0] === '# Mixers, Water & Milk' && seq[14] === '# Beer, Cider & Hard Soda' && seq.filter((x) => x.startsWith('#')).length === 2, 'two small subheadings in the one list');
+      ok(JSON.stringify(seq.filter((x) => !x.startsWith('#')).slice(0, 25)) === JSON.stringify([...MIX, ...BEER].map((n) => (n === 'Whipped Cream' ? 'Whipped cream' : n))), 'staff see all 24 in the physical order');
       ok(await has(P, '.aguide-line', 'Refill FOH first.'), 'one-line reminder: Refill FOH first.');
       ok(await P.locator('.psec, .psec-h').count() === 0, 'no collapsible sections or extra steps');
       await P.click(`${row('Orange Juice')} button.padd`); await P.click(`${row('Orange Juice')} button[aria-label="One more Orange Juice"]`);
@@ -86,6 +87,21 @@ const BEER = ['Heineken Zero', 'James Squire Ginger Beer', 'Little Creatures Rog
   const [h] = await sql`select heading from product_placements where heading like 'Beer%'`;
   ok(h.heading === 'Beer & Cider', 'subheading saved');
   await A.screenshot({ path: `${OUT}/p11-arrange.png` });
+
+  // ---- Admin can delete a product; history keeps it ----
+  const [oj] = await sql`select p.id from products p join departments d on d.id = p.department_id where d.name = 'Gold Class Bar' and p.name = 'Orange Juice'`;
+  const [{ n: histBefore }] = await waitDb(() => sql`select count(*)::int as n from session_items where product_name = 'Orange Juice'`, (r) => r[0].n > 0);
+  await A.goto(`${B}/admin/products/${oj.id}`); await A.click('.danger-zone summary');
+  ok(await has(A, '.danger-zone', 'removes it from BOH bar fridge'), 'delete explains what goes (the areas it is in)');
+  await A.click('.danger-zone button:has-text("Delete Orange Juice")');
+  ok(await has(A, '.danger-zone .banner.s-bad', 'Tick the box'), 'delete needs the confirmation box');
+  await A.check('.danger-zone input[name="understand"]'); await A.click('.danger-zone button:has-text("Delete Orange Juice")');
+  await A.waitForURL(/\/admin\/products\?/);
+  ok(await has(A, '.banner.s-ok', 'Orange Juice deleted'), 'back on Products with "Orange Juice deleted"');
+  const [{ n: left }] = await sql`select count(*)::int as n from products where id = ${oj.id}`;
+  const [{ n: pl }] = await sql`select count(*)::int as n from product_placements where product_id = ${oj.id}`;
+  const [{ n: hist }] = await sql`select count(*)::int as n from session_items where product_name = 'Orange Juice'`;
+  ok(left === 0 && pl === 0 && hist === histBefore, 'product and its place in the fridge gone; past restock records kept');
   ok(errs.length === 0, 'no page errors ' + JSON.stringify(errs));
   await b.close(); await sql.end();
 })().catch(async (e) => { console.error(e.message); process.exit(1); });

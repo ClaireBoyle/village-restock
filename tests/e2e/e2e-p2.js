@@ -113,8 +113,9 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
   ok(!(await A.isVisible('.line:has-text("Tomato sauce")')), 'skipped area left off the collection list');
   await A.click('.line:has-text("Tomatoes") button.l-few');
   await A.waitForSelector('.line:has-text("Tomatoes") .fewer');
-  await A.click('.line:has-text("Tomatoes") .chip:has-text("Confirmed: not enough")');
   ok(await hasText(A, '.line[data-line="Tomatoes"] .short-txt', 'Short 1'), 'scenario 7: collected fewer than requested, shortfall shown');
+  await A.click('.line:has-text("Tomatoes") .fw-ok'); // Confirm: "not enough in storeroom" by default
+  ok(await hasText(A, '.line[data-line="Tomatoes"] .l-why', 'Running low'), 'confirmed without choosing a reason: recorded as running low');
   for (const l of await A.$$('.line.todo button:has-text("Got all")')) await l.click().catch(() => {});
   await A.waitForTimeout(500);
   while (await A.$('.line.todo button:has-text("Got all")')) { await A.click('.line.todo button:has-text("Got all") >> nth=0'); await A.waitForTimeout(150); }
@@ -133,7 +134,7 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
   const shorts = await sql`select product_name, shortfall_qty, reason from shortages`;
   ok(shorts.length === 1 && shorts[0].productName === 'Tomatoes' && Number(shorts[0].shortfallQty) === 1 && shorts[0].reason === 'insufficient',
     'scenario 8: confirmed shortage recorded for supervisors: ' + JSON.stringify(shorts));
-  ok(await A.isVisible('.stock-panel.low:has-text("Running low")') && await A.isVisible('.stock-panel.low li:has-text("Tomatoes")'), 'finished screen shows Tomatoes in the orange Running low panel');
+  ok(await A.isVisible('.sr-row.k-low:has-text("Tomatoes")') && await A.isVisible('.sr-row.k-low:has-text("Running low")'), 'finished screen lists Tomatoes as Running low');
   ok(!(await A.isVisible('text=Copy for managers')), 'no copy section on the finished screen');
   const emails = await (async () => { for (let k = 0; k < 40; k++) { const r = await sql`select status, recipient, subject, body_text from email_outbox`; if (r.length && r[0].status === 'sent') return r; await new Promise((res) => setTimeout(res, 300)); } return sql`select status, recipient, subject, body_text from email_outbox`; })();
   ok(emails.length === 1 && emails[0].status === 'sent' && emails[0].recipient === 'managers@example.com', 'manager email sent automatically, once: ' + (emails[0] && emails[0].subject));
@@ -149,7 +150,7 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
   await A.click('.dock button:has-text("Collection list")'); await A.waitForSelector('.line:has-text("Large cups")');
   ok(await hasText(A, '.line[data-line="Large cups"] .l-qty', '3'), 'quick restock: 1 of 4 sleeves -> collect 3');
   await A.click('.line:has-text("Large cups") button:has-text("Got all")');
-  await A.click('.dock button:has-text("Review and finish")'); await A.waitForSelector('text=Ready to finish');
+  await A.click('.dock button:has-text("Review and finish")'); await A.waitForSelector('.finish-title');
   await A.click('.dock button:has-text("Finish restock")'); await A.waitForSelector('text=Restock complete'); await waitSynced(A);
   const [quick] = await sql`select status from restock_sessions where kind = 'quick'`;
   ok(quick.status === 'finished', 'scenario 9: quick restock finished without a full inspection');

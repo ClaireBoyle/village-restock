@@ -25,7 +25,16 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
   const [skipOpen, setSkipOpen] = useState(false);
   const [zoom, setZoom] = useState(false);
   const [review, setReview] = useState(false);
-  const [openSecs, setOpenSecs] = useState<Record<string, boolean>>({}); // sections expanded/collapsed on this screen // the "N to collect" list above the bottom bar
+  const [openSecs, setOpenSecs] = useState<Record<string, boolean>>({});
+  // Long subheading groups can be folded away (open by default; remembered on this device).
+  const [shut, setShut] = useState<Record<string, boolean>>({});
+  useEffect(() => { try { setShut(JSON.parse(localStorage.getItem('vr-shut-groups') ?? '{}')); } catch { /* private mode */ } }, []);
+  const toggleGroup = (id: string) => setShut((cur) => {
+    const next = { ...cur, [id]: !cur[id] };
+    if (!next[id]) delete next[id];
+    try { localStorage.setItem('vr-shut-groups', JSON.stringify(next)); } catch { /* private mode */ }
+    return next;
+  }); // sections expanded/collapsed on this screen // the "N to collect" list above the bottom bar
   // The kitchen reminder can be hidden for this restock (remembered on this device).
   const remKey = `vr-kreminder-${session.id}`;
   const [reminderHidden, setReminderHidden] = useState(false);
@@ -99,6 +108,35 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
     <ProductRow key={p.placementId} p={p} item={items.get(p.placementId) ?? EMPTY_ITEM} note={alsoEntered(p) ?? notes.own.get(p.placementId)}
       onChange={(fields, resolve) => void onItem(p, fields, resolve)} />
   );
+  /**
+   * A list with its subheadings. A heading starts a group; groups of 15 or more products can be
+   * folded with a tap on the heading (they start open, so nothing needs an extra tap).
+   */
+  const LONG = 15; // only very long groups (e.g. 31 spirits); shorter ones never fold
+  const renderList = (ps: typeof cur.placements) => {
+    const out: React.ReactNode[] = [];
+    let i = 0;
+    while (i < ps.length) {
+      const head = ps[i].heading;
+      let j = i + 1;
+      while (j < ps.length && !ps[j].heading) j++;
+      const group = ps.slice(i, j);
+      if (head) {
+        const id = group[0].placementId;
+        const foldable = group.length >= LONG;
+        const closed = foldable && !!shut[id];
+        const entered = group.filter((x) => (needOf(x, items.get(x.placementId) ?? EMPTY_ITEM) ?? 0) > 0).length;
+        out.push(foldable
+          ? <button key={`h-${id}`} type="button" className="phead fold" onClick={() => toggleGroup(id)} aria-expanded={!closed}>
+              <span>{head}</span><small>{closed ? `${group.length} products${entered ? ` · ${entered} to collect` : ''}` : ''}</small><Icon name={closed ? 'down' : 'up'} /></button>
+          : <h3 key={`h-${id}`} className="phead">{head}</h3>);
+        if (closed) { i = j; continue; }
+      }
+      out.push(...group.map(renderRow));
+      i = j;
+    }
+    return out;
+  };
   const reopen = () => { pin(); void setArea(session.id, cur.area.id, 'not_started', null, who); };
   const firstUnchecked = () => {
     const p = cur.placements.find((x) => !chk(x));
@@ -184,10 +222,8 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
 
           <div className="prows">
             {cur.placements.length === 0 ? <p className="meta">No products in this area yet.</p> : null}
-            {/* Optional subheadings (e.g. "Mixers, Water & Milk"), always open, in the same list */}
-            {cur.own.map((p) => p.heading
-              ? [<h3 key={`h-${p.placementId}`} className="phead">{p.heading}</h3>, renderRow(p)]
-              : renderRow(p))}
+            {/* Optional subheadings (e.g. "Mixers, Water & Milk") in the same list */}
+            {renderList(cur.own)}
           </div>
 
           {cur.sections.map((sec) => {
@@ -204,7 +240,7 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
                   <>
                     {sec.mode === 'optional' ? <p className="psec-hint"><Icon name="info" /><span>Only add <b>extra</b> stock this needs from downstairs. Anything already entered above is already on the collection list.</span></p>
                       : sec.area.guideText ? <p className="psec-hint"><Icon name="info" /><span>{sec.area.guideText}</span></p> : null}
-                    <div className="prows">{sec.placements.map(renderRow)}</div>
+                    <div className="prows">{renderList(sec.placements)}</div>
                   </>
                 ) : null}
               </section>

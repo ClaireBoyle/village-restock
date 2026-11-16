@@ -6,7 +6,7 @@ import { db } from '@/lib/server/db';
 
 const METHOD: Record<string, string> = { par: 'Target level', manual: 'Staff enter need', routine: 'Routine task' };
 
-export default async function Products({ searchParams }: { searchParams: Promise<{ dept?: string; q?: string; status?: string }> }) {
+export default async function Products({ searchParams }: { searchParams: Promise<{ dept?: string; q?: string; status?: string; deleted?: string }> }) {
   const sp = await searchParams;
   const sql = db();
   const departments = await sql`select id, name from departments order by sort_order, name`;
@@ -50,6 +50,7 @@ export default async function Products({ searchParams }: { searchParams: Promise
         <div><h1>Products</h1><p>What staff check, the target level in each area, and where to collect it from.</p></div>
         {dept ? <Link className="btn primary" href={`/admin/products/new?dept=${dept}`}><Icon name="plus" />Add product</Link> : null}
       </div>
+      {sp.deleted ? <div className="banner s-ok" role="status"><Icon name="check" /><div><b>{sp.deleted.slice(0, 80)} deleted.</b><p>Past restocks still show it.</p></div></div> : null}
 
       {departments.length === 0 ? (
         <div className="banner s-info"><Icon name="info" /><div><b>Add a department first</b><p>Products belong to a department.</p></div><Link className="btn small" href="/admin/departments">Departments</Link></div>

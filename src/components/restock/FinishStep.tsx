@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
   EXCEPTION_REASONS, EMPTY_ITEM, SHORT_REASONS, activePlacements, areaStatus, collectionLines, exceptions, isChecked, isRequired,
-  lineGot, lineInfo, lineState, outcomeLine, stockOutcomes, type StockOutcome,
+  lineGot, lineInfo, lineState, stockOutcomes, type StockOutcome,
 } from '@/lib/restock-logic';
 import { formatQty, round2 } from '@/lib/restock-math';
 import { finishSession, reopenSession, updateLocalSession } from '@/lib/client/restock-store';
@@ -47,6 +47,9 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
     if (st !== 'done' && info.reason !== 'insufficient') notCollected.push([l.productName, `${formatQty(round2(l.total - got), l.unitSingular, l.unitPlural)} not collected${info.reason ? ` (${SHORT_REASONS.find((r) => r[0] === info.reason)![1].toLowerCase()})` : ''}`]);
   }
   const outcomes = stockOutcomes(lines, items, view.byId);
+  // Recorded "couldn't collect" results (access, time, other): not a shortage, but managers should know.
+  const incomplete = outcomes.some((o) => o.status === 'not_topped_up' && o.reason);
+  const finishReason = (r: string | null) => r ?? (incomplete ? 'Collection incomplete' : null);
   // Products nobody checked, grouped by area ("Fridge 2: Milk, Butter portions")
   const uncheckedByArea = new Map<string, string[]>();
   for (const p of covered) {
@@ -62,7 +65,7 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
     ctx.go(e.kind === 'collect' ? 'collect' : 'check');
   };
 
-  const report = <StockReport outcomes={outcomes} finished={finished} />;
+  const report = <StockReport outcomes={outcomes} />;
 
   const details = (
     <div className="sum">
@@ -107,11 +110,8 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
         ) : (
           <>
             <h2 className="finish-title">{areaName ? `Finish ${areaName}` : 'Finish restock'}</h2>
-            {ex.length === 0 ? (
-              <section className="ready s-ok"><h2><Icon name="check" />Ready to finish</h2><p>{
-                areaName ? (lines.length ? 'Everything entered is collected or recorded.' : 'Nothing was needed from the storeroom.')
-                  : 'Every target count is in and every item is collected or recorded.'}</p></section>
-            ) : (
+            {/* Straight to what matters: anything still to do, then shortages, then comments. */}
+            {ex.length === 0 ? null : (
               <section className="ready s-warn"><h2><Icon name="warn" />Still to do</h2>
                 <ul className="exlist compact">{ex.map((e) => (
                   <li key={e.text}><span><b>{e.text}</b>{e.detail ? <small>{e.detail}</small> : null}</span>
@@ -135,12 +135,11 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
               </section>
             ) : null}
 
-            {outcomes.some((o) => o.status !== 'not_topped_up') ? report : null}
+            {report}
 
             <section className="note-box">
               <label htmlFor="finish-note"><b>Comments for managers</b> <span className="muted">(optional)</span></label>
-              <p className="meta">{emailed ? 'Added to the email managers get when you finish.' : 'Saved with this restock for managers to see.'} For example: a broken fridge, a delivery that didn&rsquo;t arrive.</p>
-              <textarea id="finish-note" rows={3} maxLength={1000} value={note} onChange={(e) => editNote(e.target.value)} placeholder="Anything managers should know?" />
+              <textarea id="finish-note" rows={2} maxLength={1000} value={note} onChange={(e) => editNote(e.target.value)} placeholder="Anything managers should know?" />
             </section>
 
             <details className="sum-details">
@@ -161,11 +160,10 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
           <button className="btn primary big" onClick={ctx.done}><Icon name={areaName ? 'back' : 'home'} />{ctx.doneLabel}</button>
         </Dock>
       ) : (
-        <Dock icon={ex.length ? 'warn' : 'check'} title={ex.length ? 'Not finished yet' : 'Ready to finish'}
-          sub={ex.length ? 'Finish restock unlocks once target counts and collecting are done' : areaName ? 'Products left blank weren’t needed' : 'Ready: blank products were left as not entered'}>
+        <Dock icon={ex.length ? 'warn' : 'check'} title={ex.length ? `${plural(ex.length, 'thing')} still to do` : ''}>
           <button className="btn save-exit" onClick={ctx.saveAndExit} aria-label="Save and exit"><Icon name="save" /><span className="lg">Save and exit</span><span className="sm">Save &amp; exit</span></button>
           {ex.length ? <button className="btn caution big" onClick={() => { setExOpen(true); window.setTimeout(() => document.getElementById('expanel')?.scrollIntoView({ block: 'start' }), 50); }}><span className="lg">Finish with exceptions&hellip;</span><span className="sm">With exceptions&hellip;</span></button> : null}
-          <button className="btn good big" disabled={ex.length > 0} onClick={() => { void finishSession(session.id, null, who, finalNote); window.scrollTo({ top: 0 }); }}><Icon name="check" />{areaName ? 'Finish' : 'Finish restock'}</button>
+          <button className="btn good big" disabled={ex.length > 0} onClick={() => { void finishSession(session.id, finishReason(null), who, finalNote); window.scrollTo({ top: 0 }); }}><Icon name="check" />{areaName ? 'Finish' : 'Finish restock'}</button>
         </Dock>
       )}
     </>
@@ -173,55 +171,40 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
 }
 
 /**
- * What we're now low on or out of. Orange = running low, red = out of stock.
- * "Not topped up" (ran out of time etc.) is a small note: the storeroom isn't short.
+ * What managers will act on, as compact rows: confirmed storeroom shortages (out of stock /
+ * running low), then collection that couldn't be finished (not a shortage). Nothing at all
+ * when everything was collected.
  */
-function StockReport({ outcomes, finished }: { outcomes: StockOutcome[]; finished: boolean }) {
-  const low = outcomes.filter((o) => o.status === 'low');
-  const out = outcomes.filter((o) => o.status === 'out');
-  const other = outcomes.filter((o) => o.status === 'not_topped_up');
-  if (!low.length && !out.length) {
-    return (
-      <>
-        <section className="stock-panel all-good">
-          <Icon name="check" /><div><h2>Nothing low or out of stock</h2><p>{finished ? 'Everything collected is back to its target.' : 'So far, the storerooms had everything.'}</p></div>
-        </section>
-        {finished && other.length ? <OtherNote rows={other} /> : null}
-      </>
-    );
-  }
-  const row = (o: StockOutcome) => (
-    <li key={o.productName}>
-      <div className="sp-top">
-        <span className="sp-name">{o.productName}</span>
-        {o.flagged ? <span className="badge s-bad flag-tag"><Icon name="flag" />Flagged</span> : null}
-        {o.onShelf !== null && o.target ? <span className="sp-shelf">{fmt(o.onShelf)} of {fmt(o.target)} on the shelf</span> : null}
-      </div>
-      <span className="sp-detail">{o.status === 'out' ? `None left in the storeroom \u00b7 needed ${fmt(o.needed)} ${o.needed === 1 ? o.unitSingular : o.unitPlural}` : `Storeroom had ${fmt(o.got)}, short ${fmt(o.short)} ${o.short === 1 ? o.unitSingular : o.unitPlural}`}</span>
-      {o.status === 'out' && o.affects.length ? <span className="sp-affects"><Icon name="x" />Set as sold out: <b>{o.affects.join(', ')}</b></span> : null}
+function StockReport({ outcomes }: { outcomes: StockOutcome[] }) {
+  const short = outcomes.filter((o) => o.status === 'out' || o.status === 'low');
+  const incomplete = outcomes.filter((o) => o.status === 'not_topped_up' && o.reason);
+  if (!short.length && !incomplete.length) return null;
+  const q = (o: StockOutcome, n: number) => `${fmt(n)} ${n === 1 ? o.unitSingular : o.unitPlural}`;
+  const why = (o: StockOutcome) => SHORT_REASONS.find((r) => r[0] === o.reason)?.[1] ?? 'Not collected';
+  const row = (o: StockOutcome, kind: 'out' | 'low' | 'inc') => (
+    <li key={o.productName} className={`sr-row k-${kind}`}>
+      <span className="sr-dot" aria-hidden="true" />
+      <span className="sr-t">
+        <b>{o.productName}{o.flagged ? <span className="sr-flag"><Icon name="flag" />Flagged</span> : null}</b>
+        <small>{kind === 'out' ? <>Out of stock &middot; Short {q(o, o.short)}</>
+          : kind === 'low' ? <>Running low &middot; Collected {fmt(o.got)} of {q(o, o.needed)}</>
+          : <>Collection incomplete &middot; {why(o)} &middot; {q(o, o.short)} not collected</>}</small>
+        {kind === 'out' && o.affects.length ? <small className="sr-affects">Set as sold out: <b>{o.affects.join(', ')}</b></small> : null}
+      </span>
     </li>
   );
   return (
     <>
-      {out.length ? (
-        <section className="stock-panel out">
-          <h2><Icon name="warn" />Out of stock <span className="count">{out.length}</span></h2>
-          <ul>{out.map(row)}</ul>
-        </section>
+      {short.length ? (
+        <section className="sreport" aria-labelledby="sr-short"><h3 id="sr-short">Stock shortages <span className="count">{short.length}</span></h3>
+          <ul>{short.filter((o) => o.status === 'out').map((o) => row(o, 'out'))}{short.filter((o) => o.status === 'low').map((o) => row(o, 'low'))}</ul></section>
       ) : null}
-      {low.length ? (
-        <section className="stock-panel low">
-          <h2><Icon name="down" />Running low <span className="count">{low.length}</span></h2>
-          <ul>{low.map(row)}</ul>
-        </section>
+      {incomplete.length ? (
+        <section className="sreport" aria-labelledby="sr-inc"><h3 id="sr-inc">Collection incomplete <span className="count">{incomplete.length}</span></h3>
+          <ul>{incomplete.map((o) => row(o, 'inc'))}</ul></section>
       ) : null}
-      {finished && other.length ? <OtherNote rows={other} /> : null}
     </>
   );
-}
-
-function OtherNote({ rows }: { rows: StockOutcome[] }) {
-  return <p className="meta other-note"><b>Not topped up</b> (not a storeroom shortage): {rows.map((o) => outcomeLine(o)).join('; ')}</p>;
 }
 
 const fmt = (n: number) => String(round2(n));

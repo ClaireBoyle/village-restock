@@ -67,7 +67,8 @@ export function Dock({ icon, title, sub, progress, above, children }: { icon: Ic
       {above}
       {progress !== undefined ? <div className="dock-bar" aria-hidden="true"><i style={{ width: `${Math.round(Math.min(1, Math.max(0, progress)) * 100)}%` }} /></div> : null}
       <div className="wrap dock-in">
-        <div className="dock-txt"><Icon name={icon} /><div><b>{title}</b>{sub ? <small>{sub}</small> : null}</div></div>
+        {/* No status text when there's nothing worth saying (e.g. ready to finish): just the buttons. */}
+        {title || sub ? <div className="dock-txt"><Icon name={icon} /><div><b>{title}</b>{sub ? <small>{sub}</small> : null}</div></div> : <span className="dock-txt" />}
         <div className="dock-acts">{children}</div>
       </div>
     </div>

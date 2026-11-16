@@ -22,11 +22,13 @@ export const CONFLICT_FIELDS = ['currentQty', 'requestedQty', 'routineChoice'] a
 export type LineState = 'todo' | 'done' | 'part' | 'short';
 
 export const SHORT_REASONS: [ShortReason, string][] = [
-  ['insufficient', 'Confirmed: not enough in the storeroom'],
-  ['access', 'Couldn’t access the stock'],
-  ['time', 'Interrupted or ran out of time'],
+  ['insufficient', 'Not enough in storeroom'],
+  ['access', 'Couldn’t access stock'],
+  ['time', 'Interrupted / ran out of time'],
   ['other', 'Other'],
 ];
+/** Reasons that mean "couldn't finish collecting", not "the storeroom was short". */
+export const isOperational = (r: ShortReason | null | undefined) => r === 'access' || r === 'time' || r === 'other';
 export const SKIP_REASONS = ['Being cleaned or defrosted', 'Another staff member is doing it', 'Ran out of time', 'Not in use tonight'];
 export const EXCEPTION_REASONS = ['Ran out of time before close', 'Stock or area unavailable', 'Manager approved', 'Other'];
 
@@ -375,9 +377,11 @@ export function exceptions(args: {
   const covered = activePlacements(kind, placements, recordedAreas);
   const clashes = covered.filter((p) => items.get(p.placementId)?.conflict);
   if (clashes.length) out.push({ kind: 'unchecked', status: 'not_started', text: `${clashes.length} product${clashes.length === 1 ? ' needs' : 's need'} a decision`, detail: `Two different counts: ${clashes.map((p) => p.productName).join(', ')}`, areaId: clashes[0].areaId });
+  // Outstanding = nobody has recorded what happened yet. A confirmed result (all, fewer with
+  // "not enough in storeroom", or a reason such as "couldn't access stock") is resolved.
   const outstanding = collectionLines(covered, items).filter((l) => {
     const st = lineState(l, items);
-    return st === 'todo' || st === 'part' || (st === 'short' && lineInfo(l, items).reason !== 'insufficient');
+    return st === 'todo' || st === 'part';
   });
   if (outstanding.length) {
     out.push({ kind: 'collect', status: 'warn', text: `${outstanding.length} item${outstanding.length === 1 ? '' : 's'} not fully collected`, detail: outstanding.map((l) => l.productName).join(', ') });
@@ -447,8 +451,8 @@ export function outcomeLine(o: StockOutcome): string {
   const shelf = o.onShelf !== null && o.target !== null ? ` \u00b7 ${round2(o.onShelf)} of ${round2(o.target)} on the shelf` : '';
   if (o.status === 'out') return `${o.productName}: none in the storeroom (needed ${q(o.needed)})${shelf}`;
   if (o.status === 'low') return `${o.productName}: only ${q(o.got)} in the storeroom, short ${q(o.short)}${shelf}`;
-  const why = o.reason === 'time' ? 'ran out of time' : o.reason === 'access' ? 'couldn\u2019t access the stock' : o.reason === 'other' ? 'other reason' : 'not collected';
-  return `${o.productName}: ${q(o.short)} not topped up (${why})${shelf}`;
+  const why = o.reason === 'time' ? 'interrupted / ran out of time' : o.reason === 'access' ? 'couldn\u2019t access stock' : o.reason === 'other' ? 'other reason' : 'not collected';
+  return `${o.productName}: ${q(o.short)} not collected (${why})${shelf}`;
 }
 
 /** The plain-text summary staff copy for managers. Leads with what we're low on or out of. */
@@ -478,7 +482,7 @@ export function summaryText(args: {
   if (!outcomes.length) { L.push(''); L.push('Nothing low or out of stock. Everything collected is back to target.'); }
   group('out', 'OUT OF STOCK');
   group('low', 'RUNNING LOW');
-  group('not_topped_up', 'NOT TOPPED UP');
+  group('not_topped_up', 'COLLECTION INCOMPLETE (not a storeroom shortage)');
 
   const flaggedDone = lines.filter((l) => lineInfo(l, items).flagged && lineState(l, items) === 'done').map((l) => l.productName);
   if (flaggedDone.length) { L.push(''); L.push(`FLAGGED FOR MANAGER: ${flaggedDone.join(', ')}`); }
