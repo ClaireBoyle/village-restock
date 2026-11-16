@@ -116,9 +116,9 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
   ok(await hasText(A, '.line[data-line="Tomatoes"] .short-txt', 'Short 1'), 'scenario 7: collected fewer than requested, shortfall shown');
   await A.click('.line:has-text("Tomatoes") .fw-ok'); // Confirm: "not enough in storeroom" by default
   ok(await hasText(A, '.line[data-line="Tomatoes"] .l-why', 'Running low'), 'confirmed without choosing a reason: recorded as running low');
-  for (const l of await A.$$('.line.todo button:has-text("Got all")')) await l.click().catch(() => {});
+  for (const l of await A.$$('.line.todo button.l-all')) await l.click().catch(() => {});
   await A.waitForTimeout(500);
-  while (await A.$('.line.todo button:has-text("Got all")')) { await A.click('.line.todo button:has-text("Got all") >> nth=0'); await A.waitForTimeout(150); }
+  while (await A.$('.line.todo button.l-all')) { await A.click('.line.todo button.l-all >> nth=0'); await A.waitForTimeout(150); }
   ok(!(await A.$('.line.todo')), 'everything else collected');
 
   // ---------- Finish ----------
@@ -149,7 +149,7 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
   await A.waitForSelector(card('Large cups')); await fillQty(A, `${card('Large cups')}`, '1');
   await A.click('.dock button:has-text("Collection list")'); await A.waitForSelector('.line:has-text("Large cups")');
   ok(await hasText(A, '.line[data-line="Large cups"] .l-qty', '3'), 'quick restock: 1 of 4 sleeves -> collect 3');
-  await A.click('.line:has-text("Large cups") button:has-text("Got all")');
+  await A.click('.line:has-text("Large cups") button.l-all');
   await A.click('.dock button:has-text("Review and finish")'); await A.waitForSelector('.finish-title');
   await A.click('.dock button:has-text("Finish restock")'); await A.waitForSelector('text=Restock complete'); await waitSynced(A);
   const [quick] = await sql`select status from restock_sessions where kind = 'quick'`;

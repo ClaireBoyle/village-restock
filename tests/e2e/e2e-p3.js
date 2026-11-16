@@ -76,7 +76,7 @@ const hasText = (p, sel, t, timeout = 10000) => p.locator(sel).filter({ hasText:
   await A.click('.dock button:has-text("Collection list")'); await A.waitForSelector('.line');
   await A.click('.line[data-line="Tomatoes"] button.l-few');
   await A.click('.line[data-line="Tomatoes"] .fw-ok');
-  while (await A.$('.line.todo button:has-text("Got all")')) { await A.click('.line.todo button:has-text("Got all") >> nth=0'); await A.waitForTimeout(150); }
+  while (await A.$('.line.todo button.l-all')) { await A.click('.line.todo button.l-all >> nth=0'); await A.waitForTimeout(150); }
   await A.click('.dock button:has-text("Review and finish")'); await A.click('.dock button:has-text("Finish with exceptions")');
   await A.click('#expanel .chip:has-text("Ran out of time before close")'); await A.click('button:has-text("Confirm finish with exceptions")');
   await waitDb(() => sql`select status from restock_sessions where kind = 'full'`, (r) => r[0]?.status === 'finished_exceptions', 30000);

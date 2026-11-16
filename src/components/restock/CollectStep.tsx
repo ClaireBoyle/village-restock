@@ -106,31 +106,42 @@ function Line({ line, items, write, oneArea }: { line: CollectionLine; items: Ma
   const flag = () => write(gotFewerUpdates(line, got, info.reason, !info.flagged));
   const undo = () => { write(clearCollectedUpdates(line)); setEditing(false); setOthers(false); };
 
-  let right: React.ReactNode = null;
+  // One glance: the amount first and biggest, then the name, then one round tick for "got all".
+  // "Got fewer" is a small link; done / short lines say so quietly with Undo / Change.
+  const all = () => write(gotAllUpdates(line));
+  const startFewer = () => { setEditing(true); setGot(Math.max(0, Math.floor(line.total) - 1)); };
+  let act: React.ReactNode = null;
   if (st === 'done') {
-    right = <div className="l-done"><span><Icon name="check" /><span className="lg">{line.kind === 'task' ? 'Done' : 'Collected'}</span></span><button className="linkbtn" onClick={undo}>Undo</button></div>;
-  } else if (st === 'short' && !open) {
-    right = <div className={`l-done short ${info.reason === 'insufficient' ? '' : 'op'}`}><span><Icon name="warn" />{got} of {round2(line.total)}</span><button className="linkbtn" onClick={() => setEditing(true)}>Change</button></div>;
-  } else if (line.kind === 'task') {
-    right = <button className="btn good l-all" onClick={() => write(gotAllUpdates(line))}><Icon name="check" />Done</button>;
-  } else if (!open) {
-    right = <div className="l-acts">
-      <button className="btn l-few" onClick={() => { setEditing(true); setGot(Math.max(0, Math.floor(line.total) - 1)); }} aria-label={`Got fewer ${line.productName}`}>Got fewer</button>
-      <button className="btn good l-all" onClick={() => write(gotAllUpdates(line))} aria-label={`Got all ${round2(line.total)} ${line.productName}`}><Icon name="check" />Got all</button>
-    </div>;
+    act = <button type="button" className="l-tick on" onClick={undo} aria-label={`Undo ${line.productName}`}><Icon name="check" /></button>;
+  } else if (!open && !(st === 'short')) {
+    act = <button type="button" className="l-tick l-all" onClick={all}
+      aria-label={line.kind === 'task' ? `Done: ${line.productName}` : `Got all ${round2(line.total)} ${line.productName}`}><Icon name="check" /></button>;
   }
+  const sub = line.kind === 'task' ? (line.instructions || forTxt)
+    : oneArea && line.parts.length === 1 ? null : `For ${forTxt}`;
 
   return (
     <div className={`line ${st === 'done' ? 'done' : st === 'short' ? (info.reason === 'insufficient' ? 'short' : 'short op') : 'todo'} ${open ? 'editing' : ''}`} data-line={line.productName}>
-      <div className="l-main">
+      <div className="lrow">
+        {line.kind === 'qty' ? (
+          <span className="l-amt l-qty" aria-label={`${round2(line.total)} ${u(line.total)}`}>
+            <b>{st === 'short' && !open ? <>{round2(got)}<i>/{round2(line.total)}</i></> : round2(line.total)}</b><small>{u(line.total)}</small>
+          </span>
+        ) : <span className="l-amt task" aria-hidden="true"><Icon name="task" /></span>}
         <ProductThumb src={line.photoPath} name={line.productName} credit={line.photoCredit} className="l-photo" />
-        <div className="l-name"><b>{line.productName}</b>{line.kind === 'task' ? <small>{line.instructions || forTxt}</small>
-          : st === 'short' && !open ? <small className="l-why">{info.reason === 'insufficient' ? (got === 0 ? 'Out of stock' : 'Running low') : shortReason(info.reason)} &middot; short {formatQty(short, line.unitSingular, line.unitPlural)}{info.flagged ? ' · flagged' : ''}</small>
-          : oneArea && line.parts.length === 1 ? null : <small>For {forTxt}</small>}</div>
-        <div className="l-right">
-          {line.kind === 'qty' && !(st === 'short' && !open) ? <span className="l-qty"><b>{round2(line.total)}</b><small>{u(line.total)}</small></span> : null}
-          {right}
+        <div className="l-nm">
+          <b>{line.productName}</b>
+          {st === 'short' && !open ? (
+            <small className="l-why">{info.reason === 'insufficient' ? (got === 0 ? 'Out of stock' : 'Running low') : shortReason(info.reason)} &middot; short {formatQty(short, line.unitSingular, line.unitPlural)}{info.flagged ? ' · flagged' : ''}
+              <button type="button" className="linkbtn l-link" onClick={() => setEditing(true)}>Change</button></small>
+          ) : st === 'done' ? (
+            <small className="l-ok">{line.kind === 'task' ? 'Done' : 'Collected'}<button type="button" className="linkbtn l-link" onClick={undo}>Undo</button></small>
+          ) : (
+            <small>{sub ? <span>{sub}</span> : null}
+              {line.kind === 'qty' && !open ? <button type="button" className="linkbtn l-link l-few" onClick={startFewer} aria-label={`Got fewer ${line.productName}`}>Got fewer</button> : null}</small>
+          )}
         </div>
+        {act}
       </div>
       {open ? (
         <div className="fewer">
