@@ -24,7 +24,7 @@ export function QuickStep({ ctx }: { ctx: RestockCtx }) {
   const results = view.placements.filter((p) => {
     if (query) return `${p.productName} ${p.areaName} ${p.categoryName ?? ''}`.toLowerCase().includes(query);
     if (chip === 'all') return true;
-    return by === 'area' ? p.areaId === chip : p.categoryName === chip;
+    return by === 'area' ? p.screenAreaId === chip : p.categoryName === chip;
   });
 
   const toggle = (id: string) => {

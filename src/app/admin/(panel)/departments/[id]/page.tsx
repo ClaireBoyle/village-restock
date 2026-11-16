@@ -14,6 +14,7 @@ export default async function DepartmentDetail({ params }: { params: Promise<{ i
   if (!d) notFound();
   const areas = await sql`
     select a.id, a.name, a.guide_text, a.guide_photo_path, a.active, a.is_sample,
+      (to_jsonb(a)->>'parent_area_id') as parent_area_id, coalesce(to_jsonb(a)->>'section_mode', 'open') as section_mode,
       (select count(*) from product_placements pl join products p on p.id = pl.product_id and p.status = 'active' where pl.check_area_id = a.id)::int as products
     from check_areas a where a.department_id = ${id} order by a.sort_order, a.name`;
   const categories = await sql`
@@ -36,13 +37,14 @@ export default async function DepartmentDetail({ params }: { params: Promise<{ i
             <div key={String(a.id)} className={`row ${a.active ? '' : 'muted'}`} style={{ flexWrap: 'wrap' }}>
               <div className="grow" style={{ minWidth: 200 }}>
                 <div className="title">{String(a.name)} {a.isSample ? <span className="tag sample">Sample</span> : null} {!a.active ? <span className="tag">Hidden</span> : null}</div>
-                <div className="meta">{Number(a.products)} products{a.guideText ? ' · has a stocking guide' : ''}{a.guidePhotoPath ? ' · has a photo' : ''}</div>
+                <div className="meta">{Number(a.products)} products{a.guideText ? ' · has a stocking guide' : ''}{a.guidePhotoPath ? ' · has a photo' : ''}{a.parentAreaId ? ` · section of ${String(areas.find((x) => x.id === a.parentAreaId)?.name ?? '?')}${a.sectionMode === 'optional' ? ' (optional)' : a.sectionMode === 'collapsed' ? ' (collapsed)' : ''}` : ''}</div>
               </div>
               <Link className="btn small" href={`/admin/arrange/${a.id}`}><Icon name="list" />Arrange products</Link>
               <MoveButtons kind="area" id={String(a.id)} first={i === 0} last={i === areas.length - 1} label={String(a.name)} />
               <details style={{ flexBasis: '100%' }}>
                 <summary className="linkbtn" style={{ cursor: 'pointer' }}>Edit {String(a.name)}</summary>
-                <div style={{ paddingBlock: 8 }}><AreaForm departmentId={id} a={{ id: String(a.id), name: String(a.name), guideText: String(a.guideText), active: Boolean(a.active) }} /></div>
+                <div style={{ paddingBlock: 8 }}><AreaForm departmentId={id} parents={areas.filter((x) => !x.parentAreaId && x.id !== a.id).map((x) => ({ id: String(x.id), name: String(x.name) }))}
+                  a={{ id: String(a.id), name: String(a.name), guideText: String(a.guideText), active: Boolean(a.active), parentAreaId: (a.parentAreaId as string) ?? null, sectionMode: String(a.sectionMode) }} /></div>
                 <div style={{ paddingBlock: 8 }}><b style={{ display: 'block', marginBottom: 8 }}>Guide photo</b>
                   <PhotoField kind="area" id={String(a.id)} current={(a.guidePhotoPath as string) ?? null}
                     hint="A photo of the area fully stocked, so staff can see how it should look." /></div>
@@ -52,7 +54,7 @@ export default async function DepartmentDetail({ params }: { params: Promise<{ i
         </div>
         <details>
           <summary className="btn small" style={{ listStyle: 'none', display: 'inline-flex' }}><Icon name="plus" />Add an area</summary>
-          <div style={{ paddingTop: 12 }}><AreaForm departmentId={id} /></div>
+          <div style={{ paddingTop: 12 }}><AreaForm departmentId={id} parents={areas.filter((x) => !x.parentAreaId).map((x) => ({ id: String(x.id), name: String(x.name) }))} /></div>
         </details>
       </section>
 

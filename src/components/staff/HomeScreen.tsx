@@ -32,8 +32,8 @@ interface DeptState {
 const t = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }).toLowerCase() : '');
 
 function stateFor(cat: Catalogue, d: CatDepartment, local: LocalSession | undefined, localAreas: LocalArea[], remote: RemoteSession | undefined, quick: LocalSession | undefined): DeptState {
-  const areas = cat.areas.filter((a) => a.departmentId === d.id).sort((a, b) => a.sortOrder - b.sortOrder);
-  const areaIds = new Set(areas.map((a) => a.id));
+  const areas = cat.areas.filter((a) => a.departmentId === d.id && !a.parentAreaId).sort((a, b) => a.sortOrder - b.sortOrder); // sections are part of their area
+  const areaIds = new Set(cat.areas.filter((a) => a.departmentId === d.id).map((a) => a.id)); // includes sections
   const products = cat.placements.filter((p) => areaIds.has(p.checkAreaId)).length;
   const s = local ?? remote;
   const statusOf = (id: string): Seg => {

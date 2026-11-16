@@ -32,7 +32,12 @@ export function DepartmentForm({ d }: { d?: DepartmentRow }) {
   );
 }
 
-export function AreaForm({ departmentId, a }: { departmentId: string; a?: { id: string; name: string; guideText: string; active: boolean } }) {
+export function AreaForm({ departmentId, a, parents = [] }: {
+  departmentId: string;
+  a?: { id: string; name: string; guideText: string; active: boolean; parentAreaId?: string | null; sectionMode?: string };
+  /** Areas this one could be shown inside (top-level areas of the department, not itself). */
+  parents?: { id: string; name: string }[];
+}) {
   const k = a?.id ?? `new-${departmentId}`;
   return (
     <ActionForm action={saveArea} style={stack} resetOnSuccess={!a}>
@@ -41,6 +46,21 @@ export function AreaForm({ departmentId, a }: { departmentId: string; a?: { id: 
       <div className="field"><label htmlFor={`an-${k}`}>Area name</label><input id={`an-${k}`} name="name" defaultValue={a?.name} required maxLength={60} placeholder="e.g. Fridge 1" /></div>
       <div className="field"><label htmlFor={`ag-${k}`}>Stocking guide (optional)</label>
         <textarea id={`ag-${k}`} name="guideText" defaultValue={a?.guideText} maxLength={600} placeholder="What a well-stocked area looks like, e.g. Dairy on the top shelf, oldest stock at the front." /></div>
+      {parents.length ? (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div className="field" style={{ flex: '1 1 220px' }}><label htmlFor={`ap-${k}`}>Show as</label>
+            <select id={`ap-${k}`} name="parentAreaId" defaultValue={a?.parentAreaId ?? ''}>
+              <option value="">Its own area (own tab)</option>
+              {parents.filter((p) => p.id !== a?.id).map((p) => <option key={p.id} value={p.id}>A section of {p.name}</option>)}
+            </select></div>
+          <div className="field" style={{ flex: '1 1 220px' }}><label htmlFor={`am-${k}`}>If it&rsquo;s a section</label>
+            <select id={`am-${k}`} name="sectionMode" defaultValue={a?.sectionMode ?? 'collapsed'}>
+              <option value="open">Shown open</option>
+              <option value="collapsed">Collapsed (tap to show)</option>
+              <option value="optional">Optional and collapsed (never required)</option>
+            </select></div>
+        </div>
+      ) : null}
       {a ? <label className="check"><input type="checkbox" name="active" defaultChecked={a.active} />Show to staff</label> : <input type="hidden" name="active" value="on" />}
       <div><SubmitButton>{a ? 'Save area' : 'Add area'}</SubmitButton></div>
     </ActionForm>

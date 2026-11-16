@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Icon } from '@/components/Icon';
 import {
-  EMPTY_ITEM, SKIP_REASONS, type ItemState, activePlacements, areaNotes, areaStatus, collectionLines, isChecked, isRequired,
+  EMPTY_ITEM, SKIP_REASONS, type ItemState, activePlacements, areaNotes, areaStatus, collectionLines, isChecked, isRequired, needOf,
 } from '@/lib/restock-logic';
 import { setArea, setItems, updateLocalSession } from '@/lib/client/restock-store';
 import { localDb } from '@/lib/client/local-db';
@@ -24,7 +24,8 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
   const { view, session, items, areaRecords, recorded, who } = ctx;
   const [skipOpen, setSkipOpen] = useState(false);
   const [zoom, setZoom] = useState(false);
-  const [review, setReview] = useState(false); // the "N to collect" list above the bottom bar
+  const [review, setReview] = useState(false);
+  const [openSecs, setOpenSecs] = useState<Record<string, boolean>>({}); // sections expanded/collapsed on this screen // the "N to collect" list above the bottom bar
   // The kitchen reminder can be hidden for this restock (remembered on this device).
   const remKey = `vr-kreminder-${session.id}`;
   const [reminderHidden, setReminderHidden] = useState(false);
@@ -82,6 +83,17 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
     const closed = rec?.status === 'complete' || rec?.status === 'skipped';
     if (!before && after && !closed) { pin(); await setArea(session.id, cur.area.id, 'complete', null, who); }
   };
+  // Same product already entered elsewhere on this screen (e.g. Back bench) → say so in the cupboard, to avoid double-counting.
+  const alsoEntered = (p: (typeof cur.placements)[number]) => {
+    if (!p.optional) return null;
+    const others = cur.placements.filter((x) => x.productId === p.productId && x.placementId !== p.placementId)
+      .map((x) => ({ x, need: needOf(x, items.get(x.placementId) ?? EMPTY_ITEM) })).filter((o) => (o.need ?? 0) > 0);
+    return others.length ? `Already ${others.map((o) => `${Math.round(o.need! * 100) / 100} for ${o.x.areaName}`).join(', ')}` : null;
+  };
+  const renderRow = (p: (typeof cur.placements)[number]) => (
+    <ProductRow key={p.placementId} p={p} item={items.get(p.placementId) ?? EMPTY_ITEM} note={alsoEntered(p) ?? notes.own.get(p.placementId)}
+      onChange={(fields, resolve) => void onItem(p, fields, resolve)} />
+  );
   const reopen = () => { pin(); void setArea(session.id, cur.area.id, 'not_started', null, who); };
   const firstUnchecked = () => {
     const p = cur.placements.find((x) => !chk(x));
@@ -163,11 +175,29 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
 
           <div className="prows">
             {cur.placements.length === 0 ? <p className="meta">No products in this area yet.</p> : null}
-            {cur.placements.map((p) => (
-              <ProductRow key={p.placementId} p={p} item={items.get(p.placementId) ?? EMPTY_ITEM} note={notes.own.get(p.placementId)}
-                onChange={(fields, resolve) => void onItem(p, fields, resolve)} />
-            ))}
+            {cur.own.map(renderRow)}
           </div>
+
+          {cur.sections.map((sec) => {
+            const enteredHere = sec.placements.filter(chk).length;
+            const open = openSecs[sec.area.id] ?? (sec.mode === 'open' || enteredHere > 0);
+            return (
+              <section key={sec.area.id} className={`psec ${sec.mode} ${open ? 'open' : ''}`}>
+                <button type="button" className="psec-h" onClick={() => setOpenSecs((o) => ({ ...o, [sec.area.id]: !open }))} aria-expanded={open}>
+                  <span className="psec-t"><b>{sec.area.name}</b>{sec.mode === 'optional' ? <span className="psec-tag">Optional</span> : null}</span>
+                  <small>{enteredHere ? `${enteredHere} entered` : `${sec.placements.length} product${sec.placements.length === 1 ? '' : 's'}`}</small>
+                  <Icon name={open ? 'up' : 'down'} />
+                </button>
+                {open ? (
+                  <>
+                    {sec.mode === 'optional' ? <p className="psec-hint"><Icon name="info" /><span>Only add <b>extra</b> stock this needs from downstairs. Anything already entered above is already on the collection list.</span></p>
+                      : sec.area.guideText ? <p className="psec-hint"><Icon name="info" /><span>{sec.area.guideText}</span></p> : null}
+                    <div className="prows">{sec.placements.map(renderRow)}</div>
+                  </>
+                ) : null}
+              </section>
+            );
+          })}
 
           {st === 'skipped' ? (
             <div className="banner s-skip area-end"><Icon name="skip" /><div><b>{cur.area.name} skipped</b><p>{rec?.skipReason}{rec?.updatedBy ? ` · ${rec.updatedBy}` : ''} {timeOf(rec?.updatedAt)}</p></div>
@@ -197,7 +227,7 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
         above={review && lines.length ? (
           <div className="entered" id="entered-list">
             <ul>{lines.map((l) => (
-              <li key={l.key}><button onClick={() => { const pl = l.parts[0]; setReview(false); goArea(view.byId.get(pl.placementId)?.areaId ?? cur.area.id);
+              <li key={l.key}><button onClick={() => { const pl = l.parts[0]; setReview(false); const vp = view.byId.get(pl.placementId); if (vp?.optional) setOpenSecs((o) => ({ ...o, [vp.areaId]: true })); goArea(vp?.screenAreaId ?? cur.area.id);
                 window.setTimeout(() => document.querySelector(`[data-placement="${pl.placementId}"]`)?.scrollIntoView({ block: 'center' }), 120); }}>
                 <b>{l.kind === 'task' ? '✓' : Math.round(l.total * 100) / 100}</b><span>{l.photoPath ? <img className="en-photo" src={l.photoPath} alt="" loading="lazy" /> /* eslint-disable-line @next/next/no-img-element */ : null}{l.productName}</span><small>{l.parts.map((x) => x.areaName).join(', ')}</small>
               </button></li>

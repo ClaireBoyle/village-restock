@@ -45,6 +45,10 @@ export interface PlacementView {
   /** Menu items to mark as sold out if this product runs out. */
   affects: string[];
   /** Reference photo, if one has been added. */
+  /** The area whose screen this product appears on (its own area, or the area its section belongs to). */
+  screenAreaId: string;
+  /** In an optional section (e.g. Spirits cupboard): never required, collapsed by default. */
+  optional: boolean;
   photoPath: string | null;
   photoCredit?: string | null;
 }
@@ -67,9 +71,13 @@ export const EMPTY_ITEM: ItemState = {
   collectedMode: null, collectedQty: null, shortfallReason: null, flagged: false, conflict: null,
 };
 
+/** A section shown inside an area's screen (e.g. "Spirits cupboard" inside Back bench). */
+export interface AreaSection { area: CatArea; mode: 'open' | 'collapsed' | 'optional'; placements: PlacementView[] }
+
 export interface DepartmentView {
   department: CatDepartment;
-  areas: { area: CatArea; placements: PlacementView[] }[];
+  /** Screens staff move between. Each area's placements include those of its sections, after its own. */
+  areas: { area: CatArea; placements: PlacementView[]; own: PlacementView[]; sections: AreaSection[] }[];
   placements: PlacementView[];
   byId: Map<string, PlacementView>;
   locationOrder: Map<string, number>;
@@ -82,30 +90,44 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
   const products = new Map(cat.products.map((p) => [p.id, p]));
   const locations = new Map(cat.locations.map((l) => [l.id, l]));
   const categories = new Map(cat.categories.map((c) => [c.id, c.name]));
-  const areas = cat.areas
+  const all = cat.areas
     .filter((a) => a.departmentId === departmentId)
-    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
-    .map((area) => {
-      const placements = cat.placements
-        .filter((pl) => pl.checkAreaId === area.id && products.get(pl.productId)?.departmentId === departmentId)
-        .sort((a, b) => a.sortOrder - b.sortOrder)
-        .map((pl): PlacementView => {
-          const p = products.get(pl.productId)!;
-          const locId = pl.locationId ?? p.defaultLocationId;
-          return {
-            placementId: pl.id, productId: p.id, areaId: area.id, areaName: area.name, productName: p.name,
-            unitSingular: p.unitSingular, unitPlural: p.unitPlural, method: p.method,
-            par: pl.parLevel, allowDecimal: p.allowDecimal, locationId: locId,
-            locationName: locId ? locations.get(locId)?.name ?? null : null,
-            instructions: pl.instructions ?? p.instructions,
-            categoryName: p.categoryId ? categories.get(p.categoryId) ?? null : null,
-            affects: p.affects ?? [],
-            photoPath: p.photoPath ?? null,
-            photoCredit: p.photoCredit ?? null,
-          };
-        });
-      return { area, placements };
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+  const ids = new Set(all.map((a) => a.id));
+  // A section belongs to another area's screen; one whose parent is gone or itself a section stands alone.
+  const parentOf = (a: CatArea) => {
+    const pid = a.parentAreaId;
+    if (!pid || pid === a.id || !ids.has(pid)) return null;
+    const parent = all.find((x) => x.id === pid)!;
+    return parent.parentAreaId && ids.has(parent.parentAreaId) ? null : pid;
+  };
+  const placementsOf = (area: CatArea, screenAreaId: string, optional: boolean) => cat.placements
+    .filter((pl) => pl.checkAreaId === area.id && products.get(pl.productId)?.departmentId === departmentId)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((pl): PlacementView => {
+      const p = products.get(pl.productId)!;
+      const locId = pl.locationId ?? p.defaultLocationId;
+      return {
+        placementId: pl.id, productId: p.id, areaId: area.id, areaName: area.name, productName: p.name,
+        unitSingular: p.unitSingular, unitPlural: p.unitPlural, method: p.method,
+        par: pl.parLevel, allowDecimal: p.allowDecimal, locationId: locId,
+        locationName: locId ? locations.get(locId)?.name ?? null : null,
+        instructions: pl.instructions ?? p.instructions,
+        categoryName: p.categoryId ? categories.get(p.categoryId) ?? null : null,
+        affects: p.affects ?? [],
+        photoPath: p.photoPath ?? null,
+        photoCredit: p.photoCredit ?? null,
+        screenAreaId, optional,
+      };
     });
+  const areas = all.filter((a) => !parentOf(a)).map((area) => {
+    const own = placementsOf(area, area.id, false);
+    const sections: AreaSection[] = all.filter((a) => parentOf(a) === area.id).map((sec) => {
+      const mode = sec.sectionMode === 'optional' || sec.sectionMode === 'collapsed' ? sec.sectionMode : 'open';
+      return { area: sec, mode, placements: placementsOf(sec, area.id, mode === 'optional') };
+    });
+    return { area, own, sections, placements: [...own, ...sections.flatMap((x) => x.placements)] };
+  });
   const placements = areas.flatMap((a) => a.placements);
   return {
     department, areas, placements,
@@ -131,7 +153,7 @@ export function needOf(p: PlacementView, i: ItemState): number | null {
  * "not entered", which is different from 0).
  */
 export function isRequired(p: PlacementView): boolean {
-  return p.method === 'par';
+  return p.method === 'par' && !p.optional;
 }
 
 export function isChecked(p: PlacementView, i: ItemState): boolean {
@@ -348,7 +370,8 @@ export function exceptions(args: {
 
 /** Placements that still count: skipped areas are left out of collecting. */
 export function activePlacements(kind: 'full' | 'quick', placements: PlacementView[], recordedAreas: Map<string, AreaStatus>) {
-  return kind === 'full' ? placements.filter((p) => recordedAreas.get(p.areaId) !== 'skipped') : placements;
+  // Skipping an area also skips its sections (they're on the same screen).
+  return kind === 'full' ? placements.filter((p) => recordedAreas.get(p.screenAreaId ?? p.areaId) !== 'skipped') : placements;
 }
 
 // ---------------------------------------------------------------------------

@@ -16,7 +16,8 @@ export async function loadCatalogue(): Promise<Catalogue> {
       select id, name, short_name, group_label, theme, icon, description, sort_order
       from departments where active order by sort_order, name`;
     const areas = await tx`
-      select a.id, a.department_id, a.name, a.guide_text, a.guide_photo_path, a.sort_order
+      select a.id, a.department_id, a.name, a.guide_text, a.guide_photo_path, a.sort_order,
+             (to_jsonb(a)->>'parent_area_id') as parent_area_id, coalesce(to_jsonb(a)->>'section_mode', 'open') as section_mode
       from check_areas a join departments d on d.id = a.department_id and d.active
       where a.active order by a.sort_order, a.name`;
     const locations = await tx`select id, name, sort_order from storage_locations where active order by sort_order, name`;

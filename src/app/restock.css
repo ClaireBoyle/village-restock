@@ -848,3 +848,17 @@ button.pnote.open span{display:block}
 .pt:has(.pphoto){position:relative;padding-left:54px;min-height:44px;justify-content:center}
 .pt:has(.pphoto) .pphoto{position:absolute;left:0;top:50%;transform:translateY(-50%)}
 @media (max-width:640px){.pt:has(.pphoto){padding-left:50px;min-height:40px}}
+
+/* Sections inside an area's screen (e.g. Other FOH spirits, optional Spirits cupboard) */
+.psec{border-radius:14px;border:1px solid var(--hair);background:color-mix(in srgb,var(--surface) 55%,transparent);margin-top:4px}
+.psec.optional{border-style:dashed}
+.psec-h{display:flex;align-items:center;gap:10px;width:100%;min-height:50px;padding:6px 14px;border:0;background:none;color:inherit;text-align:left;cursor:pointer}
+.psec-t{flex:1;min-width:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.psec-t b{font-family:var(--f-head);font-size:16px;font-weight:700}
+.psec-tag{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:var(--surface-2);color:var(--ink-2)}
+.psec-h small{font-size:13px;color:var(--ink-2);white-space:nowrap}
+.psec-h>.ic{width:18px;height:18px;color:var(--ink-2);flex:none}
+.psec.open{padding-bottom:8px}
+.psec .prows{padding:0 8px}
+.psec-hint{display:flex;gap:6px;align-items:flex-start;margin:0 14px 8px;font-size:13px;line-height:1.4;color:var(--ink-2)}
+.psec-hint .ic{width:15px;height:15px;flex:none;margin-top:2px;color:var(--d-accent)}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Catalogue } from './catalogue-types';
-import { areaNotes,
+import { activePlacements, areaNotes, isRequired,
   EMPTY_ITEM, areaStatus, cardState, isChecked, collectionLines, departmentView, exceptions, gotAllUpdates,
   gotFewerUpdates, groupByStoreroom, lineGot, lineState, needOf, stockOutcomes, summaryText, type AreaStatus, type ItemState,
 } from './restock-logic';
@@ -216,7 +216,7 @@ describe('finishing', () => {
 describe('areaNotes', () => {
   const pv = (id: string, instructions: string, method: 'manual' | 'routine' = 'manual') => ({
     placementId: id, productId: id, areaId: 'a', areaName: 'Stand', productName: id, unitSingular: 'pack', unitPlural: 'packs',
-    method, par: null, allowDecimal: false, locationId: null, locationName: null, instructions, categoryName: null, affects: [], photoPath: null,
+    method, par: null, allowDecimal: false, locationId: null, locationName: null, instructions, categoryName: null, affects: [], photoPath: null, screenAreaId: 'a', optional: false,
   });
   it('shows text repeated on several products once for the area', () => {
     const general = 'Check both sides of the stand and enter the total.';
@@ -237,6 +237,56 @@ describe('areaNotes', () => {
   it('never moves a routine task’s instruction (it is the task itself)', () => {
     const r = areaNotes([pv('a', 'Do it', 'routine'), pv('b', 'Do it', 'routine'), pv('c', 'Do it', 'routine')]);
     expect(r.shared).toEqual([]);
+  });
+});
+
+describe('area sections (Back bench + Other FOH spirits + optional Spirits cupboard)', () => {
+  const recorded = (o: Record<string, AreaStatus>) => new Map(Object.entries(o));
+  const bar: Catalogue = {
+    version: 1, generatedAt: '', settings: { timeZone: 'Australia/Melbourne', cutoffHour: 5, defrostServiceTime: '11:00' }, defrostItems: [],
+    departments: [{ id: 'gb', name: 'Gold Class Bar', shortName: 'Bar', groupLabel: '', theme: 'gold', icon: 'bar', description: '', sortOrder: 1 }],
+    areas: [
+      { id: 'bench', departmentId: 'gb', name: 'Back bench', guideText: '', guidePhotoPath: null, sortOrder: 1 },
+      { id: 'foh', departmentId: 'gb', name: 'Other FOH spirits', guideText: '', guidePhotoPath: null, sortOrder: 2, parentAreaId: 'bench', sectionMode: 'collapsed' },
+      { id: 'cup', departmentId: 'gb', name: 'Spirits cupboard', guideText: '', guidePhotoPath: null, sortOrder: 3, parentAreaId: 'bench', sectionMode: 'optional' },
+      { id: 'fridge', departmentId: 'gb', name: 'Bar fridge', guideText: '', guidePhotoPath: null, sortOrder: 4 },
+    ],
+    locations: [{ id: 'alc', name: 'Alcohol storeroom', sortOrder: 1 }],
+    categories: [],
+    products: [
+      { id: 'jim', departmentId: 'gb', categoryId: null, name: 'Jim Beam', unitSingular: 'bottle', unitPlural: 'bottles', method: 'manual', allowDecimal: false, instructions: '', defaultLocationId: 'alc', sortOrder: 1, affects: [], photoPath: null },
+      { id: 'gin', departmentId: 'gb', categoryId: null, name: 'Hendrick’s', unitSingular: 'bottle', unitPlural: 'bottles', method: 'manual', allowDecimal: false, instructions: '', defaultLocationId: 'alc', sortOrder: 2, affects: [], photoPath: null },
+      { id: 'cpar', departmentId: 'gb', categoryId: null, name: 'Cupboard par item', unitSingular: 'bottle', unitPlural: 'bottles', method: 'par', allowDecimal: false, instructions: '', defaultLocationId: 'alc', sortOrder: 3, affects: [], photoPath: null },
+    ],
+    placements: [
+      { id: 'jim-bench', productId: 'jim', checkAreaId: 'bench', parLevel: null, locationId: null, instructions: null, sortOrder: 1 },
+      { id: 'gin-foh', productId: 'gin', checkAreaId: 'foh', parLevel: null, locationId: null, instructions: null, sortOrder: 1 },
+      { id: 'jim-cup', productId: 'jim', checkAreaId: 'cup', parLevel: null, locationId: null, instructions: null, sortOrder: 1 },
+      { id: 'cpar-cup', productId: 'cpar', checkAreaId: 'cup', parLevel: 6, locationId: null, instructions: null, sortOrder: 2 },
+    ],
+  };
+  const v = departmentView(bar, 'gb')!;
+  it('sections sit inside the Back bench screen, not as separate areas', () => {
+    expect(v.areas.map((a) => a.area.name)).toEqual(['Back bench', 'Bar fridge']);
+    const bench = v.areas[0];
+    expect(bench.own.map((p) => p.productName)).toEqual(['Jim Beam']);
+    expect(bench.sections.map((x) => [x.area.name, x.mode])).toEqual([['Other FOH spirits', 'collapsed'], ['Spirits cupboard', 'optional']]);
+    expect(bench.placements.every((p) => p.screenAreaId === 'bench')).toBe(true);
+  });
+  it('the same product in Back bench and the cupboard is one collection line from the Alcohol storeroom', () => {
+    const lines = collectionLines(v.placements, items({ 'jim-bench': { requestedQty: 2 }, 'jim-cup': { requestedQty: 3 } }));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ productName: 'Jim Beam', total: 5, locationName: 'Alcohol storeroom' });
+    expect(lines[0].parts.map((x) => [x.areaName, x.need])).toEqual([['Back bench', 2], ['Spirits cupboard', 3]]);
+  });
+  it('the optional cupboard is never required, even for target-level products', () => {
+    const cupPar = v.byId.get('cpar-cup')!;
+    expect(cupPar.optional).toBe(true);
+    expect(isRequired(cupPar)).toBe(false);
+    expect(exceptions({ kind: 'full', view: v, placements: v.placements, recordedAreas: recorded({}), items: items({}) })).toEqual([]);
+  });
+  it('skipping Back bench also skips its sections', () => {
+    expect(activePlacements('full', v.placements, recorded({ bench: 'skipped' })).map((p) => p.placementId)).toEqual([]);
   });
 });
 

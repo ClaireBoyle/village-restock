@@ -14,6 +14,10 @@ export interface CatDepartment {
 export interface CatArea {
   id: string; departmentId: string; name: string; guideText: string;
   guidePhotoPath: string | null; sortOrder: number;
+  /** Shown as a section inside this area's screen (null = an area of its own). */
+  parentAreaId?: string | null;
+  /** open: shown expanded · collapsed: tap to show · optional: collapsed and never required. */
+  sectionMode?: 'open' | 'collapsed' | 'optional';
 }
 export interface CatLocation { id: string; name: string; sortOrder: number }
 export interface CatCategory { id: string; departmentId: string; name: string; sortOrder: number }

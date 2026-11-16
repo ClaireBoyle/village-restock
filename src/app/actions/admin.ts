@@ -80,6 +80,7 @@ export async function saveDepartment(_: ActionResult, form: FormData): Promise<A
 // ---------------------------------------------------------------------------
 const areaSchema = z.object({
   id: optUuid, departmentId: uuid, name: text(60, 'Area name'), guideText: optText(600), active: checkbox,
+  parentAreaId: optUuid.optional(), sectionMode: z.enum(['open', 'collapsed', 'optional']).optional(),
 });
 
 export async function saveArea(_: ActionResult, form: FormData): Promise<ActionResult> {
@@ -88,13 +89,30 @@ export async function saveArea(_: ActionResult, form: FormData): Promise<ActionR
   if (!p.success) return firstIssue(p.error);
   const a = p.data;
   try {
+    const sql = db();
+    // Sections (migration 008): an area can sit inside another area's screen.
+    const [{ has }] = await sql`select exists (select 1 from information_schema.columns where table_name = 'check_areas' and column_name = 'parent_area_id') as has`;
+    const parent = has && a.parentAreaId ? a.parentAreaId : null;
+    if (parent) {
+      if (parent === a.id) return { error: 'An area can’t be a section of itself.' };
+      const [pa] = await sql`select parent_area_id from check_areas where id = ${parent} and department_id = ${a.departmentId}`;
+      if (!pa) return { error: 'That area belongs to a different department.' };
+      if (pa.parentAreaId) return { error: 'Sections can’t have their own sections. Choose an area that isn’t a section.' };
+      if (a.id) {
+        const kids = await sql`select 1 from check_areas where parent_area_id = ${a.id} limit 1`;
+        if (kids.length) return { error: 'This area has sections of its own, so it can’t become a section.' };
+      }
+    }
     if (a.id) {
-      await db()`update check_areas set name = ${a.name}, guide_text = ${a.guideText}, active = ${a.active}
+      await sql`update check_areas set name = ${a.name}, guide_text = ${a.guideText}, active = ${a.active}
         where id = ${a.id} and department_id = ${a.departmentId}`;
+      if (has) await sql`update check_areas set parent_area_id = ${parent}, section_mode = ${a.sectionMode ?? 'collapsed'} where id = ${a.id}`;
+      revalidatePath('/admin', 'layout');
       return done('Area saved.');
     }
     const sort = await nextSort('check_areas', { col: 'department_id', id: a.departmentId });
-    await db()`insert into check_areas (department_id, name, guide_text, sort_order) values (${a.departmentId}, ${a.name}, ${a.guideText}, ${sort})`;
+    const [row] = await sql`insert into check_areas (department_id, name, guide_text, sort_order) values (${a.departmentId}, ${a.name}, ${a.guideText}, ${sort}) returning id`;
+    if (has && parent) await sql`update check_areas set parent_area_id = ${parent}, section_mode = ${a.sectionMode ?? 'collapsed'} where id = ${String(row.id)}`;
     return done(`${a.name} added.`);
   } catch (e) { return fail(e); }
 }
