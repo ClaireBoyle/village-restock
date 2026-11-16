@@ -90,7 +90,8 @@ export function useCatalogue(): CatalogueState {
     if (!catalogue || connection !== 'online' || warmed.current === catalogue.version) return;
     warmed.current = catalogue.version;
     const photos = [...catalogue.products.map((p) => p.photoPath), ...catalogue.areas.map((a) => a.guidePhotoPath)].filter((p): p is string => !!p);
-    void warmOfflineCache(['/', ...catalogue.departments.map((d) => `/d/${d.id}`)], photos);
+    const defrostDepts = new Set((catalogue.defrostItems ?? []).map((i) => i.departmentId));
+    void warmOfflineCache(['/', ...catalogue.departments.map((d) => `/d/${d.id}`), ...[...defrostDepts].map((id) => `/d/${id}/defrost`)], photos);
   }, [catalogue, connection]);
 
   return { catalogue, checkedAt, connection, error, refresh };

@@ -8,7 +8,7 @@
 //
 // Restock entries are NOT handled here: they're saved in the device database
 // (IndexedDB) and uploaded by the app's own sync engine.
-const VERSION = 'v4';
+const VERSION = 'v5';
 const PAGES = `vr-pages-${VERSION}`;
 const STATIC = `vr-static-${VERSION}`;
 const PHOTOS = `vr-photos-${VERSION}`;
@@ -30,7 +30,7 @@ self.addEventListener('activate', (event) => {
   })());
 });
 
-const isPage = (url) => url.pathname === '/' || /^\/d\/[0-9a-f-]{36}$/i.test(url.pathname);
+const isPage = (url) => url.pathname === '/' || /^\/d\/[0-9a-f-]{36}(\/defrost)?$/i.test(url.pathname);
 const isStatic = (url) => url.pathname.startsWith('/_next/static/') || url.pathname.startsWith('/icons/') || url.pathname.startsWith('/brand/') || url.pathname === '/manifest.webmanifest' || url.pathname === '/favicon.ico';
 const isPhoto = (url) => /^\/api\/photos\/[0-9a-f-]{36}$/i.test(url.pathname);
 

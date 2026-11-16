@@ -122,6 +122,16 @@ export function needOf(p: PlacementView, i: ItemState): number | null {
   return null;
 }
 
+/**
+ * Restocking is exception-based: staff enter numbers only for what needs topping up.
+ * Only target-level (par) products need a count before a restock can finish cleanly;
+ * a blank "staff enter" product or routine task simply wasn't needed (still recorded as
+ * "not entered", which is different from 0).
+ */
+export function isRequired(p: PlacementView): boolean {
+  return p.method === 'par';
+}
+
 export function isChecked(p: PlacementView, i: ItemState): boolean {
   if (i.conflict) return false; // needs a person to choose first
   if (p.method === 'par') return i.currentQty !== null;
@@ -309,12 +319,13 @@ export function exceptions(args: {
   if (kind === 'full') {
     for (const { area, placements: ps } of view.areas) {
       const st = areaStatus(recordedAreas.get(area.id), ps, items);
-      const done = ps.filter((p) => isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM)).length;
+      const req = ps.filter(isRequired);
+      const done = req.filter((p) => isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM)).length;
       if (st === 'skipped') out.push({ kind: 'area', status: st, text: `${area.name} skipped`, detail: '', areaId: area.id });
-      else if (st !== 'complete') out.push({ kind: 'area', status: st, text: `${area.name} not complete`, detail: `${done} of ${ps.length} checked`, areaId: area.id });
+      else if (st !== 'complete' && done < req.length) out.push({ kind: 'area', status: st, text: `${area.name}: ${req.length - done} target count${req.length - done === 1 ? '' : 's'} missing`, detail: `${done} of ${req.length} counted`, areaId: area.id });
     }
   } else {
-    const un = placements.filter((p) => !isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM));
+    const un = placements.filter((p) => isRequired(p) && !isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM));
     if (un.length) out.push({ kind: 'unchecked', status: 'not_started', text: `${un.length} product${un.length === 1 ? '' : 's'} without a number`, detail: un.map((p) => p.productName).join(', ') });
   }
   const covered = activePlacements(kind, placements, recordedAreas);

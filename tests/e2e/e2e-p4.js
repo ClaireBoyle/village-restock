@@ -101,7 +101,7 @@ const card = (name) => `article.card:has(h3:text-is("${name}"))`;
   const kid = String(kitch.id);
   let warm = false;
   for (let i = 0; i < 40 && !warm; i++) {
-    warm = await P.evaluate(async (id) => { const c = await caches.open('vr-pages-v4'); const ph = await caches.open('vr-photos-v4'); return !!(await c.match('/d/' + id)) && (await ph.keys()).length >= 2; }, kid);
+    warm = await P.evaluate(async (id) => { const c = await caches.open('vr-pages-v5'); const ph = await caches.open('vr-photos-v5'); return !!(await c.match('/d/' + id)) && (await ph.keys()).length >= 2; }, kid);
     if (!warm) await P.waitForTimeout(500);
   }
   ok(warm, 'department pages and photos saved for offline use');

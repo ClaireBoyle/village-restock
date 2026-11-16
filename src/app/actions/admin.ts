@@ -478,3 +478,96 @@ export async function saveAreaOrder(areaId: string, placementIds: string[]): Pro
   revalidatePath('/admin', 'layout');
   return { ok: true };
 }
+
+// ---------------------------------------------------------------------------
+// Defrost Planner setup (managers only). Food-safety values come from the kitchen's
+// approved procedures; the app never changes them by itself.
+// ---------------------------------------------------------------------------
+const qtyField = (label: string, { allowBlank = false, min = 0 } = {}) => z.preprocess(
+  (v) => (v === '' || v == null ? (allowBlank ? null : v) : Number(String(v).replace(',', '.'))),
+  allowBlank
+    ? z.number({ message: `${label} must be a number.` }).min(min, `${label} must be ${min} or more.`).max(9999).nullable()
+    : z.number({ message: `${label} is required.` }).min(min, `${label} must be ${min} or more.`).max(9999),
+);
+const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+const defrostSchema = z.object({
+  id: optUuid,
+  departmentId: uuid,
+  name: text(80, 'Name'),
+  unitSingular: text(30, 'Unit (one)'),
+  unitPlural: text(30, 'Unit (more than one)'),
+  expectedDemand: qtyField('Expected demand'),
+  buffer: qtyField('Buffer'),
+  packSize: qtyField('Pack size').refine((v) => (v ?? 0) > 0, 'Pack size must be more than 0.'),
+  minQty: qtyField('Minimum amount'),
+  thawMethod: optText(120),
+  thawHours: qtyField('Thaw time', { allowBlank: true }),
+  shelfLifeHours: qtyField('Usable life', { allowBlank: true }),
+  safetyNotes: optText(400),
+  active: checkbox,
+});
+
+export async function saveDefrostItem(_: ActionResult, form: FormData): Promise<ActionResult> {
+  await requireAdmin();
+  const p = defrostSchema.safeParse(Object.fromEntries(form));
+  if (!p.success) return firstIssue(p.error);
+  const d = p.data;
+  if (d.thawHours !== null && d.thawHours > 240) return { error: 'Thaw time must be 240 hours or less.' };
+  const weekday: Record<string, number> = {};
+  for (const day of DAYS) {
+    const raw = String(form.get(`wd_${day}`) ?? '').trim().replace(',', '.');
+    if (raw === '') continue;
+    const v = Number(raw);
+    if (!Number.isFinite(v) || v < 0 || v > 9999) return { error: `Expected demand for ${day} must be a number from 0 to 9999.` };
+    weekday[day] = v;
+  }
+  const sql = db();
+  try {
+    if (d.id) {
+      await sql`update defrost_items set name = ${d.name}, unit_singular = ${d.unitSingular}, unit_plural = ${d.unitPlural},
+        expected_demand = ${d.expectedDemand}, weekday_demand = ${sql.json(weekday)}, buffer = ${d.buffer}, pack_size = ${d.packSize}, min_qty = ${d.minQty},
+        thaw_method = ${d.thawMethod}, thaw_hours = ${d.thawHours}, shelf_life_hours = ${d.shelfLifeHours}, safety_notes = ${d.safetyNotes},
+        active = ${d.active}, updated_at = now() where id = ${d.id} and department_id = ${d.departmentId}`;
+      revalidatePath('/admin', 'layout');
+      return done(`${d.name} saved. Devices get it next time they connect.`);
+    }
+    const [{ n }] = await sql`select coalesce(max(sort_order), 0) + 1 as n from defrost_items where department_id = ${d.departmentId}`;
+    await sql`insert into defrost_items (department_id, name, unit_singular, unit_plural, expected_demand, weekday_demand, buffer, pack_size, min_qty,
+        thaw_method, thaw_hours, shelf_life_hours, safety_notes, sort_order, active)
+      values (${d.departmentId}, ${d.name}, ${d.unitSingular}, ${d.unitPlural}, ${d.expectedDemand}, ${sql.json(weekday)}, ${d.buffer}, ${d.packSize}, ${d.minQty},
+        ${d.thawMethod}, ${d.thawHours}, ${d.shelfLifeHours}, ${d.safetyNotes}, ${Number(n)}, true)`;
+    revalidatePath('/admin', 'layout');
+    return done(`${d.name} added.`);
+  } catch (e) { return fail(e); }
+}
+
+export async function saveDefrostServiceTime(_: ActionResult, form: FormData): Promise<ActionResult> {
+  await requireAdmin();
+  const t = String(form.get('serviceTime') ?? '').trim();
+  if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(t)) return { error: 'Enter a time like 11:00.' };
+  await setSetting('defrost_service_time', t);
+  await db()`update app_settings set value = to_jsonb(coalesce((value #>> '{}')::int, 1) + 1) where key = 'catalogue_version'`;
+  revalidatePath('/admin', 'layout');
+  return done('Next service time saved.');
+}
+
+// ---------------------------------------------------------------------------
+// Stock Insights thresholds
+// ---------------------------------------------------------------------------
+export async function saveInsightSettings(_: ActionResult, form: FormData): Promise<ActionResult> {
+  await requireAdmin();
+  const fields: [string, string, number, number][] = [
+    ['windowDays', 'insights_window_days', 3, 60], ['shortageDays', 'insights_shortage_days', 2, 60],
+    ['turnoverDays', 'insights_turnover_days', 2, 60], ['defrostDays', 'insights_defrost_days', 1, 60], ['wasteDays', 'insights_waste_days', 1, 60],
+  ];
+  const vals: Record<string, number> = {};
+  for (const [name, , min, max] of fields) {
+    const v = Number(form.get(name));
+    if (!Number.isInteger(v) || v < min || v > max) return { error: `Enter whole numbers between ${min} and ${max}.` };
+    vals[name] = v;
+  }
+  if (vals.shortageDays > vals.windowDays || vals.turnoverDays > vals.windowDays) return { error: 'The day counts can’t be more than the number of days looked at.' };
+  for (const [name, key] of fields) await setSetting(key, vals[name]);
+  revalidatePath('/admin/insights');
+  return done('Thresholds saved.');
+}

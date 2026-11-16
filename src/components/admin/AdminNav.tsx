@@ -7,9 +7,11 @@ const LINKS: { href: string; label: string; icon: IconName }[] = [
   { href: '/admin', label: 'Overview', icon: 'grid' },
   { href: '/admin/restocks', label: 'Restocks', icon: 'list' },
   { href: '/admin/shortages', label: 'Shortages', icon: 'warn' },
+  { href: '/admin/insights', label: 'Stock Insights', icon: 'grid' },
   { href: '/admin/products', label: 'Products', icon: 'tag' },
   { href: '/admin/departments', label: 'Departments & areas', icon: 'layers' },
   { href: '/admin/storerooms', label: 'Storerooms', icon: 'box' },
+  { href: '/admin/defrost', label: 'Defrost Planner', icon: 'clock' },
   { href: '/admin/import', label: 'Spreadsheets', icon: 'copy' },
   { href: '/admin/settings', label: 'Access & settings', icon: 'cog' },
 ];

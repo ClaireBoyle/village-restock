@@ -3,7 +3,7 @@ import { db } from './db';
 import { loadCatalogue } from './catalogue';
 import { queueRestockEmail } from './email';
 import {
-  CONFLICT_FIELDS, EMPTY_ITEM, activePlacements, areaStatus, isChecked, stockOutcomes, type Conflict, collectionLines, departmentView, exceptions, lineGot, lineInfo, lineState,
+  CONFLICT_FIELDS, EMPTY_ITEM, activePlacements, areaStatus, isChecked, isRequired, stockOutcomes, type Conflict, collectionLines, departmentView, exceptions, lineGot, lineInfo, lineState,
   type AreaStatus, type ItemState,
 } from '@/lib/restock-logic';
 import { opSchema, type ItemFields, type OpResult, type RemoteSession, type SyncOp } from '@/lib/sync-types';
@@ -174,6 +174,33 @@ async function apply(tx: Tx, op: SyncOp, deviceId: string): Promise<{ mergedInto
       await tx`delete from shortages where session_id = ${op.sessionId} and status = 'open'`;
       return {};
     }
+
+    case 'defrost.set': {
+      const [item] = await tx`select name from defrost_items where id = ${op.itemId} and department_id = ${op.departmentId}`;
+      if (!item) throw new OpError('That defrost item no longer exists');
+      // Two devices may start the same night's plan: there is only ever one per department and date.
+      const [plan] = await tx`insert into defrost_plans (id, department_id, service_date, people)
+        values (${op.planId}, ${op.departmentId}, ${op.serviceDate}, ${op.by ? [op.by] : []})
+        on conflict (department_id, service_date) do update set updated_at = now(),
+          people = case when ${op.by}::text is null or ${op.by}::text = any(defrost_plans.people) then defrost_plans.people else array_append(defrost_plans.people, ${op.by}::text) end
+        returning id`;
+      const f = op.fields;
+      const has = (k: keyof typeof f) => Object.prototype.hasOwnProperty.call(f, k);
+      await tx`insert into defrost_entries (plan_id, item_id, item_name, updated_by, updated_at) values (${plan.id}, ${op.itemId}, ${String(item.name)}, ${op.by}, ${op.at})
+        on conflict (plan_id, item_id) do nothing`;
+      await tx`update defrost_entries set
+          chilled_qty = ${has('chilled') ? f.chilled ?? null : tx`chilled_qty`},
+          thawing_qty = ${has('thawing') ? f.thawing ?? null : tx`thawing_qty`},
+          adjust_qty = ${has('adjust') ? f.adjust ?? null : tx`adjust_qty`},
+          suggested_qty = ${has('suggested') ? f.suggested ?? null : tx`suggested_qty`},
+          defrost_qty = ${has('defrost') ? f.defrost ?? null : tx`defrost_qty`},
+          ran_out = ${has('ranOut') ? Boolean(f.ranOut) : tx`ran_out`},
+          discarded_qty = ${has('discarded') ? f.discarded ?? null : tx`discarded_qty`},
+          discard_reason = ${has('discardReason') ? f.discardReason ?? null : tx`discard_reason`},
+          updated_by = ${op.by}, updated_at = ${op.at}
+        where plan_id = ${plan.id} and item_id = ${op.itemId}`;
+      return {};
+    }
   }
 }
 
@@ -240,7 +267,8 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
         const [a] = await tx`select skip_reason from session_areas where session_id = ${s.id} and check_area_id = ${area.id}`;
         notChecked.push(`${area.name} skipped (${a?.skipReason ?? 'no reason'})`);
       } else if (st !== 'complete') {
-        const un = ps.filter((p) => !isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM)).map((p) => p.productName);
+        // Only missing target counts: blank "staff enter" products just didn't need anything.
+        const un = ps.filter((p) => isRequired(p) && !isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM)).map((p) => p.productName);
         if (un.length) notChecked.push(`${area.name}: ${un.join(', ')}`);
       }
     }

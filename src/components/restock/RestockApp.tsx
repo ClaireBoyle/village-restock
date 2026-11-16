@@ -31,6 +31,8 @@ export interface RestockCtx {
   go: (s: Step) => void;
   saveAndExit: () => void;
   done: () => void;
+  /** Gold Class Kitchen: show the optional Defrost Planner reminder. */
+  hasDefrost: boolean;
 }
 
 type Mode = 'full' | 'quick';
@@ -112,6 +114,7 @@ export function RestockApp({ departmentId }: { departmentId: string }) {
   }, [mode, today]);
 
   const gold = view?.department.theme === 'gold';
+  const hasDefrost = !!catalogue?.defrostItems?.some((i) => i.departmentId === departmentId);
   // Each department has its own backdrop: deep navy (Village) or dark gold (Gold Class).
   const themeCls = `theme-navy ${gold ? 'theme-gold gc' : ''}`;
   const activeSession = mode === 'full' ? fullSession : mode === 'quick' ? quickSession : null;
@@ -141,7 +144,7 @@ export function RestockApp({ departmentId }: { departmentId: string }) {
     return (
       <div className={themeCls}>{top}
         <TypeStep view={view} fullSession={fullSession} remoteFull={remoteFull} quickSession={quickSession} opening={opening}
-          onStart={(m) => void begin(m)} onSummary={showFullSummary} />
+          onStart={(m) => void begin(m)} onSummary={showFullSummary} hasDefrost={hasDefrost} />
       </div>
     );
   }
@@ -154,7 +157,7 @@ export function RestockApp({ departmentId }: { departmentId: string }) {
   const placements = session.kind === 'full' ? view.placements : session.selected.map((id) => view.byId.get(id)).filter((p): p is PlacementView => Boolean(p));
 
   const ctx: RestockCtx = {
-    view, session, placements, items, areaRecords, recorded, who, go,
+    view, session, placements, items, areaRecords, recorded, who, go, hasDefrost,
     // Restock screens: one slim step bar, no banner, so products start near the top of the screen.
     header: <div className="rbar"><Stages kind={session.kind} current={step} onGo={go} /></div>,
     saveAndExit: () => router.push('/?saved=1'),

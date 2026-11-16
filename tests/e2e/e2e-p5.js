@@ -53,8 +53,7 @@ const FRIDGE = ['Fuze Peach Iced Tea', 'Monster Original', 'Monster White', 'Mon
   // Enter jumps to the next product
   await P.focus(`${row('Skittles')} .qty-input`); await P.keyboard.type('4'); await P.keyboard.press('Enter');
   ok(await P.evaluate(() => document.activeElement?.closest('article')?.querySelector('h3')?.textContent) === 'Starburst', 'Enter moves straight to the next product');
-  await P.click('.area-end button:has-text("Go to the first one")');
-  ok(await P.evaluate(() => document.activeElement?.closest('article')?.querySelector('h3')?.textContent) === "Peanut M&M's", 'Next unchecked jumps to the first unchecked product');
+  ok(await has(P, '.area-next', 'Only enter products that need restocking'), 'exception-based: blanks are fine, no "go back and check" prompt');
 
   // Fill the rest of the stand -> completes by itself
   for (const n of stand) { const v = await P.inputValue(`${row(n)} .qty-input`); if (v === '') await P.click(`${row(n)} .pquick`); }

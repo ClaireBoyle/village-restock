@@ -1,3 +1,4 @@
+import type { DefrostItem } from './defrost';
 // The catalogue is the permanent configuration a device needs to run a
 // restock: departments, areas, storerooms, categories, products and par levels.
 // It is downloaded whole (it is small) and kept on the device for offline use.
@@ -34,13 +35,15 @@ export interface Catalogue {
   version: number;
   generatedAt: string;
   /** Restocks finished after midnight but before cutoffHour count as the previous day's close. */
-  settings: { timeZone: string; cutoffHour: number };
+  settings: { timeZone: string; cutoffHour: number; defrostServiceTime: string };
   departments: CatDepartment[];
   areas: CatArea[];
   locations: CatLocation[];
   categories: CatCategory[];
   products: CatProduct[];
   placements: CatPlacement[];
+  /** Defrost Planner items (Gold Class Kitchen). Empty until a manager sets them up. */
+  defrostItems: DefrostItem[];
 }
 
 export type CatalogueResponse = { unchanged: true; version: number } | ({ unchanged: false } & Catalogue);

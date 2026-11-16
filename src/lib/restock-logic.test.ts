@@ -7,7 +7,7 @@ import { areaNotes,
 
 // A tiny catalogue: Kitchen with Fridge 1 + Dry shelf; Bar fridge + Back shelf sharing one beer.
 const cat: Catalogue = {
-  version: 1, generatedAt: '', settings: { timeZone: 'Australia/Melbourne', cutoffHour: 5 },
+  version: 1, generatedAt: '', settings: { timeZone: 'Australia/Melbourne', cutoffHour: 5, defrostServiceTime: '11:00' }, defrostItems: [],
   departments: [
     { id: 'k', name: 'Kitchen', shortName: 'Kitchen', groupLabel: '', theme: 'gold', icon: 'kitchen', description: '', sortOrder: 1 },
     { id: 'b', name: 'Bar', shortName: 'Bar', groupLabel: '', theme: 'gold', icon: 'bar', description: '', sortOrder: 2 },
@@ -172,7 +172,19 @@ describe('finishing', () => {
   const recorded = (o: Record<string, AreaStatus>) => new Map(Object.entries(o));
   it('lists incomplete areas and uncollected items as exceptions', () => {
     const ex = exceptions({ kind: 'full', view: kitchen, placements: kitchen.placements, recordedAreas: recorded({}), items: items({ 'p-tom': { currentQty: 2 } }) });
-    expect(ex.map((e) => e.text)).toEqual(['Fridge 1 not complete', 'Dry shelf not complete', '1 item not fully collected']);
+    expect(ex.map((e) => e.text)).toEqual(['Dry shelf: 1 target count missing', '1 item not fully collected']);
+  });
+  it('exception-based: a blank "staff enter" product does not block finishing, a missing target count does', () => {
+    // Cloths (staff enter) left blank, Sauce (target level) counted, Tomatoes counted and collected
+    const base = items({ 'p-tom': { currentQty: 8 }, 'p-sauce': { currentQty: 4 } });
+    expect(exceptions({ kind: 'full', view: kitchen, placements: kitchen.placements, recordedAreas: recorded({}), items: base })).toEqual([]);
+    // Blank stays "not entered", different from 0 ("checked, nothing needed")
+    const cloth = kitchen.byId.get('p-cloth')!;
+    expect(isChecked(cloth, base.get('p-cloth') ?? EMPTY_ITEM)).toBe(false);
+    expect(isChecked(cloth, { ...EMPTY_ITEM, requestedQty: 0 })).toBe(true);
+    // Quick restock: a blank target-level product still needs a number
+    const q = exceptions({ kind: 'quick', view: kitchen, placements: [kitchen.byId.get('p-sauce')!, cloth], recordedAreas: recorded({}), items: items({}) });
+    expect(q.map((e) => e.text)).toEqual(['1 product without a number']);
   });
   it('a confirmed storeroom shortage is not an exception (scenario 8 is reported, not blocked)', () => {
     const base = items({ 'p-tom': { currentQty: 2 }, 'p-cloth': { requestedQty: 0 }, 'p-sauce': { currentQty: 4 } });

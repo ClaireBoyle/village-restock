@@ -48,6 +48,14 @@ export interface LocalItem extends ItemState {
   updatedAt: string;
 }
 
+/** One Defrost Planner entry on this device. Blank (null) = not entered, never 0. */
+export interface LocalDefrost {
+  departmentId: string; serviceDate: string; itemId: string; planId: string;
+  chilled: number | null; thawing: number | null; adjust: number | null; suggested: number | null; defrost: number | null;
+  ranOut: boolean; discarded: number | null; discardReason: string | null;
+  updatedBy: string | null; updatedAt: string;
+}
+
 export interface OutboxRow { seq?: number; opId: string; sessionId: string | null; op: SyncOp; createdAt: string; attempts: number }
 export interface ProblemRow { seq?: number; opId: string; op: SyncOp; error: string; at: string }
 
@@ -58,6 +66,7 @@ class LocalDb extends Dexie {
   items!: Table<LocalItem, [string, string]>;
   outbox!: Table<OutboxRow, number>;
   problems!: Table<ProblemRow, number>;
+  defrost!: Table<LocalDefrost, [string, string, string]>;
   constructor() {
     super('village-restock');
     this.version(1).stores({ kv: 'key' });
@@ -68,6 +77,9 @@ class LocalDb extends Dexie {
       items: '[sessionId+placementId], sessionId',
       outbox: '++seq, opId, sessionId',
       problems: '++seq, opId',
+    });
+    this.version(3).stores({
+      defrost: '[departmentId+serviceDate+itemId], [departmentId+serviceDate]',
     });
   }
 }
@@ -86,7 +98,11 @@ export async function readStoredCatalogue(): Promise<StoredCatalogue | null> {
   try {
     const row = await localDb().kv.get('catalogue');
     const stored = (row?.value as StoredCatalogue) ?? null;
-    if (stored && !stored.catalogue.settings) stored.catalogue.settings = { timeZone: 'Australia/Melbourne', cutoffHour: 5 };
+    if (stored && !stored.catalogue.settings) stored.catalogue.settings = { timeZone: 'Australia/Melbourne', cutoffHour: 5, defrostServiceTime: '11:00' };
+    if (stored) {
+      stored.catalogue.settings.defrostServiceTime ??= '11:00';
+      stored.catalogue.defrostItems ??= []; // saved before the Defrost Planner existed
+    }
     return stored;
   } catch {
     return null; // private browsing or storage blocked: the app still works online

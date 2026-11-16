@@ -19,6 +19,14 @@ export const itemFieldsSchema = z.object({
 
 const base = { opId: z.uuid(), at: z.iso.datetime(), by: name };
 
+const dq = z.number().min(0).max(9999).nullable();
+export const defrostFieldsSchema = z.object({
+  chilled: dq.optional(), thawing: dq.optional(), adjust: z.number().min(-9999).max(9999).nullable().optional(),
+  suggested: dq.optional(), defrost: dq.optional(), ranOut: z.boolean().optional(),
+  discarded: dq.optional(), discardReason: z.string().trim().max(80).nullable().optional(),
+}).strict();
+export type DefrostFields = z.infer<typeof defrostFieldsSchema>;
+
 export const opSchema = z.discriminatedUnion('type', [
   z.object({
     ...base, type: z.literal('session.start'),
@@ -42,6 +50,11 @@ export const opSchema = z.discriminatedUnion('type', [
     /** Optional comments for managers (added to the email). */
     note: z.string().trim().max(1000).nullable().optional() }),
   z.object({ ...base, type: z.literal('session.reopen'), sessionId: z.uuid() }),
+  // Defrost Planner: one item's entry for a department's next service (blank = not entered).
+  z.object({
+    ...base, type: z.literal('defrost.set'), planId: z.uuid(), departmentId: z.uuid(), serviceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    itemId: z.uuid(), fields: defrostFieldsSchema,
+  }),
 ]);
 
 export type SyncOp = z.infer<typeof opSchema>;

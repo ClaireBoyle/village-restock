@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Icon } from '@/components/Icon';
 import { useLive } from '@/lib/client/hooks';
 import { localDb, type LocalSession } from '@/lib/client/local-db';
@@ -10,9 +11,11 @@ import type { RemoteSession } from '@/lib/sync-types';
 const TIPS_KEY = 'vr-hide-tips';
 
 /** Choose Full or Quick Restock, with tonight's progress at a glance. */
-export function TypeStep({ view, fullSession, remoteFull, quickSession, opening, onStart, onSummary }: {
+export function TypeStep({ view, fullSession, remoteFull, quickSession, opening, onStart, onSummary, hasDefrost = false }: {
   view: DepartmentView; fullSession: LocalSession | null; remoteFull: RemoteSession | null; quickSession: LocalSession | null; opening: boolean;
   onStart: (m: 'full' | 'quick') => void; onSummary: () => void;
+  /** Gold Class Kitchen: offer the (optional) Defrost Planner beside Kitchen Restock. */
+  hasDefrost?: boolean;
 }) {
   const [hideTips, setHideTips] = useState(true);
   useEffect(() => { try { setHideTips(localStorage.getItem(TIPS_KEY) === '1'); } catch { setHideTips(false); } }, []);
@@ -55,11 +58,23 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
           <button className="linkbtn" onClick={toggleTips}>Hide tips</button>
         </section>
       )}
-      <div className="types">
+      <div className={`types ${hasDefrost ? 'with-defrost' : ''}`}>
+        {hasDefrost ? (
+          <section className="type type-defrost">
+            <div className="type-h">
+              <span className="type-icon" aria-hidden="true"><Icon name="clock" /></span>
+              <h2>Defrost Planner</h2>
+              <Badge st="info" icon="info">Recommended</Badge>
+            </div>
+            <p className="lead">What frozen stock to defrost for the <b>next service</b>.</p>
+            <p className="meta">Optional, and separate from restocking: use it before, after or between.</p>
+            <div className="actions"><Link className="btn big" href={`/d/${view.department.id}/defrost`}>Open Defrost Planner<Icon name="next" /></Link></div>
+          </section>
+        ) : null}
         <section className={`type type-full ${src && !finished ? 'k-active' : ''}`}>
           <div className="type-h">
             <span className="type-icon" aria-hidden="true"><Icon name="list" /></span>
-            <h2>Full Restock</h2>
+            <h2>{hasDefrost ? 'Kitchen Restock' : 'Full Restock'}</h2>
             {finished ? (src!.status === 'finished_exceptions' ? <Badge st="warn" icon="warn">Finished with exceptions {timeOf(src!.finishedAt)}</Badge> : <Badge st="ok">Complete {timeOf(src!.finishedAt)}</Badge>)
               : src ? <Badge st="info">In progress since {timeOf(src.startedAt)}</Badge> : <Badge st="none">Not started tonight</Badge>}
           </div>
@@ -71,7 +86,7 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
           <p className="meta">{view.areas.length} areas &middot; {view.placements.length} products &middot; shared, so anyone can continue it{src?.people.length ? ` · ${src.people.join(', ')}` : ''}</p>
           <div className="actions">
             {finished && fullSession ? <button className="btn primary big" onClick={onSummary}>View summary</button>
-              : <button className="btn primary big" disabled={opening} onClick={() => onStart('full')}>{src ? <>{finished ? 'Open restock' : 'Resume full restock'}<Icon name="next" /></> : 'Start full restock'}</button>}
+              : <button className="btn primary big" disabled={opening} onClick={() => onStart('full')}>{src ? <>{finished ? 'Open restock' : `Resume ${hasDefrost ? 'kitchen' : 'full'} restock`}<Icon name="next" /></> : `Start ${hasDefrost ? 'kitchen' : 'full'} restock`}</button>}
           </div>
         </section>
         <section className="type type-quick">
@@ -87,3 +102,4 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
     </main>
   );
 }
+

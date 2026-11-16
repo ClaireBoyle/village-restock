@@ -1,8 +1,9 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Icon } from '@/components/Icon';
 import {
-  EMPTY_ITEM, SKIP_REASONS, type ItemState, activePlacements, areaNotes, areaStatus, collectionLines, isChecked,
+  EMPTY_ITEM, SKIP_REASONS, type ItemState, activePlacements, areaNotes, areaStatus, collectionLines, isChecked, isRequired,
 } from '@/lib/restock-logic';
 import { setArea, setItems, updateLocalSession } from '@/lib/client/restock-store';
 import { localDb } from '@/lib/client/local-db';
@@ -23,6 +24,11 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
   const { view, session, items, areaRecords, recorded, who } = ctx;
   const [skipOpen, setSkipOpen] = useState(false);
   const [zoom, setZoom] = useState(false);
+  // The kitchen reminder can be hidden for this restock (remembered on this device).
+  const remKey = `vr-kreminder-${session.id}`;
+  const [reminderHidden, setReminderHidden] = useState(false);
+  useEffect(() => { try { setReminderHidden(localStorage.getItem(remKey) === '1'); } catch { /* private mode */ } }, [remKey]);
+  const hideReminder = () => { setReminderHidden(true); try { localStorage.setItem(remKey, '1'); } catch { /* private mode */ } };
   const chk = (p: { placementId: string } & Parameters<typeof isChecked>[0]) => isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM);
   const statusOf = (areaId: string) => areaStatus(recorded.get(areaId), view.areas.find((a) => a.area.id === areaId)!.placements, items);
   const firstOpen = view.areas.find(({ area }) => !['complete', 'skipped'].includes(statusOf(area.id)))?.area.id;
@@ -39,6 +45,8 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
   const rec = areaRecords.get(cur.area.id);
   const done = cur.placements.filter(chk).length;
   const left = cur.placements.length - done;
+  // Exception-based: only missing target counts matter; a blank "staff enter" product just didn't need anything.
+  const reqLeft = cur.placements.filter((p) => isRequired(p) && !chk(p)).length;
   const next = view.areas.find(({ area }) => area.id !== cur.area.id && !['complete', 'skipped'].includes(statusOf(area.id)));
   const active = activePlacements('full', view.placements, recorded);
   const lines = collectionLines(active, items);
@@ -78,6 +86,14 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
     <>
       <main className="wrap restock-main">
       {ctx.header}
+      {ctx.hasDefrost && !reminderHidden ? (
+        <aside className="kreminder" aria-label="Kitchen reminder">
+          <Icon name="clock" />
+          <p><b>Kitchen reminder:</b> Remember to check what needs defrosting for the next service and refill the freezer containers. You can use the Defrost Planner at any time.</p>
+          <span className="kr-acts"><Link className="linkbtn" href={`/d/${view.department.id}/defrost`}>Open Defrost Planner<Icon name="next" /></Link></span>
+          <button className="iconbtn kr-x" onClick={hideReminder} aria-label="Hide reminder"><Icon name="x" /></button>
+        </aside>
+      ) : null}
       <div className="chk-layout">
         <nav className="rail" aria-label="Areas">
           {view.areas.map(({ area, placements }) => {
@@ -148,12 +164,18 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
               <button className="banner-toggle" onClick={reopen} aria-label={`${cur.area.name} complete. Tap to reopen it`}>
                 <Icon name="check" /><span><b>{cur.area.name} complete</b><p>{rec?.updatedBy ? `${rec.updatedBy}, ` : ''}{timeOf(rec?.updatedAt)} &middot; <u>Tap to reopen</u></p></span>
               </button>{nextBtn}</div>
-          ) : left ? (
-            <div className="banner s-none area-end"><Icon name="circle" /><div><b>{plural(left, 'product')} still to check</b><p>Blank means not checked yet. Enter 0 or tap None if nothing is needed.</p></div>
+          ) : reqLeft ? (
+            <div className="banner s-none area-end"><Icon name="circle" /><div><b>{reqLeft} target {reqLeft === 1 ? 'count' : 'counts'} still needed</b><p>Count what&rsquo;s on the shelf, or tap Full.</p></div>
               <button className="btn" onClick={firstUnchecked}>Go to the first one</button>
               <button className="btn area-skip-end" onClick={() => { setSkipOpen(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}><Icon name="skip" />Skip area</button></div>
           ) : (
-            <button className="btn good big wide" onClick={() => { pin(); void setArea(session.id, cur.area.id, 'complete', null, who); }}><Icon name="check" />Mark {cur.area.name} complete</button>
+            // Nothing required is missing: just a quiet pointer to the next area (no sign-off needed).
+            <div className="area-end area-next">
+              <p className="meta">{left ? <>Only enter products that need restocking. {plural(left, 'product')} left blank (recorded as not entered).</> : 'Everything here has an answer.'}</p>
+              {/* Optional: lets a reopened area count as done again. Never required to finish. */}
+              {!left ? <button className="btn small" onClick={() => { pin(); void setArea(session.id, cur.area.id, 'complete', null, who); }}><Icon name="check" />Mark {cur.area.name} complete</button> : null}
+              {nextBtn}
+            </div>
           )}
         </section>
       </div>

@@ -15,7 +15,7 @@ type OpInput = DistributiveOmit<SyncOp, 'opId' | 'at' | 'by'>;
 const now = () => new Date().toISOString();
 const by = (name: string) => (name.trim() ? name.trim().slice(0, 30) : null);
 
-async function queue(op: OpInput, who: string) {
+export async function queue(op: OpInput, who: string) {
   const full = { ...op, opId: crypto.randomUUID(), at: now(), by: by(who) } as SyncOp;
   const db = localDb();
   // Fold rapid edits to the same product (e.g. tapping + three times) into one upload,
@@ -27,6 +27,15 @@ async function queue(op: OpInput, who: string) {
       // Keep the EARLIEST base: it's what the server last told us.
       const mergedBase = { ...full.base, ...last.op.base };
       await db.outbox.update(last.seq!, { op: { ...last.op, fields: { ...last.op.fields, ...full.fields }, base: mergedBase, at: full.at, by: full.by } });
+      return;
+    }
+  }
+  // Defrost entries: fold quick edits to the same item too.
+  if (full.type === 'defrost.set') {
+    const last = await db.outbox.orderBy('seq').last();
+    if (last && last.op.type === 'defrost.set' && (last.seq ?? 0) > sendingUpTo()
+      && last.op.departmentId === full.departmentId && last.op.serviceDate === full.serviceDate && last.op.itemId === full.itemId) {
+      await db.outbox.update(last.seq!, { op: { ...last.op, fields: { ...last.op.fields, ...full.fields }, at: full.at, by: full.by } });
       return;
     }
   }
