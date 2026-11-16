@@ -5,13 +5,13 @@
 --   Cups/lids storage:  Cups  · Cup Small, Medium, Large, XL
 --                       Lids  · Lid Small/Medium, Lid Large, Lid XL
 --
--- * Staff enter how many sleeves they need (no targets). Collected from Dry storage
---   (change it in Admin > Products if they come from somewhere else).
+-- * Staff enter how many sleeves they need (no targets). Collected from Candy Bar BOH.
 -- * Existing products with the same name are reused, never duplicated.
 do $$
 declare
   dept uuid := (select id from departments where lower(name) = 'gold class bar');
-  dry uuid := (select id from storage_locations where lower(name) = 'dry storage');
+  dry uuid := coalesce((select id from storage_locations where lower(name) = 'candy bar boh'),
+                       (select id from storage_locations where lower(name) = 'dry storage'));
   cat uuid; area uuid; p uuid; pl uuid; i int;
   -- area, product name, heading above it
   list text[][] := array[
