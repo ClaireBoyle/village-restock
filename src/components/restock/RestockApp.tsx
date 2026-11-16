@@ -1,10 +1,10 @@
 'use client';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Icon } from '@/components/Icon';
 import { TopBar } from '@/components/TopBar';
 import { useCatalogue } from '@/lib/client/use-catalogue';
-import { useLive, useStaffName } from '@/lib/client/hooks';
+import { useLive, useResetIds, useStaffName } from '@/lib/client/hooks';
 import { localDb, type LocalArea, type LocalSession } from '@/lib/client/local-db';
 import { findOpenQuickSession, openAreaSession, openFullSession, startSession } from '@/lib/client/restock-store';
 import { EMPTY_ITEM, departmentView, scopeView, type AreaStatus, type DepartmentView, type ItemState, type PlacementView } from '@/lib/restock-logic';
@@ -16,6 +16,7 @@ import { QuickStep } from './QuickStep';
 import { OfflineBanner, TopControls } from './SyncControls';
 import { TypeStep } from './TypeStep';
 import { AreaPicker } from './AreaPicker';
+import { ResetSheet, type ResetScope } from './ResetControls';
 import { Stages, timeOf, type Step } from './shared';
 import type { RemoteSession } from '@/lib/sync-types';
 
@@ -53,17 +54,25 @@ function readUrl(): { mode: Mode | null; step: Step; quickId: string | null; are
  * loaded it keeps working with no connection (moving between steps never
  * needs the network). The step is kept in the address so a refresh returns here.
  */
-export function RestockApp({ departmentId }: { departmentId: string }) {
+export type ResetFor = { kind: 'full' } | { kind: 'quick' } | { kind: 'area'; areaId: string; areaName: string };
+
+export function RestockApp({ departmentId, isAdmin = false }: { departmentId: string; isAdmin?: boolean }) {
   const router = useRouter();
   const { catalogue, checkedAt } = useCatalogue();
   const [who] = useStaffName();
   const [mode, setMode] = useState<Mode | null>(null);
   const [step, setStep] = useState<Step>('check');
   const [opening, setOpening] = useState(false);
-  const [remote, setRemote] = useState<RemoteSession[]>([]);
+  const [remoteAll, setRemote] = useState<RemoteSession[]>([]);
+  const resetIds = useResetIds();
+  const remote = remoteAll.filter((s) => !resetIds.has(s.id));
   // The quick or area restock being worked on. Kept by id so it stays on screen after it's finished.
   const [quickId, setQuickId] = useState<string | null>(null);
   const [areaId, setAreaId] = useState<string | null>(null);
+  // Admin reset: what's being reset, and a refresh after it's done.
+  const [resetting, setResetting] = useState<{ scope: ResetScope; typeLabel: string; localIds: string[] } | null>(null);
+  const [refresh, setRefresh] = useState(0);
+  const [toast, setToast] = useState('');
   useEffect(() => { const u = readUrl(); setMode(u.mode); setStep(u.step); setQuickId(u.quickId); setAreaId(u.areaId); }, []);
 
   const view = useMemo(() => (catalogue ? departmentView(catalogue, departmentId) : null), [catalogue, departmentId]);
@@ -77,10 +86,13 @@ export function RestockApp({ departmentId }: { departmentId: string }) {
   // What other devices have done tonight: a full restock already started, or area restocks. (Skipped quietly when offline.)
   useEffect(() => {
     if (!today || mode) return;
-    fetch(`/api/sessions?date=${today}`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null))
-      .then((b: { sessions: RemoteSession[] } | null) => setRemote((b?.sessions ?? []).filter((s) => s.departmentId === departmentId)))
+    const load = () => fetch(`/api/sessions?date=${today}`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null))
+      .then((b: { sessions: RemoteSession[] } | null) => b && setRemote(b.sessions.filter((s) => s.departmentId === departmentId)))
       .catch(() => undefined);
-  }, [today, fullSession, departmentId, mode]);
+    void load();
+    const id = window.setInterval(load, 20_000); // keep other devices' progress current while choosing
+    return () => window.clearInterval(id);
+  }, [today, fullSession, departmentId, mode, refresh]);
   const remoteFull = fullSession ? null : remote.find((s) => s.kind === 'full') ?? null;
 
   const itemRows = useLive(async () => (session ? localDb().items.where('sessionId').equals(session.id).toArray() : []), [session?.id], []);
@@ -118,6 +130,41 @@ export function RestockApp({ departmentId }: { departmentId: string }) {
   /** An area restock already finished tonight: show its summary. */
   const showAreaSummary = (id: string, area: string) => { setQuickId(id); setAreaId(area); setMode('area'); setStep('finish'); setUrl('area', 'finish', id, area); window.scrollTo({ top: 0 }); };
   const toChooser = () => { setMode(null); setQuickId(null); setAreaId(null); setUrl(null, 'check'); window.scrollTo({ top: 0 }); };
+
+  // The restock on screen was reset by an admin (on another device): go back to the start.
+  const shown = useRef<string | null>(null);
+  useEffect(() => {
+    if (!mode) { shown.current = null; return; } // choosing again: forget the last one
+    if (session) { shown.current = session.id; return; }
+    if (shown.current && !opening) {
+      void localDb().sessions.get(shown.current).then((s) => { if (!s) { shown.current = null; toChooser(); } });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, mode, opening]);
+
+  /** Admin: open the reset confirmation for tonight's full restock, this device's quick restock, or one area. */
+  const startReset = async (r: ResetFor) => {
+    if (!today || !view) return;
+    const db = localDb();
+    const mine = (await db.sessions.where('departmentId').equals(departmentId).toArray());
+    if (r.kind === 'full') {
+      setResetting({ scope: { departmentId, kind: 'full', tradingDate: today }, typeLabel: 'Full restock',
+        localIds: mine.filter((s) => s.kind === 'full' && s.tradingDate === today).map((s) => s.id) });
+    } else if (r.kind === 'quick') {
+      const q = mine.filter((s) => s.kind === 'quick' && s.status === 'open');
+      setResetting({ scope: { departmentId, kind: 'quick', tradingDate: q[0]?.tradingDate ?? today, sessionIds: q.map((s) => s.id) }, typeLabel: 'Quick restock', localIds: q.map((s) => s.id) });
+    } else {
+      setResetting({ scope: { departmentId, kind: 'area', tradingDate: today, areaId: r.areaId }, typeLabel: `${r.areaName} restock`,
+        localIds: mine.filter((s) => s.kind === 'area' && s.areaId === r.areaId && s.tradingDate === today).map((s) => s.id) });
+    }
+  };
+  const resetSheet = resetting && view ? (
+    <ResetSheet scope={resetting.scope} departmentName={view.department.name} typeLabel={resetting.typeLabel} localIds={resetting.localIds}
+      onClose={() => setResetting(null)}
+      onDone={(n) => { setResetting(null); setRefresh((x) => x + 1); setToast(n ? 'Restock reset. Staff can start a fresh one now.' : 'Cleared from this device.');
+        window.setTimeout(() => setToast(''), 3500); }} />
+  ) : null;
+  const toastEl = toast ? <div className="toast" role="status">{toast}</div> : null;
 
   // Opened from an address with ?mode=full but nothing on this device yet: set it up.
   useEffect(() => {
@@ -169,7 +216,9 @@ export function RestockApp({ departmentId }: { departmentId: string }) {
     return (
       <div className={themeCls}>{top}
         <AreaPicker view={view} remote={remote} quickSession={quickSession} today={today!} opening={opening}
-          onStart={(a) => void begin('area', 'check', a)} onSummary={showAreaSummary} onQuick={() => void begin('quick')} />
+          onStart={(a) => void begin('area', 'check', a)} onSummary={showAreaSummary} onQuick={() => void begin('quick')}
+          onReset={isAdmin ? (r) => void startReset(r) : undefined} />
+        {resetSheet}{toastEl}
       </div>
     );
   }
@@ -178,7 +227,9 @@ export function RestockApp({ departmentId }: { departmentId: string }) {
     return (
       <div className={themeCls}>{top}
         <TypeStep view={view} fullSession={fullSession} remoteFull={remoteFull} quickSession={quickSession} opening={opening}
-          onStart={(m) => void begin(m)} onSummary={showFullSummary} hasDefrost={hasDefrost} />
+          onStart={(m) => void begin(m)} onSummary={showFullSummary} hasDefrost={hasDefrost}
+          onReset={isAdmin ? (r) => void startReset(r) : undefined} />
+        {resetSheet}{toastEl}
       </div>
     );
   }

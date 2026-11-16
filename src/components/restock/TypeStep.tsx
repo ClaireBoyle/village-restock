@@ -7,15 +7,19 @@ import { localDb, type LocalSession } from '@/lib/client/local-db';
 import { areaStatus, EMPTY_ITEM, type AreaStatus, type DepartmentView, type ItemState } from '@/lib/restock-logic';
 import { AREA_BADGE, AREA_LABEL, Badge, timeOf } from './shared';
 import type { RemoteSession } from '@/lib/sync-types';
+import { AdminMenu } from './ResetControls';
+import type { ResetFor } from './RestockApp';
 
 const TIPS_KEY = 'vr-hide-tips';
 
 /** Choose Full or Quick Restock, with tonight's progress at a glance. */
-export function TypeStep({ view, fullSession, remoteFull, quickSession, opening, onStart, onSummary, hasDefrost = false }: {
+export function TypeStep({ view, fullSession, remoteFull, quickSession, opening, onStart, onSummary, hasDefrost = false, onReset }: {
   view: DepartmentView; fullSession: LocalSession | null; remoteFull: RemoteSession | null; quickSession: LocalSession | null; opening: boolean;
   onStart: (m: 'full' | 'quick') => void; onSummary: () => void;
   /** Gold Class Kitchen: offer the (optional) Defrost Planner beside Kitchen Restock. */
   hasDefrost?: boolean;
+  /** Admins only: reset a restock. */
+  onReset?: (r: ResetFor) => void;
 }) {
   const [hideTips, setHideTips] = useState(true);
   useEffect(() => { try { setHideTips(localStorage.getItem(TIPS_KEY) === '1'); } catch { setHideTips(false); } }, []);
@@ -77,6 +81,7 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
             <h2>{hasDefrost ? 'Kitchen Restock' : 'Full Restock'}</h2>
             {finished ? (src!.status === 'finished_exceptions' ? <Badge st="warn" icon="warn">Finished with exceptions {timeOf(src!.finishedAt)}</Badge> : <Badge st="ok">Complete {timeOf(src!.finishedAt)}</Badge>)
               : src ? <Badge st="info">In progress since {timeOf(src.startedAt)}</Badge> : <Badge st="none">Not started tonight</Badge>}
+            {onReset && src ? <AdminMenu label={`${hasDefrost ? 'Kitchen' : 'Full'} restock`} onChoose={() => onReset({ kind: 'full' })} /> : null}
           </div>
           <p className="lead">Every area, checked properly. For <b>closing shifts</b>.</p>
           <div className="areas-mini">{view.areas.map(({ area, placements }) => {
@@ -93,6 +98,7 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
           <div className="type-h">
             <span className="type-icon" aria-hidden="true"><Icon name="bolt" /></span>
             <h2>Quick Restock</h2>{quickSession?.selected.length ? <Badge st="info">{quickSession.selected.length} on your list</Badge> : null}
+            {onReset && quickSession ? <AdminMenu label="Quick restock" onChoose={() => onReset({ kind: 'quick' })} /> : null}
           </div>
           <p className="lead">Only what&rsquo;s running low. For <b>short breaks between sessions</b>.</p>
           <p className="meta">Search or browse, then collect straight away. Kept separate from the full restock.</p>

@@ -6,6 +6,7 @@ import {
   CONFLICT_FIELDS, EMPTY_ITEM, activePlacements, areaStatus, isChecked, isRequired, stockOutcomes, type Conflict, collectionLines, departmentView, exceptions, lineGot, lineInfo, lineState,
   scopeView, type AreaStatus, type ItemState, type SessionKind,
 } from '@/lib/restock-logic';
+import { defrostWasReset, sessionWasReset, startedBeforeReset } from './reset';
 import { opSchema, type ItemFields, type OpResult, type RemoteSession, type SyncOp } from '@/lib/sync-types';
 
 type Tx = postgres.TransactionSql<Record<string, unknown>>;
@@ -13,8 +14,9 @@ type Tx = postgres.TransactionSql<Record<string, unknown>>;
 const same = (a: unknown, b: unknown) => (a ?? null) === (b ?? null) || (typeof a === 'number' && typeof b === 'number' && Math.abs(a - b) < 0.005);
 
 class OpError extends Error {
-  constructor(message: string, public permanent = true) { super(message); }
+  constructor(message: string, public permanent = true, public reset = false) { super(message); }
 }
+const RESET = 'An admin reset this restock. It has been cleared from this device.';
 
 const COLUMN: Record<keyof ItemFields, string> = {
   currentQty: 'current_qty', requestedQty: 'requested_qty', routineChoice: 'routine_choice',
@@ -51,7 +53,7 @@ async function applyOne(deviceId: string, op: SyncOp): Promise<OpResult> {
       return result;
     });
   } catch (e) {
-    if (e instanceof OpError) return { opId: op.opId, ok: false, error: e.message, permanent: e.permanent };
+    if (e instanceof OpError) return { opId: op.opId, ok: false, error: e.message, permanent: e.permanent, ...(e.reset ? { reset: true } : {}) };
     console.error('sync op failed', op.type, e);
     return { opId: op.opId, ok: false, error: 'Server error, will retry', permanent: false };
   }
@@ -65,7 +67,11 @@ async function addPerson(tx: Tx, sessionId: string, by: string | null) {
 
 async function sessionRow(tx: Tx, id: string) {
   const [s] = await tx`select id, department_id, kind, status, (to_jsonb(restock_sessions)->>'area_id') as area_id from restock_sessions where id = ${id} for update`;
-  if (!s) throw new OpError('Restock not found on the server yet', false); // its start op may still be on its way
+  if (!s) {
+    // Reset by an admin: never let late changes bring it back.
+    if (await sessionWasReset(tx, id)) throw new OpError(RESET, true, true);
+    throw new OpError('Restock not found on the server yet', false); // its start op may still be on its way
+  }
   return s;
 }
 
@@ -73,6 +79,8 @@ async function apply(tx: Tx, op: SyncOp, deviceId: string): Promise<{ mergedInto
   switch (op.type) {
     case 'session.start': {
       const s = op.session;
+      // An old copy of a reset restock, or one started before a reset of the same restock (e.g. offline): drop it.
+      if (await sessionWasReset(tx, s.id) || await startedBeforeReset(tx, { ...s, areaId: s.areaId ?? null })) throw new OpError(RESET, true, true);
       const [dept] = await tx`select id from departments where id = ${s.departmentId}`;
       if (!dept) throw new OpError('That department no longer exists');
       if (s.kind === 'full') {
@@ -187,6 +195,7 @@ async function apply(tx: Tx, op: SyncOp, deviceId: string): Promise<{ mergedInto
     }
 
     case 'defrost.set': {
+      if (await defrostWasReset(tx, op.departmentId, op.serviceDate, op.at)) throw new OpError('An admin cleared this Defrost Planner record.', true, true);
       const [item] = await tx`select name from defrost_items where id = ${op.itemId} and department_id = ${op.departmentId}`;
       if (!item) throw new OpError('That defrost item no longer exists');
       // Two devices may start the same night's plan: there is only ever one per department and date.

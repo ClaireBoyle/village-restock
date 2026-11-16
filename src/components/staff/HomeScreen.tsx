@@ -5,7 +5,7 @@ import { Icon } from '@/components/Icon';
 import { TopBar, timeLabel } from '@/components/TopBar';
 import { OfflineBanner, TopControls } from '@/components/restock/SyncControls';
 import { useCatalogue } from '@/lib/client/use-catalogue';
-import { useLive } from '@/lib/client/hooks';
+import { useLive, useResetIds } from '@/lib/client/hooks';
 import { localDb, type LocalArea, type LocalItem, type LocalSession } from '@/lib/client/local-db';
 import { tradingDate } from '@/lib/restock-math';
 import { adminSignOut } from '@/app/actions/admin';
@@ -92,7 +92,9 @@ function areaStateFor(cat: Catalogue, d: CatDepartment, local: LocalSession[], l
 export function HomeScreen({ isAdmin }: { isAdmin: boolean }) {
   const { catalogue, checkedAt, error } = useCatalogue();
   const [toast, setToast] = useState('');
-  const [remote, setRemote] = useState<RemoteSession[]>([]);
+  const [remoteAll, setRemote] = useState<RemoteSession[]>([]);
+  const resetIds = useResetIds();
+  const remote = remoteAll.filter((s) => !resetIds.has(s.id));
   const day = catalogue ? tradingDate(new Date(), catalogue.settings.timeZone, catalogue.settings.cutoffHour) : null;
   // The shift's own date: after midnight it's still the same close until the cut-off (5 am).
   const dateLabel = day ? new Date(`${day}T12:00:00Z`).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }) : '';

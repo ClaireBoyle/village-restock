@@ -5,6 +5,8 @@ import { localDb, type LocalSession } from '@/lib/client/local-db';
 import { collectionLines, EMPTY_ITEM, type DepartmentView, type ItemState } from '@/lib/restock-logic';
 import type { RemoteSession } from '@/lib/sync-types';
 import { Badge, timeOf } from './shared';
+import { AdminMenu } from './ResetControls';
+import type { ResetFor } from './RestockApp';
 
 interface AreaRun { id: string; status: LocalSession['status']; startedAt: string; finishedAt: string | null; people: string[]; entered: number; local: boolean }
 
@@ -12,9 +14,11 @@ interface AreaRun { id: string; status: LocalSession['status']; startedAt: strin
  * Departments restocked area by area (Candy Bar): pick the area you're about to restock.
  * Each area is its own restock (enter what's needed, collect, finish), at any time and in any order.
  */
-export function AreaPicker({ view, remote, quickSession, today, opening, onStart, onSummary, onQuick }: {
+export function AreaPicker({ view, remote, quickSession, today, opening, onStart, onSummary, onQuick, onReset }: {
   view: DepartmentView; remote: RemoteSession[]; quickSession: LocalSession | null; today: string; opening: boolean;
   onStart: (areaId: string) => void; onSummary: (sessionId: string, areaId: string) => void; onQuick: () => void;
+  /** Admins only: reset tonight's restocks of an area, or this device's quick restock. */
+  onReset?: (r: ResetFor) => void;
 }) {
   const sessions = useLive(async () => (await localDb().sessions.where('departmentId').equals(view.department.id).toArray())
     .filter((s) => s.kind === 'area' && s.tradingDate === today), [view.department.id, today], [] as LocalSession[]);
@@ -64,6 +68,7 @@ export function AreaPicker({ view, remote, quickSession, today, opening, onStart
                   <h2 id={`ap-${area.id}`}>{area.name}</h2>
                   <p className="meta">{placements.length} products</p>
                 </div>
+                {onReset && runs.length ? <AdminMenu label={`${area.name} restock`} onChoose={() => onReset({ kind: 'area', areaId: area.id, areaName: area.name })} /> : null}
                 {photos.length ? (
                   <span className="ac-photos" aria-hidden="true">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -87,9 +92,12 @@ export function AreaPicker({ view, remote, quickSession, today, opening, onStart
         })}
       </div>
 
-      <button className="quick-link" onClick={onQuick} disabled={opening}>
-        <Icon name="bolt" /><span><b>{quickSession?.selected.length ? 'Continue quick restock' : 'Quick restock'}</b><small>Search for anything running low, from any area</small></span><Icon name="next" />
-      </button>
+      <div className="quick-row">
+        <button className="quick-link" onClick={onQuick} disabled={opening}>
+          <Icon name="bolt" /><span><b>{quickSession?.selected.length ? 'Continue quick restock' : 'Quick restock'}</b><small>Search for anything running low, from any area</small></span><Icon name="next" />
+        </button>
+        {onReset && quickSession ? <AdminMenu label="Quick restock" onChoose={() => onReset({ kind: 'quick' })} /> : null}
+      </div>
     </main>
   );
 }

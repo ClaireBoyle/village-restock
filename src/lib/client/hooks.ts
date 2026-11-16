@@ -2,9 +2,15 @@
 import { liveQuery } from 'dexie';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { getSyncStatus, startSyncEngine, subscribeSync, type SyncStatus } from './sync-engine';
-import { getStaffName, setStaffName } from './local-db';
+import { getStaffName, localDb, setStaffName } from './local-db';
 
 /** Re-runs a query on the device database whenever the data it reads changes. */
+/** Restocks an admin reset (hide them from lists fetched before the reset). */
+export function useResetIds(): Set<string> {
+  const ids = useLive(async () => ((await localDb().kv.get('reset-ids'))?.value as string[] | undefined) ?? [], [], [] as string[]);
+  return new Set(ids);
+}
+
 export function useLive<T>(query: () => Promise<T>, deps: unknown[], initial: T): T {
   const [value, setValue] = useState<T>(initial);
   useEffect(() => {

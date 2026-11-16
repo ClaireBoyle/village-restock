@@ -269,3 +269,66 @@ export async function mergeSessionInto(fromId: string, intoId: string) {
     await db.sessions.delete(fromId);
   });
 }
+
+// ---------------------------------------------------------------------------
+// Admin resets
+// ---------------------------------------------------------------------------
+export const RESET_NOTICE_KEY = 'reset-notice';
+/** Ids of restocks reset recently, so lists fetched earlier from the server can hide them at once. */
+export const RESET_IDS_KEY = 'reset-ids';
+async function rememberReset(ids: string[]) {
+  const db = localDb();
+  const cur = ((await db.kv.get(RESET_IDS_KEY))?.value as string[] | undefined) ?? [];
+  const next = [...new Set([...cur, ...ids])].slice(-500);
+  if (next.length !== cur.length) await db.kv.put({ key: RESET_IDS_KEY, value: next });
+}
+const opSessionId = (op: SyncOp) => ('sessionId' in op ? op.sessionId : op.type === 'session.start' ? op.session.id : null);
+
+/**
+ * An admin reset this restock: remove it from this device with everything entered and every
+ * change still waiting to upload, so nothing can bring it back. `notice` leaves a short
+ * message for whoever uses this device next.
+ */
+export async function purgeSession(id: string, notice = true) {
+  const db = localDb();
+  await rememberReset([id]);
+  await db.transaction('rw', [db.sessions, db.items, db.areas, db.outbox, db.problems, db.kv], async () => {
+    const s = await db.sessions.get(id);
+    const queued = await db.outbox.where('sessionId').equals(id).count();
+    const entered = await db.items.where('sessionId').equals(id).count();
+    if (!s && !queued && !entered) return;
+    await db.items.where('sessionId').equals(id).delete();
+    await db.areas.where('sessionId').equals(id).delete();
+    await db.outbox.where('sessionId').equals(id).delete();
+    for (const p of await db.problems.toArray()) if (opSessionId(p.op) === id) await db.problems.delete(p.seq!);
+    await db.sessions.delete(id);
+    if (notice && (entered || queued || s?.status === 'open')) await db.kv.put({ key: RESET_NOTICE_KEY, value: { at: now(), departmentId: s?.departmentId ?? null } });
+  });
+}
+
+/** Defrost Planner records an admin cleared: drop this device's copy (only what was entered before the clear). */
+export async function purgeDefrost(departmentId: string, serviceDate: string, resetAt: string) {
+  const db = localDb();
+  await db.transaction('rw', [db.defrost, db.outbox, db.problems, db.kv], async () => {
+    const rows = await db.defrost.where('[departmentId+serviceDate]').equals([departmentId, serviceDate]).toArray();
+    for (const r of rows) if (!r.updatedAt || r.updatedAt <= resetAt) await db.defrost.delete([departmentId, serviceDate, r.itemId]);
+    for (const o of await db.outbox.toArray()) {
+      if (o.op.type === 'defrost.set' && o.op.departmentId === departmentId && o.op.serviceDate === serviceDate && o.op.at <= resetAt) await db.outbox.delete(o.seq!);
+    }
+    for (const p of await db.problems.toArray()) {
+      if (p.op.type === 'defrost.set' && p.op.departmentId === departmentId && p.op.serviceDate === serviceDate) await db.problems.delete(p.seq!);
+    }
+  });
+}
+
+/** Apply the server's list of recent resets to this device. */
+export async function applyResets(r: { sessions: string[]; defrost: { departmentId: string; serviceDate: string; resetAt: string }[] }) {
+  const db = localDb();
+  const ids = new Set(r.sessions);
+  await rememberReset(r.sessions);
+  const local = new Set([...(await db.sessions.toArray()).map((s) => s.id), ...(await db.outbox.toArray()).map((o) => opSessionId(o.op)).filter(Boolean) as string[]]);
+  for (const id of local) if (ids.has(id)) await purgeSession(id);
+  for (const d of r.defrost) {
+    if (await db.defrost.where('[departmentId+serviceDate]').equals([d.departmentId, d.serviceDate]).count()) await purgeDefrost(d.departmentId, d.serviceDate, d.resetAt);
+  }
+}

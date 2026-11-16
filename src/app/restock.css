@@ -952,3 +952,35 @@ button.pnote.open span{display:block}
 .theme-navy .line.done{background:rgba(52,199,123,.16);border-color:rgba(52,199,123,.38)}
 .line.done .l-name b{text-decoration:line-through;text-decoration-thickness:1.5px;text-decoration-color:color-mix(in srgb,var(--ok) 70%,transparent)}
 .l-few{white-space:nowrap}
+/* "A restock was reset by an admin" (once per device) */
+.net.reset-note{background:var(--info-bg,var(--surface-2));border-bottom-color:var(--hair)}
+.net.reset-note .ic{color:var(--accent)}
+.net.reset-note .linkbtn{margin-left:auto;flex:none}
+/* Admin-only "⋯" menu on restock cards */
+.amenu{position:relative;margin-left:auto;flex:none}
+.amenu-btn{width:40px;height:40px;min-height:40px;border-radius:12px;color:var(--ink-2);opacity:.75}
+.amenu-btn:hover,.amenu-btn[aria-expanded="true"]{opacity:1}
+.amenu-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:30;min-width:220px;padding:6px;border-radius:14px;background:var(--surface);border:1px solid var(--hair);box-shadow:0 18px 40px -16px rgba(0,0,0,.55);display:flex;flex-direction:column;gap:2px}
+.theme-navy .amenu-pop{background:#1A2142;border-color:rgba(255,255,255,.14)}
+.theme-gold .amenu-pop{background:#2B2418}
+.amenu-tag{display:flex;gap:5px;align-items:center;padding:4px 8px 2px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+.amenu-tag .ic{width:12px;height:12px}
+.amenu-pop button{display:flex;gap:8px;align-items:center;min-height:44px;padding:0 10px;border:0;border-radius:10px;background:none;color:var(--bad);font-weight:600;font-size:15px;text-align:left}
+.amenu-pop button:hover{background:var(--bad-bg)}
+.amenu-pop button .ic{width:18px;height:18px}
+.acard .ac-top{align-items:center}
+.quick-row{display:flex;gap:8px;align-items:center}
+.quick-row .quick-link{flex:1;min-width:0}
+/* Reset confirmation */
+.rs-facts{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 14px;margin:0;padding:12px 14px;border-radius:14px;background:var(--surface-2)}
+.rs-facts div{display:contents}
+.rs-facts dt{color:var(--ink-2);font-size:14px}
+.rs-facts dd{margin:0;font-weight:600}
+.rs-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.rs-list li{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:12px;border:1px solid var(--hair)}
+.rs-list li span{font-size:14px;color:var(--ink-2)}
+.rs-warn{display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-radius:14px;background:var(--bad-bg);border:1px solid var(--bad-line);font-size:14.5px;line-height:1.45}
+.rs-warn .ic{width:16px;height:16px;vertical-align:-3px}
+.rs-sure{font-weight:600}
+.sheet .row-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.sheet .btn.danger:not([disabled]){background:var(--bad);color:#fff;border-color:var(--bad)}

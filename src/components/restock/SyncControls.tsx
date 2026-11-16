@@ -3,7 +3,9 @@ import { createPortal } from 'react-dom';
 import { useEffect, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { timeLabel } from '@/components/TopBar';
-import { useStaffName, useSyncStatus } from '@/lib/client/hooks';
+import { useLive, useStaffName, useSyncStatus } from '@/lib/client/hooks';
+import { localDb } from '@/lib/client/local-db';
+import { RESET_NOTICE_KEY } from '@/lib/client/restock-store';
 import { syncNow } from '@/lib/client/sync-engine';
 import { initials } from './shared';
 
@@ -31,15 +33,24 @@ export function StatusPill({ onOpen, catalogueCheckedAt }: { onOpen: () => void;
 
 export function OfflineBanner() {
   const s = useSyncStatus();
-  if (s.connection !== 'offline') return null;
-  return (
+  // An admin reset a restock this device had: say so once, so nobody wonders where it went.
+  const notice = useLive(async () => (await localDb().kv.get(RESET_NOTICE_KEY))?.value ?? null, [], null);
+  const reset = notice ? (
+    <div className="net reset-note" role="status"><div className="wrap net-in"><Icon name="reset" />
+      <span><b>A restock was reset by an admin.</b> What was entered for it on this device has been cleared. You can start again.</span>
+      <button className="linkbtn" onClick={() => void localDb().kv.delete(RESET_NOTICE_KEY)}>OK</button>
+    </div></div>
+  ) : null;
+  if (s.connection !== 'offline') return reset;
+  return (<>
+    {reset}
     <div className="net" role="status"><div className="wrap net-in"><Icon name="wifioff" />
       <span><b>No connection.</b> Keep going: your work is saved on this device{s.pending ? <> and <b>{s.pending} change{s.pending === 1 ? '' : 's'}</b> will upload</> : ' and will upload'} when Wi-Fi returns.</span>
     </div></div>
-  );
+  </>);
 }
 
-function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', k);

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Icon } from '@/components/Icon';
 import { ActionForm, SubmitButton } from '@/components/admin/ActionForm';
 import { addAdmin, changeMyPassword, retryEmailAction, saveManagerEmail, sendTestEmailAction, setAdminActive } from '@/app/actions/admin';
@@ -28,6 +29,12 @@ export default async function Settings() {
             <p>Keep the web address private. The admin area has no visible link: press and hold the logo on the home screen for 2 seconds, or add <b>/admin</b> to the address. It always asks for an admin password.</p>
           </div>
         </div>
+      </section>
+
+      <section className="panel" style={section}>
+        <h2>Before staff start</h2>
+        <p className="meta">Remove restocks and Defrost Planner records made while testing, so history, shortages and Stock Insights start clean. You choose exactly which records go; products and settings are never touched.</p>
+        <div><Link className="btn" href="/admin/settings/test-activity"><Icon name="reset" />Clear test activity</Link></div>
       </section>
 
       <section className="panel" style={section}>

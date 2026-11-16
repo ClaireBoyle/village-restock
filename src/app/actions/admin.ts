@@ -627,3 +627,22 @@ export async function chooseOpenFoodFactsPhoto(productId: string, imageUrl: stri
   revalidatePath('/admin', 'layout');
   return { ok: true, message: 'Photo saved.', path: saved.path };
 }
+
+// ---------------------------------------------------------------------------
+// Clear test activity (before staff start): only the restocks and defrost records ticked.
+// ---------------------------------------------------------------------------
+export async function clearTestActivity(_: ActionResult, form: FormData): Promise<ActionResult> {
+  const me = await requireAdmin();
+  if (form.get('understand') !== 'on') return { error: 'Tick “I understand” to confirm.' };
+  const ids = form.getAll('session').map(String).filter((v) => /^[0-9a-f-]{36}$/i.test(v));
+  const plans = form.getAll('defrost').map(String).map((v) => v.split('|')).filter(([d, day]) => /^[0-9a-f-]{36}$/i.test(d ?? '') && /^\d{4}-\d{2}-\d{2}$/.test(day ?? ''))
+    .map(([departmentId, serviceDate]) => ({ departmentId, serviceDate }));
+  if (!ids.length && !plans.length) return { error: 'Nothing selected. Tick the test records to clear.' };
+  try {
+    const { resetSessions, resetDefrost } = await import('@/lib/server/reset');
+    const n = await resetSessions(ids, { by: me.name });
+    const d = await resetDefrost(plans, me.name);
+    revalidatePath('/admin', 'layout');
+    return { ok: true, message: `Cleared ${n} restock${n === 1 ? '' : 's'}${plans.length ? ` and ${d} defrost record${d === 1 ? '' : 's'}` : ''}. Devices drop their copies on their next sync.` };
+  } catch (e) { return { error: (e as Error).message || 'Something went wrong. Nothing was cleared.' }; }
+}

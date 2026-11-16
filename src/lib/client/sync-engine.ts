@@ -5,7 +5,7 @@
 //   "problems" = changes the server refused (kept, never silently dropped).
 import type { OpResult, RemoteSession, SyncResponse } from '@/lib/sync-types';
 import { deviceId, localDb } from './local-db';
-import { importRemote, mergeSessionInto } from './restock-store';
+import { applyResets, importRemote, mergeSessionInto, purgeDefrost, purgeSession } from './restock-store';
 
 export interface SyncStatus {
   connection: 'unknown' | 'online' | 'offline';
@@ -55,6 +55,7 @@ export function syncNow(): Promise<void> {
     try {
       const held = await push();
       await pull();
+      await checkResets();
       emit({ connection: 'online', lastSyncAt: held ? status.lastSyncAt : new Date().toISOString(), lastError: held });
     } catch (e) {
       // Only a failed network request means "offline". A slow or failing server is shown as
@@ -121,6 +122,11 @@ async function push(): Promise<string | null> {
       if (r.ok) {
         await db.outbox.delete(row.seq!);
         if (r.mergedInto && row.op.type === 'session.start') await mergeSessionInto(row.op.session.id, r.mergedInto);
+      } else if (r.reset) {
+        // An admin reset this restock (or cleared this defrost record): drop it and everything queued for it.
+        if (row.op.type === 'defrost.set') await purgeDefrost(row.op.departmentId, row.op.serviceDate, new Date().toISOString());
+        else if (row.sessionId) await purgeSession(row.sessionId);
+        await db.outbox.delete(row.seq!);
       } else if (r.permanent) {
         // Refused for good (e.g. product removed): keep it where staff/admin can see it.
         await db.transaction('rw', db.outbox, db.problems, async () => {
@@ -147,9 +153,17 @@ async function pull() {
   for (const s of open) {
     const res = await request(`/api/sessions/${s.id}`, { cache: 'no-store' });
     if (res.status === 404) continue; // not uploaded yet
+    if (res.status === 410) { await purgeSession(s.id); continue; } // reset by an admin
     if (!res.ok) throw new Error(`The server replied ${res.status}`);
     await importRemote((await res.json()) as RemoteSession);
   }
+}
+
+/** Restocks an admin reset recently: drop this device's old copies (one small request). */
+async function checkResets() {
+  const res = await request('/api/resets', { cache: 'no-store' });
+  if (!res.ok) return;
+  await applyResets(await res.json());
 }
 
 let started = false;

@@ -25,6 +25,7 @@ node tests/e2e/e2e-p2.js
 | `e2e-p7.js` | Product photos from Open Food Facts, against a stand-in server. Start the app with `OFF_API_BASE=http://localhost:3199 OFF_IMAGE_HOSTS=localhost:3199` |
 | `e2e-p8.js` | Gold Class Bar spirits: Back bench first, collapsible Other FOH spirits, optional Spirits cupboard, merged collection lines. **First** load `spirits-fixture.sql` after the reset |
 | `e2e-p9.js` | Candy Bar area by area: pick an area, + Add / 0 / untouched, collect only that area (storeroom reminder once), finish, resume, offline, tablet and desktop. **First** load `candy-fixture.sql` then `candy-area-fixture.sql` after the reset |
+| `e2e-p10.js` | Admin Reset restock (full, finished area, quick), two devices, queued offline changes, offline-started restocks, non-admin refused, offline admin, Clear test activity. **First** load `candy-fixture.sql` then `candy-area-fixture.sql` after the reset |
 | `e2e-stuck-lock.js` | A hung database connection holding a lock: the app says "Sync needs attention" (not "Offline") and uploads by itself once it clears |
 
 Screenshots go to `tests/e2e/out/` (not committed).

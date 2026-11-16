@@ -69,7 +69,9 @@ export const syncRequestSchema = z.object({
 
 export type OpResult =
   | { opId: string; ok: true; mergedInto?: string; conflict?: boolean }
-  | { opId: string; ok: false; error: string; permanent: boolean };
+  | { opId: string; ok: false; error: string; permanent: boolean;
+      /** An admin reset this restock (or cleared this defrost plan): drop it from the device. */
+      reset?: boolean };
 
 export interface SyncResponse { results: OpResult[]; serverTime: string }
 
