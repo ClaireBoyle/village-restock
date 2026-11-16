@@ -133,6 +133,18 @@ const BEER = ['Heineken Zero', 'James Squire Ginger Beer', 'Little Creatures Rog
   const o3 = await waitDb(order, (o) => o.indexOf('Orange Juice') === k, 15000);
   ok(JSON.stringify(o3) === JSON.stringify(o1), 'and the up arrow puts it back');
 
+  // ---- Saving changes to a product goes back to all the products, at that product ----
+  const [{ id: pj }] = await sql`select p.id from products p join departments d on d.id = p.department_id where d.name = 'Gold Class Bar' and p.name = 'Soy Milk'`;
+  await A.goto(`${B}/admin/products/${pj}`); await A.waitForSelector('form button.btn.primary');
+  await A.fill('input[name="instructions"], textarea[name="instructions"]', 'Check the use-by date.');
+  await A.click('form button.btn.primary:has-text("Save")');
+  await A.waitForURL(/\/admin\/products\?dept=.*saved=/);
+  await A.waitForSelector(`#p-${pj}.just-saved`, { timeout: 5000 }).catch(() => undefined);
+  const inView = await A.$eval(`#p-${pj}`, (el) => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= window.innerHeight; });
+  ok(await has(A, '.banner.s-ok', 'Soy Milk saved.') && inView, 'Save changes returns to all the products, scrolled to Soy Milk');
+  const [{ instructions }] = await sql`select instructions from products where id = ${pj}`;
+  ok(instructions === 'Check the use-by date.', 'and the change was saved');
+
   // ---- Admin can delete a product; history keeps it ----
   const [oj] = await sql`select p.id from products p join departments d on d.id = p.department_id where d.name = 'Gold Class Bar' and p.name = 'Orange Juice'`;
   const [{ n: histBefore }] = await waitDb(() => sql`select count(*)::int as n from session_items where product_name = 'Orange Juice'`, (r) => r[0].n > 0);

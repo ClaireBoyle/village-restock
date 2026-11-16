@@ -292,7 +292,8 @@ export async function saveProduct(_: ActionResult, form: FormData): Promise<Acti
     });
     revalidatePath('/admin', 'layout');
     if (!d.id) redirect(`/admin/products/${productId}?saved=1`);
-    return { ok: true, message: `${d.name} saved.` };
+    // Changes saved: back to all the products, at this one.
+    redirect(`/admin/products?dept=${d.departmentId}&saved=${encodeURIComponent(d.name)}&at=${productId}`);
   } catch (e) {
     if ((e as { code?: string }).code === 'NOTFOUND') return { error: 'That product no longer exists.' };
     if ((e as { digest?: string }).digest?.startsWith('NEXT_REDIRECT')) throw e;
