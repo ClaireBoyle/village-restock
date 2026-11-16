@@ -150,6 +150,22 @@ const contrast = (P, sel) => P.$eval(sel, (el) => {
   await P.click('.dock button.good'); await P.waitForSelector('.finish-hero');
 
   ok(await P.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), '17. phone: no sideways scrolling');
+
+  // Walk in fridge: fresh produce and juices on top, then the wines (applied twice: no change)
+  await sql.file('db/updates/2026-11-gold-class-bar-walk-in-fridge.sql');
+  await sql.file('db/updates/2026-11-gold-class-bar-walk-in-fridge.sql');
+  const cw = await b.newContext({ ...devices['iPhone 13'] }); const W = await cw.newPage(); W.on('pageerror', (e) => errs.push(e.message));
+  await sql`delete from shortages`; await sql`delete from restock_sessions`; // tonight's full restock was finished above
+  await W.goto(B + '/'); await W.waitForSelector('.dcard2'); await W.click('.dcard2:has-text("Bar") >> nth=0');
+  await W.click('.type-full button.btn.primary'); await W.waitForSelector('article.prow');
+  await goArea(W, 'Walk in fridge');
+  const wl = await W.$$eval('.area > .prows > *', (els) => els.map((e) => (e.classList.contains('phead') ? `# ${e.textContent}` : e.querySelector('h3')?.textContent)));
+  ok(JSON.stringify(wl.slice(0, 14)) === JSON.stringify(['# Fresh Produce', 'Lemons', 'Limes', 'Strawberries', 'Oranges', 'Passionfruit', 'Maraschino Cherries',
+    '# Juices & Water', 'Orange Juice', 'Pineapple Juice', 'Apple Juice', 'Cranberry Juice', 'Mount Franklin Still Water', '# Sparkling & Champagne']) && wl[14] === 'Dunes & Greene Split Pick Moscato',
+    'Walk in fridge: Fresh Produce, Juices & Water, then wines (Moscato first): ' + wl.slice(0, 15).join(' | '));
+  const [{ n: oj }] = await sql`select count(*)::int as n from products p join departments d on d.id = p.department_id where d.name = 'Gold Class Bar' and p.name = 'Orange Juice' and p.status = 'active'`;
+  ok(oj === 1, 'the juices are the same products as in the BOH bar fridge (no duplicates)');
+  await cw.close();
   ok(errs.length === 0, 'no page errors ' + JSON.stringify(errs));
   await b.close(); await sql.end();
 })().catch(async (e) => { console.error(e.message); process.exit(1); });
