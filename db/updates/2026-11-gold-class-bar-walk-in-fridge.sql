@@ -1,9 +1,15 @@
--- Gold Class Bar Walk in fridge: fresh produce and juices at the top, then the wines.
--- Safe to run more than once. Only touches the Gold Class Bar "Walk in fridge" checking area.
+-- Gold Class Bar Walk in fridge, in the order of the shelves (top to bottom, left to right, from the
+-- photo of the fridge), with one small heading per shelf. Safe to run more than once.
+-- Only touches the Gold Class Bar "Walk in fridge" checking area.
 --
---   Fresh Produce:   Lemons, Limes, Strawberries, Oranges, Passionfruit, Maraschino Cherries
---   Juices & Water:  Orange Juice, Pineapple Juice, Apple Juice, Cranberry Juice, Mount Franklin Still Water
---   then the wines, in their current order and groups (the Moscato first in Sparkling & Champagne).
+--   Top shelf · Fruit & Juices:  Maraschino Cherries, Orange / Pineapple / Apple / Cranberry Juice,
+--                                Limes, Lemons, Oranges, Strawberries, Passionfruit
+--   Middle shelf · Wine:         Moscato, Chandon NV, Redbank Prosecco, Cloudy Bay Sauvignon Blanc,
+--                                Red Claw Pinot Gris, Red Claw Chardonnay, Mt Yengo Pinot Grigio,
+--                                Alexander Hill Rosé, Alexander Hill Sauvignon Blanc, Alexander Hill Brut Cuvée
+--   Bottom shelf · Water & Wine: Mount Franklin Still Water, Pewsey Vale Riesling, Minuty M Rosé,
+--                                Chandon Rosé NV, Moet Rosé, Moet Chandon, Veuve Clicquot, Twin Islands Sauvignon Blanc
+--   Anything else already in the fridge stays, at the end.
 --
 -- * Existing products are reused (the juices from the BOH bar fridge): same product, so the
 --   collection list adds them up. Their names, units and photos are kept. Missing ones are added.
@@ -14,21 +20,35 @@ declare
   walkin uuid := (select id from storage_locations where lower(name) = 'walk in fridge(downstairs)');
   area uuid;
   -- name, unit (one), unit (more), category, heading above it
+  -- products to add if missing: name, unit (one), unit (more), category
   list text[][] := array[
-    ['Lemons', 'lemon', 'lemons', 'Fresh Produce', 'Fresh Produce'],
-    ['Limes', 'lime', 'limes', 'Fresh Produce', ''],
-    ['Strawberries', 'punnet', 'punnets', 'Fresh Produce', ''],
-    ['Oranges', 'orange', 'oranges', 'Fresh Produce', ''],
-    ['Passionfruit', 'passionfruit', 'passionfruit', 'Fresh Produce', ''],
-    ['Maraschino Cherries', 'jar', 'jars', 'Fresh Produce', ''],
-    ['Orange Juice', 'bottle', 'bottles', 'Juices & Water', 'Juices & Water'],
-    ['Pineapple Juice', 'bottle', 'bottles', 'Juices & Water', ''],
-    ['Apple Juice', 'bottle', 'bottles', 'Juices & Water', ''],
-    ['Cranberry Juice', 'bottle', 'bottles', 'Juices & Water', ''],
-    ['Mount Franklin Still Water', 'bottle', 'bottles', 'Juices & Water', '']
+    ['Maraschino Cherries', 'jar', 'jars', 'Fresh Produce'],
+    ['Orange Juice', 'bottle', 'bottles', 'Juices & Water'],
+    ['Pineapple Juice', 'bottle', 'bottles', 'Juices & Water'],
+    ['Apple Juice', 'bottle', 'bottles', 'Juices & Water'],
+    ['Cranberry Juice', 'bottle', 'bottles', 'Juices & Water'],
+    ['Limes', 'lime', 'limes', 'Fresh Produce'],
+    ['Lemons', 'lemon', 'lemons', 'Fresh Produce'],
+    ['Oranges', 'orange', 'oranges', 'Fresh Produce'],
+    ['Strawberries', 'punnet', 'punnets', 'Fresh Produce'],
+    ['Passionfruit', 'passionfruit', 'passionfruit', 'Fresh Produce'],
+    ['Mount Franklin Still Water', 'bottle', 'bottles', 'Juices & Water']
+  ];
+  -- the whole fridge in shelf order: name, heading above it
+  shelf text[][] := array[
+    ['Maraschino Cherries', 'Top shelf · Fruit & Juices'],
+    ['Orange Juice', ''], ['Pineapple Juice', ''], ['Apple Juice', ''], ['Cranberry Juice', ''],
+    ['Limes', ''], ['Lemons', ''], ['Oranges', ''], ['Strawberries', ''], ['Passionfruit', ''],
+    ['Dunes & Greene Split Pick Moscato', 'Middle shelf · Wine'],
+    ['Chandon NV', ''], ['Redbank King Valley Prosecco NV', ''], ['Cloudy Bay Sauvignon Blanc', ''],
+    ['Red Claw Pinot Gris', ''], ['Red Claw Chardonnay', ''], ['Mt Yengo Pinot Grigio', ''],
+    ['Alexander Hill Rosé', ''], ['Alexander Hill Sauvignon Blanc', ''], ['Alexander Hill Brut Cuvée', ''],
+    ['Mount Franklin Still Water', 'Bottom shelf · Water & Wine'],
+    ['Pewsey Vale Riesling', ''], ['Minuty M Rosé', ''], ['Chandon Rosé NV', ''], ['Moet Rosé', ''],
+    ['Moet Chandon', ''], ['Veuve Clicquot', ''], ['Twin Islands Sauvignon Blanc', '']
   ];
   i int; p uuid; pl uuid; cat uuid; top uuid[] := '{}';
-  rest uuid[]; heads text[]; m int; g int; f int; k int;
+  k int;
 begin
   if dept is null then raise notice 'Gold Class Bar not found: nothing changed'; return; end if;
   if walkin is null then raise exception 'The storeroom "Walk in fridge(Downstairs)" must exist first'; end if;
@@ -54,37 +74,21 @@ begin
     pl := (select id from product_placements where product_id = p and check_area_id = area limit 1);
     if pl is null then insert into product_placements (product_id, check_area_id, sort_order) values (p, area, 0) returning id into pl; end if;
     update product_placements set par_level = null, location_id = null where id = pl;
+  end loop;
+
+  -- 2. Shelf order. Products not found by name are skipped; anything else in the fridge goes last.
+  k := 0;
+  for i in 1 .. array_length(shelf, 1) loop
+    pl := (select q.id from product_placements q join products pr on pr.id = q.product_id
+           where q.check_area_id = area and lower(pr.name) = lower(shelf[i][1]) and pr.status = 'active' limit 1);
+    continue when pl is null;
+    k := k + 1;
+    update product_placements set sort_order = k, heading = nullif(shelf[i][2], '') where id = pl;
     top := top || pl;
   end loop;
-
-  -- 2. Everything else already in the fridge (the wines), in its current order with its subheadings.
-  select coalesce(array_agg(id order by sort_order, created_at), '{}'), coalesce(array_agg(heading order by sort_order, created_at), '{}')
-    into rest, heads from product_placements where check_area_id = area and not (id = any(top));
-  if array_length(rest, 1) > 0 then
-    -- The wines start with a subheading (otherwise the first wines would fall under Juices & Water).
-    f := (select min(x.n) from unnest(heads) with ordinality x(h, n) where x.h is not null);
-    if heads[1] is null and f is not null then heads[1] := heads[f]; heads[f] := null; end if;
-    -- The Moscato leads its group (it was asked to come before Chandon NV).
-    m := (select x.n from unnest(rest) with ordinality x(id, n) join product_placements q on q.id = x.id join products pr on pr.id = q.product_id
-          where lower(pr.name) = 'dunes & greene split pick moscato' limit 1);
-    if m is not null then
-      g := coalesce((select max(x.n) from unnest(heads) with ordinality x(h, n) where x.n <= m and x.h is not null), 1);
-      if m > g then
-        rest := rest[1:g-1] || rest[m] || rest[g:m-1] || rest[m+1:];
-        heads := heads[1:g-1] || heads[g] || array[null::text] || heads[g+1:m-1] || heads[m+1:];
-      end if;
-    end if;
-  end if;
-
-  -- 3. Write the order: the 11 first, then the wines.
-  k := 0;
-  for i in 1 .. array_length(top, 1) loop
+  for pl in select q.id from product_placements q where q.check_area_id = area and not (q.id = any(top)) order by q.sort_order, q.created_at loop
     k := k + 1;
-    update product_placements set sort_order = k, heading = nullif(list[i][5], '') where id = top[i];
-  end loop;
-  for i in 1 .. coalesce(array_length(rest, 1), 0) loop
-    k := k + 1;
-    update product_placements set sort_order = k, heading = heads[i] where id = rest[i];
+    update product_placements set sort_order = k, heading = null where id = pl;
   end loop;
   raise notice 'Walk in fridge: % products arranged', k;
 end $$;

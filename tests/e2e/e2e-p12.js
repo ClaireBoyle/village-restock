@@ -160,9 +160,10 @@ const contrast = (P, sel) => P.$eval(sel, (el) => {
   await W.click('.type-full button.btn.primary'); await W.waitForSelector('article.prow');
   await goArea(W, 'Walk in fridge');
   const wl = await W.$$eval('.area > .prows > *', (els) => els.map((e) => (e.classList.contains('phead') ? `# ${e.textContent}` : e.querySelector('h3')?.textContent)));
-  ok(JSON.stringify(wl.slice(0, 14)) === JSON.stringify(['# Fresh Produce', 'Lemons', 'Limes', 'Strawberries', 'Oranges', 'Passionfruit', 'Maraschino Cherries',
-    '# Juices & Water', 'Orange Juice', 'Pineapple Juice', 'Apple Juice', 'Cranberry Juice', 'Mount Franklin Still Water', '# Sparkling & Champagne']) && wl[14] === 'Dunes & Greene Split Pick Moscato',
-    'Walk in fridge: Fresh Produce, Juices & Water, then wines (Moscato first): ' + wl.slice(0, 15).join(' | '));
+  ok(JSON.stringify(wl.slice(0, 12)) === JSON.stringify(['# Top shelf · Fruit & Juices', 'Maraschino Cherries', 'Orange Juice', 'Pineapple Juice', 'Apple Juice', 'Cranberry Juice',
+    'Limes', 'Lemons', 'Oranges', 'Strawberries', 'Passionfruit', '# Middle shelf · Wine']) && wl[12] === 'Dunes & Greene Split Pick Moscato' && wl.includes('# Bottom shelf · Water & Wine')
+    && wl[wl.indexOf('# Bottom shelf · Water & Wine') + 1] === 'Mount Franklin Still Water',
+    'Walk in fridge follows the shelves: ' + wl.slice(0, 13).join(' | ') + ' … ' + wl.slice(wl.indexOf('# Bottom shelf · Water & Wine'), wl.indexOf('# Bottom shelf · Water & Wine') + 3).join(' | '));
   const [{ n: oj }] = await sql`select count(*)::int as n from products p join departments d on d.id = p.department_id where d.name = 'Gold Class Bar' and p.name = 'Orange Juice' and p.status = 'active'`;
   ok(oj === 1, 'the juices are the same products as in the BOH bar fridge (no duplicates)');
   await cw.close();
