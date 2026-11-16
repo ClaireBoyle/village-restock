@@ -7,9 +7,19 @@ import postgres from 'postgres';
 // - snake_case columns are converted to camelCase properties.
 type Sql = postgres.Sql<Record<string, unknown>>;
 
-const g = globalThis as unknown as { __vrSql?: Sql };
+const g = globalThis as unknown as { __vrSql?: Sql; __vrUsed?: number };
+
+// Vercel pauses a function between requests. While paused, the database pooler can
+// drop its connections without the function noticing, and the next query then hangs
+// on a dead connection. So after a quiet spell, start a fresh pool instead of reusing
+// the old one. The old pool is left to close itself (idle_timeout), so a request still
+// using it isn't cut off.
+const STALE_MS = 10_000;
 
 export function db(): Sql {
+  const now = Date.now();
+  if (g.__vrSql && now - (g.__vrUsed ?? 0) > STALE_MS) g.__vrSql = undefined;
+  g.__vrUsed = now;
   if (g.__vrSql) return g.__vrSql;
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL is not set. See README.md > Environment variables.');
@@ -17,7 +27,8 @@ export function db(): Sql {
     prepare: false,
     max: process.env.NODE_ENV === 'production' ? 3 : 5,
     idle_timeout: 20,
-    connect_timeout: 10,
+    max_lifetime: 60 * 5,
+    connect_timeout: 8,
     transform: postgres.camel,
     types: {
       numeric: {
