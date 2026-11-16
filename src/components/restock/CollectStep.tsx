@@ -7,6 +7,7 @@ import {
 } from '@/lib/restock-logic';
 import { formatQty, round2 } from '@/lib/restock-math';
 import { setItems } from '@/lib/client/restock-store';
+import { ProductThumb } from './ProductCard';
 import { Dock, plural } from './shared';
 import type { RestockCtx } from './RestockApp';
 
@@ -97,6 +98,7 @@ function Line({ line, items, write }: { line: CollectionLine; items: Map<string,
   return (
     <div className={`line ${st === 'done' ? 'done' : st === 'short' ? 'short' : 'todo'}`} data-line={line.productName}>
       <div className="l-main">
+        <ProductThumb src={line.photoPath} name={line.productName} credit={line.photoCredit} className="l-photo" />
         <div className="l-name"><b>{line.productName}</b><small>{line.kind === 'task' ? line.instructions || forTxt : <>For {forTxt}</>}</small></div>
         <div className="l-right">
           {line.kind === 'qty' ? <span className="l-qty"><b>{round2(line.total)}</b><small>{line.total === 1 ? line.unitSingular : line.unitPlural}</small></span> : null}

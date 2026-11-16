@@ -22,6 +22,7 @@ node tests/e2e/e2e-p2.js
 | `e2e-note.js` | Comments for managers (set `manager_email` + `manager_email_enabled` in app_settings first) |
 | `name-test.js` | Staff name panel on a phone |
 | `e2e-p6.js` | Defrost Planner (optional, offline, two devices, safety warnings), exception-based finishing, Stock Insights. **First** load `defrost-fixture.sql` then `candy-fixture.sql` after the reset |
+| `e2e-p7.js` | Product photos from Open Food Facts, against a stand-in server. Start the app with `OFF_API_BASE=http://localhost:3199 OFF_IMAGE_HOSTS=localhost:3199` |
 | `e2e-stuck-lock.js` | A hung database connection holding a lock: the app says "Sync needs attention" (not "Offline") and uploads by itself once it clears |
 
 Screenshots go to `tests/e2e/out/` (not committed).

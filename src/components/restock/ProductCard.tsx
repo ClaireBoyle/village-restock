@@ -31,7 +31,6 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note }: {
   const value = item[field];
   const [text, setText] = useState(fmt(value));
   const [err, setErr] = useState('');
-  const [zoom, setZoom] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const focused = useRef(false);
   useEffect(() => { if (!focused.current) setText(fmt(value)); }, [value]);
@@ -123,12 +122,7 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note }: {
       </span>
       <div className="pt">
         <div className="pname">
-          {p.photoPath ? (
-            <button type="button" className="pphoto" onClick={() => setZoom(true)} aria-label={`Show photo of ${p.productName}`}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.photoPath} alt="" loading="lazy" />
-            </button>
-          ) : null}
+          <ProductThumb src={p.photoPath} name={p.productName} credit={p.photoCredit} className="pphoto" />
           <h3>{p.productName}</h3>
         </div>
         {quiet && !showArea ? <p className="ps" id={`s-${p.placementId}`}>{status}</p>
@@ -140,13 +134,12 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note }: {
       <div className="pc">{controls}</div>
       {err ? <p className="err pwide" role="alert">{err}</p> : null}
       {clash ? <div className="pwide">{clash}</div> : null}
-      {zoom && p.photoPath ? <PhotoZoom src={p.photoPath} title={p.productName} onClose={() => setZoom(false)} /> : null}
     </article>
   );
 }
 
 /** Full-screen photo. Tap anywhere (or press Escape) to close. */
-export function PhotoZoom({ src, title, onClose }: { src: string; title: string; onClose: () => void }) {
+export function PhotoZoom({ src, title, onClose, credit }: { src: string; title: string; onClose: () => void; credit?: string | null }) {
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', k);
@@ -157,7 +150,23 @@ export function PhotoZoom({ src, title, onClose }: { src: string; title: string;
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src} alt={title} />
       <p>{title}</p>
+      {credit ? <small className="pz-credit">{credit}</small> : null}
       <button type="button" className="btn" onClick={onClose}><Icon name="x" />Close</button>
     </div>
+  );
+}
+
+/** A product photo thumbnail; tap to see it full screen. Renders nothing if there's no photo. */
+export function ProductThumb({ src, name, className = '', credit }: { src: string | null | undefined; name: string; className?: string; credit?: string | null }) {
+  const [zoom, setZoom] = useState(false);
+  if (!src) return null;
+  return (
+    <>
+      <button type="button" className={`pthumb ${className}`} onClick={(e) => { e.stopPropagation(); setZoom(true); }} aria-label={`Show photo of ${name}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt="" loading="lazy" decoding="async" />
+      </button>
+      {zoom ? <PhotoZoom src={src} title={name} credit={credit} onClose={() => setZoom(false)} /> : null}
+    </>
   );
 }

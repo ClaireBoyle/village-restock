@@ -25,6 +25,8 @@ export interface CatProduct {
   affects: string[];
   /** Reference photo (e.g. /api/photos/<id>), or null. */
   photoPath: string | null;
+  /** Credit line for openly licensed photos (e.g. Open Food Facts, CC BY-SA). */
+  photoCredit?: string | null;
 }
 export interface CatPlacement {
   id: string; productId: string; checkAreaId: string; parLevel: number | null;

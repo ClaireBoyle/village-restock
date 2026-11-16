@@ -4,7 +4,7 @@ import { Icon } from '@/components/Icon';
 import { EMPTY_ITEM, collectionLines, isChecked } from '@/lib/restock-logic';
 import { formatQty } from '@/lib/restock-math';
 import { setItems, updateLocalSession } from '@/lib/client/restock-store';
-import { ProductRow } from './ProductCard';
+import { ProductRow, ProductThumb } from './ProductCard';
 import { Dock, initials } from './shared';
 import type { RestockCtx } from './RestockApp';
 
@@ -55,7 +55,7 @@ export function QuickStep({ ctx }: { ctx: RestockCtx }) {
                   const on = selected.has(p.placementId);
                   return (
                     <div key={p.placementId} className="qrow">
-                      <div className="thumb" aria-hidden="true">{initials(p.productName)}</div>
+                      {p.photoPath ? <ProductThumb src={p.photoPath} name={p.productName} credit={p.photoCredit} className="q-photo" /> : <div className="thumb" aria-hidden="true">{initials(p.productName)}</div>}
                       <div className="t"><b>{p.productName}</b><small>{p.areaName} &middot; {p.method === 'par' && p.par !== null ? `Target ${formatQty(p.par, p.unitSingular, p.unitPlural)}` : p.method === 'manual' ? 'Enter what you need' : 'Routine task'}</small></div>
                       <button className={`btn ${on ? 'good' : ''}`} onClick={() => toggle(p.placementId)} aria-pressed={on}>{on ? <><Icon name="check" />Added</> : <><Icon name="plus" />Add</>}</button>
                     </div>

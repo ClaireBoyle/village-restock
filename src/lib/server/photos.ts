@@ -31,3 +31,16 @@ export async function deletePhotoIfUnused(path: string | null | undefined) {
   const [used] = await sql`select (select count(*) from products where photo_path = ${path}) + (select count(*) from check_areas where guide_photo_path = ${path}) as n`;
   if (Number(used.n) === 0) await sql`delete from photos where id = ${id}`;
 }
+
+/** Save image bytes we fetched ourselves (e.g. an Open Food Facts photo), with its credit line. */
+export async function savePhotoBytes(bytes: Uint8Array, credit: string | null, sourceUrl: string | null): Promise<{ path: string } | { error: string }> {
+  const type = sniff(bytes);
+  if (!type) return { error: 'That isn’t a photo the app can use (JPEG, PNG or WebP).' };
+  if (bytes.length > 2_000_000) return { error: 'That photo is too large.' };
+  const sql = db();
+  const [{ has }] = await sql`select exists (select 1 from information_schema.columns where table_name = 'photos' and column_name = 'credit') as has`;
+  const [row] = has
+    ? await sql`insert into photos (data, content_type, bytes, credit, source_url) values (${Buffer.from(bytes)}, ${type}, ${bytes.length}, ${credit}, ${sourceUrl}) returning id`
+    : await sql`insert into photos (data, content_type, bytes) values (${Buffer.from(bytes)}, ${type}, ${bytes.length}) returning id`;
+  return { path: `/api/photos/${row.id}` };
+}

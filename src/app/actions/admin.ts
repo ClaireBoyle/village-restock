@@ -571,3 +571,31 @@ export async function saveInsightSettings(_: ActionResult, form: FormData): Prom
   revalidatePath('/admin/insights');
   return done('Thresholds saved.');
 }
+
+// ---------------------------------------------------------------------------
+// Product photos from Open Food Facts (public, CC BY-SA): search, then a person picks the match.
+// ---------------------------------------------------------------------------
+export async function findProductPhotos(query: string) {
+  await requireAdmin();
+  const { searchOpenFoodFacts } = await import('@/lib/server/open-food-facts');
+  return searchOpenFoodFacts(String(query ?? ''));
+}
+
+export async function chooseOpenFoodFactsPhoto(productId: string, imageUrl: string, code: string): Promise<ActionResult & { path?: string }> {
+  await requireAdmin();
+  if (!uuid.safeParse(productId).success || typeof imageUrl !== 'string' || imageUrl.length > 500) return { error: 'Something went wrong. Reload and try again.' };
+  const { downloadOffImage } = await import('@/lib/server/open-food-facts');
+  const { savePhotoBytes, deletePhotoIfUnused } = await import('@/lib/server/photos');
+  const got = await downloadOffImage(imageUrl);
+  if ('error' in got) return { error: got.error };
+  const cleanCode = String(code ?? '').replace(/[^0-9A-Za-z-]/g, '').slice(0, 40);
+  const saved = await savePhotoBytes(got.bytes, `Photo: Open Food Facts${cleanCode ? ` (product ${cleanCode})` : ''}, CC BY-SA`, cleanCode ? `https://world.openfoodfacts.org/product/${cleanCode}` : imageUrl);
+  if ('error' in saved) return { error: saved.error };
+  const sql = db();
+  const [cur] = await sql`select photo_path from products where id = ${productId}`;
+  if (!cur) return { error: 'That product no longer exists.' };
+  await sql`update products set photo_path = ${saved.path} where id = ${productId}`;
+  await deletePhotoIfUnused(cur.photoPath as string | null);
+  revalidatePath('/admin', 'layout');
+  return { ok: true, message: 'Photo saved.', path: saved.path };
+}

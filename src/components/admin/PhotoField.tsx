@@ -7,7 +7,7 @@ import { setPhoto } from '@/app/actions/admin';
 const MAX_SIDE = 1200;
 
 /** Shrink a photo on this device before upload: phone photos are often 3-8 MB. */
-async function shrink(file: File): Promise<Blob> {
+export async function shrink(file: File): Promise<Blob> {
   const bmp = await createImageBitmap(file); // also reads iPhone HEIC photos in Safari
   const scale = Math.min(1, MAX_SIDE / Math.max(bmp.width, bmp.height));
   const canvas = document.createElement('canvas');

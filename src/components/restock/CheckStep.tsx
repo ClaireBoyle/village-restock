@@ -199,7 +199,7 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
             <ul>{lines.map((l) => (
               <li key={l.key}><button onClick={() => { const pl = l.parts[0]; setReview(false); goArea(view.byId.get(pl.placementId)?.areaId ?? cur.area.id);
                 window.setTimeout(() => document.querySelector(`[data-placement="${pl.placementId}"]`)?.scrollIntoView({ block: 'center' }), 120); }}>
-                <b>{l.kind === 'task' ? '✓' : Math.round(l.total * 100) / 100}</b><span>{l.productName}</span><small>{l.parts.map((x) => x.areaName).join(', ')}</small>
+                <b>{l.kind === 'task' ? '✓' : Math.round(l.total * 100) / 100}</b><span>{l.photoPath ? <img className="en-photo" src={l.photoPath} alt="" loading="lazy" /> /* eslint-disable-line @next/next/no-img-element */ : null}{l.productName}</span><small>{l.parts.map((x) => x.areaName).join(', ')}</small>
               </button></li>
             ))}</ul>
           </div>

@@ -46,6 +46,7 @@ export interface PlacementView {
   affects: string[];
   /** Reference photo, if one has been added. */
   photoPath: string | null;
+  photoCredit?: string | null;
 }
 
 /** What staff have recorded for one placement during a restock. Blank = not yet. */
@@ -100,6 +101,7 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
             categoryName: p.categoryId ? categories.get(p.categoryId) ?? null : null,
             affects: p.affects ?? [],
             photoPath: p.photoPath ?? null,
+            photoCredit: p.photoCredit ?? null,
           };
         });
       return { area, placements };
@@ -195,6 +197,9 @@ export interface CollectionLine {
   locationName: string;
   total: number;
   instructions: string;
+  /** Reference photo of the product, if one has been added. */
+  photoPath?: string | null;
+  photoCredit?: string | null;
   /** Each placement this line restocks, with how much it needs. */
   parts: { placementId: string; areaName: string; need: number }[];
 }
@@ -213,7 +218,7 @@ export function collectionLines(placements: PlacementView[], items: Map<string, 
       if (i.routineChoice !== 'needed') continue;
       map.set(`task:${p.placementId}`, {
         key: `task:${p.placementId}`, kind: 'task', productName: p.productName, unitSingular: p.unitSingular,
-        unitPlural: p.unitPlural, locationId: p.locationId, locationName, total: 0, instructions: p.instructions,
+        unitPlural: p.unitPlural, locationId: p.locationId, locationName, total: 0, instructions: p.instructions, photoPath: p.photoPath ?? null, photoCredit: p.photoCredit ?? null,
         parts: [{ placementId: p.placementId, areaName: p.areaName, need: 0 }],
       });
       continue;
@@ -223,7 +228,7 @@ export function collectionLines(placements: PlacementView[], items: Map<string, 
     const key = `${p.productId}|${p.locationId ?? ''}`;
     const line = map.get(key) ?? {
       key, kind: 'qty' as const, productName: p.productName, unitSingular: p.unitSingular, unitPlural: p.unitPlural,
-      locationId: p.locationId, locationName, total: 0, instructions: p.instructions, parts: [],
+      locationId: p.locationId, locationName, total: 0, instructions: p.instructions, photoPath: p.photoPath ?? null, photoCredit: p.photoCredit ?? null, parts: [],
     };
     line.total = round2(line.total + need);
     line.parts.push({ placementId: p.placementId, areaName: p.areaName, need });

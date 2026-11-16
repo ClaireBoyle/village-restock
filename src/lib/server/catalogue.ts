@@ -22,11 +22,14 @@ export async function loadCatalogue(): Promise<Catalogue> {
     const locations = await tx`select id, name, sort_order from storage_locations where active order by sort_order, name`;
     const categories = await tx`
       select id, department_id, name, sort_order from categories where active order by sort_order, name`;
+    // Photo credits exist once migrations 005/007 have run; never let a missing table break the catalogue.
+    const [{ hasPhotos }] = await tx`select to_regclass('public.photos') is not null as has_photos`;
     const products = await tx`
       select p.id, p.department_id, p.category_id, p.name, p.unit_singular, p.unit_plural, p.method,
              p.allow_decimal, p.instructions, p.default_location_id, p.sort_order, p.photo_path,
              -- read via jsonb so the app still works before migration 003 adds the column
-             coalesce(to_jsonb(p)->'affects', '[]'::jsonb) as affects
+             coalesce(to_jsonb(p)->'affects', '[]'::jsonb) as affects,
+             ${hasPhotos ? tx`(select to_jsonb(ph)->>'credit' from photos ph where p.photo_path = '/api/photos/' || ph.id::text)` : tx`null`} as photo_credit
       from products p join departments d on d.id = p.department_id and d.active
       where p.status = 'active' order by p.sort_order, p.name`;
     const placements = await tx`

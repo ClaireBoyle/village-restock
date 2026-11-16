@@ -9,6 +9,7 @@ const LINKS: { href: string; label: string; icon: IconName }[] = [
   { href: '/admin/shortages', label: 'Shortages', icon: 'warn' },
   { href: '/admin/insights', label: 'Stock Insights', icon: 'grid' },
   { href: '/admin/products', label: 'Products', icon: 'tag' },
+  { href: '/admin/photos', label: 'Product photos', icon: 'camera' },
   { href: '/admin/departments', label: 'Departments & areas', icon: 'layers' },
   { href: '/admin/storerooms', label: 'Storerooms', icon: 'box' },
   { href: '/admin/defrost', label: 'Defrost Planner', icon: 'clock' },
