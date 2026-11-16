@@ -61,9 +61,10 @@ export function Ring({ pct, st }: { pct: number; st: BadgeState }) {
   );
 }
 
-export function Dock({ icon, title, sub, progress, children }: { icon: IconName; title: React.ReactNode; sub?: React.ReactNode; progress?: number; children: React.ReactNode }) {
+export function Dock({ icon, title, sub, progress, above, children }: { icon: IconName; title: React.ReactNode; sub?: React.ReactNode; progress?: number; above?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="dock">
+      {above}
       {progress !== undefined ? <div className="dock-bar" aria-hidden="true"><i style={{ width: `${Math.round(Math.min(1, Math.max(0, progress)) * 100)}%` }} /></div> : null}
       <div className="wrap dock-in">
         <div className="dock-txt"><Icon name={icon} /><div><b>{title}</b>{sub ? <small>{sub}</small> : null}</div></div>

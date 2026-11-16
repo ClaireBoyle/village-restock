@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
-import { cardState, needOf, type ItemState, type PlacementView } from '@/lib/restock-logic';
+import { cardState, isRequired, needOf, type ItemState, type PlacementView } from '@/lib/restock-logic';
 import { formatQty, parseQuantity, round2 } from '@/lib/restock-math';
 
 const fmt = (n: number | null) => (n === null ? '' : String(round2(n)));
@@ -48,12 +48,16 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note }: {
   // From blank, + gives 1 and − gives 0 (a quick way to say "none" / "empty").
   const bump = (dir: 1 | -1) => commit(Math.max(0, round2((value ?? 0) + dir * step)));
   const c = item.conflict;
+  // Exception-based products ("staff enter", routine tasks): a blank row is simply fine,
+  // so it isn't shown as a job to do. Only target-level counts are required.
+  const optional = !isRequired(p);
+  const quiet = optional && st === 'none';
 
   // One line that says where this product stands, in words as well as colour.
   const target = p.method === 'par' && p.par !== null ? `Target ${round2(p.par)}` : null;
   let status: React.ReactNode;
   if (c) status = <><Icon name="warn" />Two different {p.method === 'routine' ? 'answers' : 'counts'}: choose below</>;
-  else if (st === 'none') status = p.method === 'par' ? <>Not checked &middot; {target ?? 'no target set'}</> : 'Not checked';
+  else if (st === 'none') status = p.method === 'par' ? <>Not checked &middot; {target ?? 'no target set'}</> : <span className="sr-only">Not entered</span>;
   else if (p.method === 'routine') status = item.routineChoice === 'needed' ? <><Icon name="up" />On the list</> : <><Icon name="check" />Not needed</>;
   else if ((need ?? 0) > 0) status = <>{target ? `${target} · ` : ''}<Icon name="up" /><b>{formatQty(need!, p.unitSingular, p.unitPlural)}</b><span className="lg">&nbsp;to collect</span></>;
   else status = <>{target ? `${target} · ` : ''}<Icon name="check" />{p.method === 'manual' ? 'None needed' : 'At target'}</>;
@@ -74,10 +78,8 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note }: {
   let controls: React.ReactNode = null;
   if (c) controls = null;
   else if (p.method === 'manual') {
-    controls = <>
-      <button type="button" className={`pquick ${value === 0 ? 'on' : ''}`} aria-pressed={value === 0} onClick={() => commit(value === 0 ? null : 0)}>None</button>
-      {stepper}
-    </>;
+    // No "None" button: leaving it blank already means nothing is needed (0 can still be typed).
+    controls = stepper;
   } else if (p.method === 'par') {
     const full = value !== null && p.par !== null && value >= p.par;
     controls = <>
@@ -86,11 +88,10 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note }: {
     </>;
   } else {
     controls = (
+      // One toggle: tap if the task is needed tonight; left alone it isn't.
       <div className="pseg" role="group" aria-label={`${p.productName}: needed tonight?`}>
         <button type="button" className={item.routineChoice === 'needed' ? 'on warn' : ''} aria-pressed={item.routineChoice === 'needed'}
-          onClick={() => onChange({ routineChoice: item.routineChoice === 'needed' ? null : 'needed' })}>Needed</button>
-        <button type="button" className={item.routineChoice === 'not_needed' ? 'on' : ''} aria-pressed={item.routineChoice === 'not_needed'}
-          onClick={() => onChange({ routineChoice: item.routineChoice === 'not_needed' ? null : 'not_needed' })}>Not needed</button>
+          onClick={() => onChange({ routineChoice: item.routineChoice === 'needed' ? null : 'needed' })}><Icon name={item.routineChoice === 'needed' ? 'check' : 'plus'} />Needed</button>
       </div>
     );
   }
@@ -116,7 +117,7 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note }: {
 
   const routineText = p.method === 'routine' ? (p.instructions || 'Routine task') : null;
   return (
-    <article className={`prow card s-${st} m-${p.method}`} data-placement={p.placementId}>
+    <article className={`prow card s-${st} m-${p.method} ${quiet ? 'quiet' : ''}`} data-placement={p.placementId}>
       <span className="pi" aria-hidden="true">
         <Icon name={st === 'bad' ? 'warn' : st === 'none' ? 'circle' : st === 'warn' ? 'up' : 'check'} />
       </span>
@@ -130,7 +131,8 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note }: {
           ) : null}
           <h3>{p.productName}</h3>
         </div>
-        <p className="ps" id={`s-${p.placementId}`}>{showArea ? <span className="parea">{p.areaName} &middot; </span> : null}{status}</p>
+        {quiet && !showArea ? <p className="ps" id={`s-${p.placementId}`}>{status}</p>
+          : <p className="ps" id={`s-${p.placementId}`}>{showArea ? <span className="parea">{p.areaName}{quiet ? '' : ' · '}</span> : null}{status}</p>}
         {routineText ? <p className="pnote task"><Icon name="task" />{routineText}</p> : null}
         {note ? <button type="button" className={`pnote ${noteOpen ? 'open' : ''}`} onClick={() => setNoteOpen(!noteOpen)} aria-expanded={noteOpen}><Icon name="info" /><span>{note}</span></button> : null}
         {onRemove ? <button type="button" className="linkbtn premove" onClick={onRemove}>Remove from list</button> : null}

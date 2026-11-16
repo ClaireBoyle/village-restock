@@ -75,7 +75,7 @@ const prow = (n) => `article.prow:has(h3:text-is("${n}"))`;
   const first = (await P.$$eval('article.prow h3', (els) => els.map((x) => x.textContent)))[0];
   await P.fill(`${prow(first)} .qty-input`, '2');
   ok(await P.locator('.area-end:has-text("still needed")').count() === 0, 'no "still to check" demand for blank staff-entered products');
-  await P.click('.dock button:has-text("Collect")'); await P.waitForSelector('.line');
+  await P.click('.dock .dock-acts button:has-text("Collect")'); await P.waitForSelector('.line');
   await P.click('.line .l-all'); await P.click('.dock button:has-text("Review")');
   await P.waitForSelector('.dock button:has-text("Finish restock"):not([disabled])');
   await P.click('.dock button:has-text("Finish restock")'); await P.waitForSelector('.finish-hero');

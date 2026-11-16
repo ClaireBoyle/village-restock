@@ -24,6 +24,7 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
   const { view, session, items, areaRecords, recorded, who } = ctx;
   const [skipOpen, setSkipOpen] = useState(false);
   const [zoom, setZoom] = useState(false);
+  const [review, setReview] = useState(false); // the "N to collect" list above the bottom bar
   // The kitchen reminder can be hidden for this restock (remembered on this device).
   const remKey = `vr-kreminder-${session.id}`;
   const [reminderHidden, setReminderHidden] = useState(false);
@@ -50,7 +51,19 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
   const next = view.areas.find(({ area }) => area.id !== cur.area.id && !['complete', 'skipped'].includes(statusOf(area.id)));
   const active = activePlacements('full', view.placements, recorded);
   const lines = collectionLines(active, items);
-  const checkedAll = active.filter(chk).length;
+  // What to show as progress. Target-level products need a count; everything else is exception-based,
+  // so we count what was entered rather than "checked".
+  const progressOf = (ps: typeof active) => {
+    const req = ps.filter(isRequired);
+    return { req: req.length, counted: req.filter(chk).length, entered: ps.filter((p) => !isRequired(p) && chk(p)).length };
+  };
+  const areaLabel = (ps: typeof active, short = false) => {
+    const g = progressOf(ps);
+    if (g.req) return short ? `${g.counted}/${g.req}` : `${g.counted} of ${g.req} counted${g.entered ? ` · ${g.entered} entered` : ''}`;
+    return g.entered || !short ? `${g.entered} entered` : '';
+  };
+  const all = progressOf(active);
+
   const notes = areaNotes(cur.placements);
   const hasGuide = !!(cur.area.guideText || cur.area.guidePhotoPath || notes.shared.length);
 
@@ -98,12 +111,12 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
         <nav className="rail" aria-label="Areas">
           {view.areas.map(({ area, placements }) => {
             const s = statusOf(area.id), r = areaRecords.get(area.id);
-            const n = placements.filter(chk).length;
-            const pct = s === 'complete' || s === 'skipped' ? 1 : placements.length ? n / placements.length : 0;
-            const sub = s === 'skipped' ? `Skipped${r?.skipReason ? ` · ${r.skipReason}` : ''}` : s === 'complete' ? 'Complete' : `${n} of ${placements.length} checked`;
+            const g = progressOf(placements);
+            const pct = s === 'complete' || s === 'skipped' ? 1 : g.req ? g.counted / g.req : 0;
+            const sub = s === 'skipped' ? `Skipped${r?.skipReason ? ` · ${r.skipReason}` : ''}` : s === 'complete' ? 'Complete' : areaLabel(placements);
             return (
               <button key={area.id} className={`area-btn s-${AREA_BADGE[s]} ${area.id === cur.area.id ? 'cur' : ''}`} onClick={() => goArea(area.id)} aria-current={area.id === cur.area.id ? 'true' : undefined}>
-                <Ring pct={pct} st={AREA_BADGE[s]} /><span className="t"><b>{area.name}</b><small className="lg">{sub}</small><small className="sm">{s === 'complete' ? 'Done' : s === 'skipped' ? 'Skipped' : `${n}/${placements.length}`}</small></span>
+                <Ring pct={pct} st={AREA_BADGE[s]} /><span className="t"><b>{area.name}</b><small className="lg">{sub}</small><small className="sm">{s === 'complete' ? 'Done' : s === 'skipped' ? 'Skipped' : areaLabel(placements, true)}</small></span>
               </button>
             );
           })}
@@ -115,11 +128,11 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
               <h2 id="area-name">{cur.area.name}</h2>
               <p className="ah-sub">
                 {st === 'complete' ? <Badge st="ok">Complete</Badge> : st === 'skipped' ? <Badge st="skip" icon="skip">Skipped</Badge> : null}
-                <span><b>{done} of {cur.placements.length}</b> checked{left && st !== 'skipped' ? <> &middot; {left} left</> : null}</span>
+                <span>{areaLabel(cur.placements)}</span>
               </p>
             </div>
             <div className="acts">
-              {left > 0 && done > 0 && st !== 'skipped' ? <button className="btn small" onClick={firstUnchecked}><Icon name="down" /><span className="lg">Next unchecked</span><span className="sm">Next</span></button> : null}
+              {reqLeft > 0 && done > 0 && st !== 'skipped' ? <button className="btn small" onClick={firstUnchecked}><Icon name="down" /><span className="lg">Next to count</span><span className="sm">Next</span></button> : null}
               {st !== 'complete' && st !== 'skipped' ? <button className="btn small" onClick={() => setSkipOpen(true)}><Icon name="skip" />Skip</button> : null}
             </div>
           </div>
@@ -180,7 +193,20 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
         </section>
       </div>
       </main>
-      <Dock icon="list" progress={active.length ? checkedAll / active.length : 0} title={<>{checkedAll} of {active.length} checked<span className="dock-sep"> &middot; </span><span className="dock-2">{lines.length} to collect</span></>}
+      <Dock icon="list" progress={all.req ? all.counted / all.req : undefined}
+        above={review && lines.length ? (
+          <div className="entered" id="entered-list">
+            <ul>{lines.map((l) => (
+              <li key={l.key}><button onClick={() => { const pl = l.parts[0]; setReview(false); goArea(view.byId.get(pl.placementId)?.areaId ?? cur.area.id);
+                window.setTimeout(() => document.querySelector(`[data-placement="${pl.placementId}"]`)?.scrollIntoView({ block: 'center' }), 120); }}>
+                <b>{l.kind === 'task' ? '✓' : Math.round(l.total * 100) / 100}</b><span>{l.productName}</span><small>{l.parts.map((x) => x.areaName).join(', ')}</small>
+              </button></li>
+            ))}</ul>
+          </div>
+        ) : null}
+        title={<>{all.req ? `${all.counted} of ${all.req} counted` : `${all.entered} entered`}<span className="dock-sep"> &middot; </span>
+          <button type="button" className="dock-2 dock-review" onClick={() => setReview(!review)} disabled={!lines.length} aria-expanded={review} aria-controls="entered-list">
+            {lines.length} to collect{lines.length ? <Icon name={review ? 'down' : 'up'} /> : null}</button></>}
         sub={next && st === 'complete' ? `Next area: ${next.area.name}` : undefined}>
         <button className="btn save-exit" onClick={ctx.saveAndExit} aria-label="Save and exit"><Icon name="save" /><span className="lg">Save and exit</span><span className="sm">Save &amp; exit</span></button>
         <button className="btn primary big" onClick={() => ctx.go('collect')}><span className="lg">Collection list</span><span className="sm">Collect</span><Icon name="next" /></button>

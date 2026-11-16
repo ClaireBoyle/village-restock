@@ -40,7 +40,7 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
   await A.click(`${card('Cos lettuce')} button:has-text("Full")`);
   await A.waitForSelector('.banner.s-ok:has-text("Fridge 1 complete")'); ok(true, 'Fridge 1 completes by itself once every product is checked');
   await A.click('.banner-toggle'); await A.waitForSelector('button:has-text("Mark Fridge 1 complete")');
-  ok(await A.isVisible('.area-btn:has-text("Fridge 1") >> text=checked'), 'tapping "Fridge 1 complete" reopens the area');
+  ok(await A.isVisible('.area-btn:has-text("Fridge 1") >> text=counted'), 'tapping "Fridge 1 complete" reopens the area');
   await A.fill(`${card('Lemons')} .qty-input`, '11'); await A.waitForTimeout(800);
   ok(await A.isVisible('button:has-text("Mark Fridge 1 complete")'), 'editing a reopened area does not snap it shut again');
   await A.click('button:has-text("Mark Fridge 1 complete")');

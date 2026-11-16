@@ -37,26 +37,30 @@ const FRIDGE = ['Fuze Peach Iced Tea', 'Monster Original', 'Monster White', 'Mon
   await P.click('.ag-text'); ok(await P.locator('.aguide.open').count() === 0, 'tap again to shrink it');
 
   // ---- Zero vs unchecked; status in words; progress ----
-  ok(await has(P, `${row("Milk M&M's")} .ps`, 'Not checked'), 'untouched product says Not checked');
-  await P.click(`${row("Peanut M&M's")} .pquick`);
-  ok(await has(P, `${row("Peanut M&M's")} .ps`, 'None needed'), 'None = checked, nothing needed');
+  ok(await P.locator(`${row("Milk M&M's")}.quiet`).count() === 1 && !(await P.isVisible(`${row("Milk M&M's")} .ps`)), 'untouched staff-entered product is calm: no "Not checked" to-do');
+  ok(await P.locator(`${row("Milk M&M's")} .pquick`).count() === 0, 'no None button: blank already means nothing needed');
+  await P.fill(`${row("Peanut M&M's")} .qty-input`, '0');
+  ok(await has(P, `${row("Peanut M&M's")} .ps`, 'None needed'), 'typing 0 = checked, nothing needed (still different from blank)');
   await P.fill(`${row("Milk M&M's")} .qty-input`, '5');
   ok(await has(P, `${row("Milk M&M's")} .ps`, '5 packets'), 'typed 5 -> 5 packets to collect');
   await P.click(`${row('Maltesers')} button[aria-label^="One more"]`); await P.click(`${row('Maltesers')} button[aria-label^="One more"]`);
   ok(await val(P, `${row('Maltesers')} .qty-input`, '2'), '+ twice from blank = 2');
   await P.click(`${row('Pods')} button[aria-label^="One less"]`);
   ok(await val(P, `${row('Pods')} .qty-input`, '0') && await has(P, `${row('Pods')} .ps`, 'None needed'), '− from blank = 0 (checked, none needed)');
-  await P.click(`${row("Peanut M&M's")} .pquick`);
-  ok(await has(P, `${row("Peanut M&M's")} .ps`, 'Not checked'), 'tapping None again returns it to Not checked');
-  ok(await has(P, '.area-btn.cur', '3/31'), 'area progress counts checked products, including zero');
-  ok(await has(P, '.dock', '3 of 50 checked') && await has(P, '.dock', '2 to collect'), 'bottom bar: checked count and products to collect');
+  await P.fill(`${row("Peanut M&M's")} .qty-input`, '');
+  ok(await P.locator(`${row("Peanut M&M's")}.quiet`).waitFor({ timeout: 8000 }).then(() => true, () => false), 'clearing the box returns it to blank (not entered)');
+  ok(await has(P, '.area-btn.cur', '3 entered'), 'area tab counts what was entered, including 0');
+  ok(await has(P, '.dock', '3 entered') && await has(P, '.dock', '2 to collect'), 'bottom bar: what was entered and what to collect');
+  await P.click('.dock-review'); await P.waitForSelector('.entered');
+  ok(await has(P, '.entered', "Milk M&M's") && await has(P, '.entered', 'Maltesers'), 'tapping "to collect" lists everything entered for a quick review');
+  await P.click('.dock-review');
   // Enter jumps to the next product
   await P.focus(`${row('Skittles')} .qty-input`); await P.keyboard.type('4'); await P.keyboard.press('Enter');
   ok(await P.evaluate(() => document.activeElement?.closest('article')?.querySelector('h3')?.textContent) === 'Starburst', 'Enter moves straight to the next product');
   ok(await has(P, '.area-next', 'Only enter products that need restocking'), 'exception-based: blanks are fine, no "go back and check" prompt');
 
   // Fill the rest of the stand -> completes by itself
-  for (const n of stand) { const v = await P.inputValue(`${row(n)} .qty-input`); if (v === '') await P.click(`${row(n)} .pquick`); }
+  for (const n of stand) { const v = await P.inputValue(`${row(n)} .qty-input`); if (v === '') await P.fill(`${row(n)} .qty-input`, '0'); }
   await P.fill(`${row('Coca-Cola Bottle')} .qty-input`, '3');
   await P.waitForSelector('.banner.s-ok:has-text("Confection stand complete")');
   ok(true, 'area completes by itself once every product is checked');
@@ -66,9 +70,9 @@ const FRIDGE = ['Fuze Peach Iced Tea', 'Monster Original', 'Monster White', 'Mon
   ok(JSON.stringify(fridge) === JSON.stringify(FRIDGE), 'FOH drinks fridge: Fuze first, then Monster, water/soft drinks, juice and milk');
   ok(!(await P.textContent('.area')).match(/top shelf|middle shelf|bottom shelf/i), 'no shelf headings shown');
   for (const [n, v] of [['Pump', '2'], ['Mount Franklin Still Water', '12'], ['Sprite Bottle', '2'], ['Oat Milk', '1'], ['Coca-Cola Bottle', '5']]) await P.fill(`${row(n)} .qty-input`, v);
-  for (const n of FRIDGE) { if (await P.inputValue(`${row(n)} .qty-input`) === '') await P.click(`${row(n)} .pquick`); }
+  for (const n of FRIDGE) { if (await P.inputValue(`${row(n)} .qty-input`) === '') await P.fill(`${row(n)} .qty-input`, '0'); }
   await P.waitForSelector('.banner.s-ok:has-text("FOH drinks fridge complete")');
-  ok(await has(P, '.dock', '50 of 50 checked'), 'every product checked: 50 of 50');
+  ok(await has(P, '.dock', '50 entered'), 'every product answered: 50 entered');
   ok(await P.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'no sideways scrolling on a phone (check)');
   await P.screenshot({ path: out + 'p5-fridge.png' });
 
