@@ -53,6 +53,8 @@ export interface PlacementView {
   screenAreaId: string;
   /** In an optional section (e.g. Spirits cupboard): never required, collapsed by default. */
   optional: boolean;
+  /** Subheading shown above this product (starts a group, e.g. "Mixers, Water & Milk"). */
+  heading?: string | null;
   photoPath: string | null;
   photoCredit?: string | null;
 }
@@ -123,6 +125,7 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
         affects: p.affects ?? [],
         photoPath: p.photoPath ?? null,
         photoCredit: p.photoCredit ?? null,
+        heading: pl.heading?.trim() || null,
         screenAreaId, optional,
       };
     });

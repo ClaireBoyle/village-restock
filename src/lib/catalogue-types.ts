@@ -41,6 +41,8 @@ export interface CatProduct {
 export interface CatPlacement {
   id: string; productId: string; checkAreaId: string; parLevel: number | null;
   locationId: string | null; instructions: string | null; sortOrder: number;
+  /** A small subheading shown above this product in its area (e.g. "Beer, Cider & Hard Soda"). */
+  heading?: string | null;
 }
 
 export interface Catalogue {

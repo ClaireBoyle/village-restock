@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Icon } from '@/components/Icon';
 import { saveAreaOrder } from '@/app/actions/admin';
 
-interface Item { id: string; productId: string; name: string; category: string | null; detail: string }
+interface Item { id: string; productId: string; name: string; category: string | null; detail: string; heading: string | null }
 
 /**
  * Drag the handle (works with a finger or a mouse) or use the arrows, then Save.
@@ -19,7 +19,9 @@ export function ArrangeList({ areaId, items: initial }: { areaId: string; items:
   const [drag, setDrag] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const list = useRef<HTMLOListElement>(null);
-  const dirty = items.map((i) => i.id).join() !== saved.map((i) => i.id).join();
+  const sig = (xs: Item[]) => JSON.stringify(xs.map((i) => [i.id, i.heading?.trim() || null]));
+  const dirty = sig(items) !== sig(saved);
+  const setHeading = (id: string, heading: string | null) => { setItems((cur) => cur.map((x) => (x.id === id ? { ...x, heading } : x))); setMsg(null); };
 
   const move = (from: number, to: number) => {
     if (to < 0 || to >= items.length || from === to) return;
@@ -36,7 +38,7 @@ export function ArrangeList({ areaId, items: initial }: { areaId: string; items:
     move(from, to);
   };
   const save = () => start(async () => {
-    const r = await saveAreaOrder(areaId, items.map((i) => i.id));
+    const r = await saveAreaOrder(areaId, items.map((i) => i.id), Object.fromEntries(items.map((i) => [i.id, i.heading?.trim() || null])));
     if (r?.error) setMsg({ ok: false, text: r.error });
     else { setSaved(items); setMsg({ ok: true, text: 'Order saved. Devices get it next time they connect.' }); router.refresh(); }
   });
@@ -46,7 +48,14 @@ export function ArrangeList({ areaId, items: initial }: { areaId: string; items:
     <section className="panel arrange">
       <ol ref={list} className="arr-list" onPointerMove={onPointerMove} onPointerUp={() => setDrag(null)} onPointerCancel={() => setDrag(null)}>
         {items.map((it, i) => (
-          <li key={it.id} data-id={it.id} className={drag === it.id ? 'dragging' : ''}>
+          <li key={it.id} data-id={it.id} className={`${drag === it.id ? 'dragging' : ''} ${it.heading !== null ? 'has-head' : ''}`}>
+            {it.heading !== null ? (
+              <span className="arr-head">
+                <input value={it.heading} maxLength={40} placeholder="Subheading, e.g. Beer, Cider & Hard Soda" aria-label={`Subheading above ${it.name}`}
+                  onChange={(e) => setHeading(it.id, e.target.value)} onPointerDown={(e) => e.stopPropagation()} />
+                <button type="button" className="linkbtn" onClick={() => setHeading(it.id, null)} aria-label={`Remove the subheading above ${it.name}`}><Icon name="x" /></button>
+              </span>
+            ) : null}
             <button type="button" className="arr-handle" aria-label={`Drag ${it.name}`}
               onPointerDown={(e) => { e.preventDefault(); (e.currentTarget.closest('ol') as HTMLElement).setPointerCapture(e.pointerId); setDrag(it.id); }}>
               <Icon name="list" /></button>
@@ -56,6 +65,7 @@ export function ArrangeList({ areaId, items: initial }: { areaId: string; items:
               <button type="button" onClick={() => move(i, i - 1)} disabled={i === 0} aria-label={`Move ${it.name} up`}><Icon name="up" /></button>
               <button type="button" onClick={() => move(i, i + 1)} disabled={i === items.length - 1} aria-label={`Move ${it.name} down`}><Icon name="down" /></button>
             </span>
+            {it.heading === null ? <button type="button" className="btn small arr-hbtn" onClick={() => setHeading(it.id, '')} aria-label={`Add a subheading above ${it.name}`}><Icon name="tag" /><span className="lg">Subheading</span></button> : null}
             <Link className="btn small arr-edit" href={`/admin/products/${it.productId}`}>Edit</Link>
           </li>
         ))}

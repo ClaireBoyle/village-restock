@@ -984,3 +984,9 @@ button.pnote.open span{display:block}
 .rs-sure{font-weight:600}
 .sheet .row-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
 .sheet .btn.danger:not([disabled]){background:var(--bad);color:#fff;border-color:var(--bad)}
+/* Subheadings inside an area's list: small, quiet, with a hairline; full width in two-column layouts */
+.prows>.phead{grid-column:1/-1;display:flex;align-items:center;gap:10px;margin:8px 2px 0;font-family:var(--f-body);font-size:12.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+.prows>.phead:first-child{margin-top:0}
+.prows>.phead::after{content:"";flex:1;height:1px;background:var(--hair)}
+.theme-navy .prows>.phead::after{background:rgba(255,255,255,.12)}
+.gc .prows>.phead{color:color-mix(in srgb,var(--d-accent) 75%,var(--ink-2))}

@@ -486,7 +486,7 @@ export async function importProductsCsv(text: string) {
 // ---------------------------------------------------------------------------
 // Product order within a checking area (the order staff physically find them)
 // ---------------------------------------------------------------------------
-export async function saveAreaOrder(areaId: string, placementIds: string[]): Promise<ActionResult> {
+export async function saveAreaOrder(areaId: string, placementIds: string[], headings?: Record<string, string | null>): Promise<ActionResult> {
   await requireAdmin();
   if (!uuid.safeParse(areaId).success || !Array.isArray(placementIds) || placementIds.length > 2000
     || placementIds.some((id) => !uuid.safeParse(id).success) || new Set(placementIds).size !== placementIds.length) {
@@ -500,6 +500,13 @@ export async function saveAreaOrder(areaId: string, placementIds: string[]): Pro
     // The new order first; anything not shown (archived products) keeps its place after them.
     const order = [...placementIds, ...inArea.filter((id) => !placementIds.includes(id))];
     for (let k = 0; k < order.length; k++) await tx`update product_placements set sort_order = ${k + 1} where id = ${order[k]}`;
+    // Subheadings (migration 011): blank removes one.
+    if (headings && (await tx`select 1 from information_schema.columns where table_name = 'product_placements' and column_name = 'heading'`).length) {
+      for (const id of placementIds) {
+        const h = typeof headings[id] === 'string' ? headings[id]!.trim().slice(0, 40) : '';
+        await tx`update product_placements set heading = ${h || null} where id = ${id}`;
+      }
+    }
     return 'ok';
   });
   if (result === 'changed') return { error: 'The products in this area changed while you were arranging. Reload and try again.' };

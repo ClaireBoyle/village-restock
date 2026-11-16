@@ -13,7 +13,7 @@ export default async function ArrangeArea({ params }: { params: Promise<{ areaId
     from check_areas a join departments d on d.id = a.department_id where a.id = ${areaId}`;
   if (!area) notFound();
   const items = await sql`
-    select pl.id, p.id as product_id, p.name, c.name as category, p.method, pl.par_level, p.unit_plural
+    select pl.id, p.id as product_id, p.name, c.name as category, p.method, pl.par_level, p.unit_plural, (to_jsonb(pl)->>'heading') as heading
     from product_placements pl
     join products p on p.id = pl.product_id and p.status = 'active'
     left join categories c on c.id = p.category_id
@@ -25,11 +25,12 @@ export default async function ArrangeArea({ params }: { params: Promise<{ areaId
         <div>
           <Link className="linkbtn" href={`/admin/products?dept=${area.departmentId}`}><Icon name="back" />Products</Link>
           <h1>Arrange {String(area.name)}</h1>
-          <p>{String(area.departmentName)} &middot; Put products in the order staff find them, e.g. top shelf first, left to right. Staff see one list in this order; shelves aren&rsquo;t shown.</p>
+          <p>{String(area.departmentName)} &middot; Put products in the order staff find them, e.g. top shelf first, left to right. Staff see one list in this order. Optionally add a small subheading above a product to start a group (e.g. &ldquo;Beer, Cider &amp; Hard Soda&rdquo;).</p>
         </div>
       </div>
       <ArrangeList areaId={areaId} items={items.map((r) => ({
         id: String(r.id), productId: String(r.productId), name: String(r.name), category: (r.category as string) ?? null,
+        heading: (r.heading as string) ?? null,
         detail: r.method === 'par' ? `Target ${r.parLevel ?? '–'} ${r.unitPlural}` : r.method === 'manual' ? 'Staff enter' : 'Routine task',
       }))} />
     </>

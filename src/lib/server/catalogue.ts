@@ -36,7 +36,8 @@ export async function loadCatalogue(): Promise<Catalogue> {
       from products p join departments d on d.id = p.department_id and d.active
       where p.status = 'active' order by p.sort_order, p.name`;
     const placements = await tx`
-      select pl.id, pl.product_id, pl.check_area_id, pl.par_level, pl.location_id, pl.instructions, pl.sort_order
+      select pl.id, pl.product_id, pl.check_area_id, pl.par_level, pl.location_id, pl.instructions, pl.sort_order,
+             (to_jsonb(pl)->>'heading') as heading
       from product_placements pl
       join products p on p.id = pl.product_id and p.status = 'active'
       join check_areas a on a.id = pl.check_area_id and a.active

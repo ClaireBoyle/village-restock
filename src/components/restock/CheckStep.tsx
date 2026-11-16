@@ -184,7 +184,10 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
 
           <div className="prows">
             {cur.placements.length === 0 ? <p className="meta">No products in this area yet.</p> : null}
-            {cur.own.map(renderRow)}
+            {/* Optional subheadings (e.g. "Mixers, Water & Milk"), always open, in the same list */}
+            {cur.own.map((p) => p.heading
+              ? [<h3 key={`h-${p.placementId}`} className="phead">{p.heading}</h3>, renderRow(p)]
+              : renderRow(p))}
           </div>
 
           {cur.sections.map((sec) => {

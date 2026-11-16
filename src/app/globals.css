@@ -954,3 +954,8 @@ body:has(.theme-gold) { background: #241B10; }
 .pf-cand small { font-size: 11.5px; color: var(--ink-2); }
 .pf-src { font-size: 12px; color: var(--ink-2); margin: 0; }
 .pz-credit { color: rgba(255,255,255,.7); font-size: 12px; }
+.arr-list li.has-head { flex-wrap: wrap; }
+.arr-head { flex-basis: 100%; display: flex; gap: 6px; align-items: center; padding-bottom: 6px; margin-bottom: 2px; border-bottom: 1px dashed var(--hair); }
+.arr-head input { flex: 1; min-height: 38px; font-weight: 700; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; }
+.arr-hbtn .ic { width: 16px; height: 16px; }
+@media (max-width: 640px) { .arr-hbtn .lg { display: none; } }
