@@ -5,6 +5,8 @@ const postgres = require('postgres');
 const B = process.env.E2E_URL || 'http://localhost:3100';
 const sql = postgres(process.env.E2E_DATABASE_URL || 'postgres://vr:vr@localhost:5432/village_restock', { onnotice: () => {}, transform: postgres.camel });
 const ok = (c, m) => { if (!c) throw new Error('FAIL: ' + m); console.log('PASS:', m); };
+// Staff-entered products start as "+ Add": tap it first, then type the amount.
+const fillQty = async (pg, rowSel, v) => { if (await pg.$(`${rowSel} button.padd`)) { await pg.click(`${rowSel} button.padd`); await pg.waitForSelector(`${rowSel} .qty-input`); } await pg.fill(`${rowSel} .qty-input`, v); };
 const has = (p, sel, t, ms = 8000) => p.locator(sel).filter({ hasText: t }).first().waitFor({ timeout: ms }).then(() => true, () => false);
 const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; for (;;) { const r = await q(); if (check(r)) return r; if (Date.now() > end) return r; await new Promise((res) => setTimeout(res, 300)); } };
 const sec = (name) => `.psec:has(.psec-t b:text-is("${name}"))`;
@@ -22,28 +24,31 @@ const row = (scope, n) => `${scope} article.prow:has(h3:text-is("${n}"))`;
   // Back bench visible straight away; sections collapsed
   const bench = await P.$$eval('.area > .prows article.prow h3', (els) => els.map((e) => e.textContent));
   ok(JSON.stringify(bench) === JSON.stringify(['42 Below', 'Bacardi Carta Blanca', "Jack Daniel's", 'Jim Beam']), 'Back bench products shown first: ' + bench.join(', '));
-  ok(await P.locator('.area-btn').count() === 1, 'one area tab (sections live inside it)');
+  ok(await P.locator('.area-btn').count() === 0 && await has(P, '.area-head h2', 'Back bench'), 'one area, so no area list: Back bench is the heading (sections live inside it)');
   ok(await P.locator(`${sec('Other FOH spirits')} article.prow`).count() === 0 && await P.locator(`${sec('Spirits cupboard')} article.prow`).count() === 0, 'other FOH spirits and the cupboard start collapsed');
   ok(await has(P, sec('Spirits cupboard'), 'Optional'), 'cupboard marked Optional');
 
   // Enter on the back bench
-  await P.fill(`${row('.area > .prows', 'Jim Beam')} .qty-input`, '2');
-  await P.fill(`${row('.area > .prows', '42 Below')} .qty-input`, '1');
+  await fillQty(P, `${row('.area > .prows', 'Jim Beam')}`, '2');
+  await fillQty(P, `${row('.area > .prows', '42 Below')}`, '1');
   // Other FOH spirits
   await P.click(`${sec('Other FOH spirits')} .psec-h`);
-  await P.fill(`${row(sec('Other FOH spirits'), "Hendrick's")} .qty-input`, '1');
+  await fillQty(P, `${row(sec('Other FOH spirits'), "Hendrick's")}`, '1');
   // Cupboard: expand, see the double-count hint, add extra
   await P.click(`${sec('Spirits cupboard')} .psec-h`);
   ok(await has(P, `${sec('Spirits cupboard')} .psec-hint`, 'Only add extra'), 'cupboard explains: only add extra stock');
   ok(await has(P, row(sec('Spirits cupboard'), 'Jim Beam'), 'Already 2 for Back bench'), 'cupboard row shows what was already entered for Back bench');
-  await P.fill(`${row(sec('Spirits cupboard'), 'Jim Beam')} .qty-input`, '3');
-  ok(await has(P, '.dock', '4 entered') && await has(P, '.dock', '3 to collect'), 'bottom bar: 4 entered, 3 products to collect (Jim Beam merged)');
+  await fillQty(P, `${row(sec('Spirits cupboard'), 'Jim Beam')}`, '3');
+  ok(await has(P, '.dock', '3 to collect') && await has(P, '.area-head', '4 entered').then((x) => !x), 'bottom bar: 3 products to collect (Jim Beam merged), no repeated "entered" count');
 
   // Collection: one line per product, quantities consolidated, from the Alcohol storeroom
   await P.click('.dock .dock-acts button:has-text("Collect")'); await P.waitForSelector('.line');
   const jim = await P.textContent('.line[data-line="Jim Beam"]');
   ok(await P.locator('.line[data-line="Jim Beam"]').count() === 1 && jim.includes('5') && jim.includes('Back bench 2') && jim.includes('Spirits cupboard 3'), 'Jim Beam: one line of 5 (Back bench 2 · Spirits cupboard 3)');
   ok(await has(P, '.room-h', 'Alcohol Storeroom'), 'collected from the Alcohol storeroom');
+  ok(await P.locator('.col-note').count() === 0 && !(await P.textContent('main')).includes('not checked'), 'no "products not checked" warning: untouched products are not outstanding work');
+  ok(await has(P, '.line .l-few', 'Got fewer'), 'collection buttons read "Got fewer" and "Got all"');
+  await P.screenshot({ path: (process.env.E2E_OUT || 'tests/e2e/out') + '/p8-collect.png' });
   // Partial collection + shortage on the merged line still works
   await P.click('.line[data-line="Jim Beam"] .l-few'); await P.click('.line[data-line="Jim Beam"] .chip:has-text("Confirmed")');
   ok(await has(P, '.line[data-line="Jim Beam"] .short-txt', 'Short 1'), 'shortage recorded on the merged line');

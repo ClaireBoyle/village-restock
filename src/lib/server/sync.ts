@@ -4,7 +4,7 @@ import { loadCatalogue } from './catalogue';
 import { queueRestockEmail } from './email';
 import {
   CONFLICT_FIELDS, EMPTY_ITEM, activePlacements, areaStatus, isChecked, isRequired, stockOutcomes, type Conflict, collectionLines, departmentView, exceptions, lineGot, lineInfo, lineState,
-  type AreaStatus, type ItemState,
+  scopeView, type AreaStatus, type ItemState, type SessionKind,
 } from '@/lib/restock-logic';
 import { opSchema, type ItemFields, type OpResult, type RemoteSession, type SyncOp } from '@/lib/sync-types';
 
@@ -64,7 +64,7 @@ async function addPerson(tx: Tx, sessionId: string, by: string | null) {
 }
 
 async function sessionRow(tx: Tx, id: string) {
-  const [s] = await tx`select id, department_id, kind, status from restock_sessions where id = ${id} for update`;
+  const [s] = await tx`select id, department_id, kind, status, (to_jsonb(restock_sessions)->>'area_id') as area_id from restock_sessions where id = ${id} for update`;
   if (!s) throw new OpError('Restock not found on the server yet', false); // its start op may still be on its way
   return s;
 }
@@ -83,6 +83,17 @@ async function apply(tx: Tx, op: SyncOp, deviceId: string): Promise<{ mergedInto
           await addPerson(tx, String(existing.id), op.by);
           return { mergedInto: String(existing.id) };
         }
+      }
+      if (s.kind === 'area') {
+        const [area] = await tx`select name from check_areas where id = ${s.areaId!} and department_id = ${s.departmentId}`;
+        if (!area) throw new OpError('That area no longer exists');
+        // Needs migration 009 (kind 'area' and the area columns). Until then, retry later rather than lose it.
+        const [{ ok }] = await tx`select exists (select 1 from information_schema.columns where table_name = 'restock_sessions' and column_name = 'area_id') as ok`;
+        if (!ok) throw new OpError('The server needs a database update (009_area_restocks.sql)', false);
+        await tx`insert into restock_sessions (id, department_id, kind, trading_date, started_at, people, area_id, area_name)
+          values (${s.id}, ${s.departmentId}, 'area', ${s.tradingDate}, ${s.startedAt}, ${op.by ? [op.by] : []}, ${s.areaId!}, ${String(area.name)})
+          on conflict (id) do nothing`;
+        return {};
       }
       await tx`insert into restock_sessions (id, department_id, kind, trading_date, started_at, people)
         values (${s.id}, ${s.departmentId}, ${s.kind}, ${s.tradingDate}, ${s.startedAt}, ${op.by ? [op.by] : []})
@@ -163,7 +174,7 @@ async function apply(tx: Tx, op: SyncOp, deviceId: string): Promise<{ mergedInto
 
     case 'session.finish': {
       const s = await sessionRow(tx, op.sessionId);
-      await finishSession(tx, { id: op.sessionId, departmentId: String(s.departmentId), kind: s.kind as 'full' | 'quick' }, op.exceptionReason, op.at, op.by, op.note ?? null);
+      await finishSession(tx, { id: op.sessionId, departmentId: String(s.departmentId), kind: s.kind as SessionKind, areaId: (s.areaId as string) ?? null }, op.exceptionReason, op.at, op.by, op.note ?? null);
       await addPerson(tx, op.sessionId, op.by);
       return {};
     }
@@ -219,10 +230,12 @@ async function noteColumn(tx: Tx): Promise<boolean> {
   return hasNoteColumn;
 }
 
-async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind: 'full' | 'quick' }, reason: string | null, at: string, by: string | null, note: string | null) {
+async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind: SessionKind; areaId: string | null }, reason: string | null, at: string, by: string | null, note: string | null) {
   const comment = note?.trim() ? note.trim() : null;
   const cat = await loadCatalogue();
-  const view = departmentView(cat, s.departmentId);
+  const whole = departmentView(cat, s.departmentId);
+  // An area restock covers just its area (and that area's sections).
+  const view = whole && s.kind === 'area' ? scopeView(whole, s.areaId) : whole;
   const rows = await tx`select * from session_items where session_id = ${s.id}`;
   const areaRows = await tx`select check_area_id, status from session_areas where session_id = ${s.id}`;
   const items = new Map<string, ItemState>(rows.map((r) => [String(r.placementId), {
@@ -237,7 +250,7 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
   let finalReason = reason;
   if (view) {
     // Quick restocks cover only the products staff touched.
-    const placements = s.kind === 'full' ? view.placements : view.placements.filter((p) => items.has(p.placementId));
+    const placements = s.kind !== 'quick' ? view.placements : view.placements.filter((p) => items.has(p.placementId));
     const ex = exceptions({ kind: s.kind, view, placements, recordedAreas: recorded, items });
     if (ex.length && !reason) { status = 'finished_exceptions'; finalReason = 'Finished with outstanding work'; }
 
@@ -256,8 +269,8 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
   await tx`update restock_sessions set status = ${status}, exception_reason = ${finalReason}, finished_at = ${at} where id = ${s.id}`;
   if (await noteColumn(tx)) await tx`update restock_sessions set finish_note = ${comment} where id = ${s.id}`;
 
-  // Full restocks: queue the manager email in this same transaction.
-  if (s.kind === 'full' && view) {
+  // Full and area restocks: queue the manager email in this same transaction.
+  if (s.kind !== 'quick' && view) {
     const [row] = await tx`select people from restock_sessions where id = ${s.id}`;
     const [dept] = await tx`select name from departments where id = ${s.departmentId}`;
     const notChecked: string[] = [];
@@ -272,10 +285,10 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
         if (un.length) notChecked.push(`${area.name}: ${un.join(', ')}`);
       }
     }
-    const lines = collectionLines(activePlacements('full', view.placements, recorded), items);
+    const lines = collectionLines(activePlacements(s.kind, view.placements, recorded), items);
     const host = process.env.VERCEL_PROJECT_PRODUCTION_URL;
     await queueRestockEmail(tx, s.id, at, {
-      departmentName: String(dept?.name ?? view.department.name),
+      departmentName: `${String(dept?.name ?? view.department.name)}${s.kind === 'area' && view.areas[0] ? ` · ${view.areas[0].area.name}` : ''}`,
       finishedLabel: `${new Date(at).toLocaleDateString('en-AU', { timeZone: cat.settings.timeZone, weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '')}, ${new Date(at).toLocaleTimeString('en-AU', { timeZone: cat.settings.timeZone, hour: 'numeric', minute: '2-digit' }).toLowerCase()}`,
       people: (row?.people as string[]) ?? [], exceptionReason: finalReason,
       outcomes: stockOutcomes(lines, items, view.byId), notChecked, note: comment,
@@ -290,7 +303,7 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
 function toRemote(s: Record<string, unknown>, areas: Record<string, unknown>[], items: Record<string, unknown>[]): RemoteSession {
   const iso = (v: unknown) => (v ? new Date(v as string).toISOString() : null);
   return {
-    id: String(s.id), departmentId: String(s.departmentId), kind: s.kind as 'full' | 'quick',
+    id: String(s.id), departmentId: String(s.departmentId), kind: s.kind as RemoteSession['kind'], areaId: (s.areaId as string) ?? null,
     tradingDate: s.tradingDate instanceof Date ? s.tradingDate.toISOString().slice(0, 10) : String(s.tradingDate).slice(0, 10),
     status: s.status as RemoteSession['status'], exceptionReason: (s.exceptionReason as string) ?? null, note: (s.finishNote as string) ?? null,
     people: (s.people as string[]) ?? [], startedAt: iso(s.startedAt)!, finishedAt: iso(s.finishedAt), updatedAt: iso(s.updatedAt)!,
@@ -314,10 +327,10 @@ export async function getSession(id: string): Promise<RemoteSession | null> {
   return toRemote(s, areas, items);
 }
 
-/** Full restocks for one trading day, with their areas and items, for every department. */
+/** Full and area restocks for one trading day, with their areas and items, for every department. */
 export async function sessionsForDay(tradingDate: string): Promise<RemoteSession[]> {
   const sql = db();
-  const sessions = await sql`select * from restock_sessions where trading_date = ${tradingDate} and kind = 'full'`;
+  const sessions = await sql`select * from restock_sessions where trading_date = ${tradingDate} and kind in ('full', 'area') order by started_at`;
   if (!sessions.length) return [];
   const ids = sessions.map((s) => String(s.id));
   const areas = await sql`select * from session_areas where session_id in ${sql(ids)}`;

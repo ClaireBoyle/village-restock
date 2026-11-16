@@ -6,7 +6,7 @@ import { TopBar, timeLabel } from '@/components/TopBar';
 import { OfflineBanner, TopControls } from '@/components/restock/SyncControls';
 import { useCatalogue } from '@/lib/client/use-catalogue';
 import { useLive } from '@/lib/client/hooks';
-import { localDb, type LocalArea, type LocalSession } from '@/lib/client/local-db';
+import { localDb, type LocalArea, type LocalItem, type LocalSession } from '@/lib/client/local-db';
 import { tradingDate } from '@/lib/restock-math';
 import { adminSignOut } from '@/app/actions/admin';
 import type { RemoteSession } from '@/lib/sync-types';
@@ -17,7 +17,9 @@ type Seg = 'done' | 'skip' | 'none';
 /** Tonight's state for one department, from this device's copy or from what other devices uploaded. */
 interface DeptState {
   d: CatDepartment;
-  kind: 'active' | 'quick' | 'done' | 'exceptions' | 'idle';
+  kind: 'active' | 'quick' | 'done' | 'exceptions' | 'idle' | 'part';
+  /** Departments restocked area by area: each area's state tonight, in words. */
+  areaDetail?: string;
   segs: Seg[];           // one per area, in walking order
   doneAreas: number;
   products: number;
@@ -53,6 +55,40 @@ function stateFor(cat: Catalogue, d: CatDepartment, local: LocalSession | undefi
   return { ...base, kind: 'idle' };
 }
 
+/**
+ * Departments restocked area by area (Candy Bar): an area counts as done once it has a finished
+ * restock tonight. Opened-but-empty area restocks don't count as started.
+ */
+function areaStateFor(cat: Catalogue, d: CatDepartment, local: LocalSession[], localItems: LocalItem[], remote: RemoteSession[], quick: LocalSession | undefined): DeptState {
+  const areas = cat.areas.filter((a) => a.departmentId === d.id && !a.parentAreaId).sort((a, b) => a.sortOrder - b.sortOrder);
+  const areaIds = new Set(cat.areas.filter((a) => a.departmentId === d.id).map((a) => a.id));
+  const products = cat.placements.filter((p) => areaIds.has(p.checkAreaId)).length;
+  const hasEntries = (id: string, remoteItems?: RemoteSession['items']) => (remoteItems ?? localItems.filter((i) => i.sessionId === id))
+    .some((i) => i.requestedQty !== null || i.currentQty !== null || i.routineChoice !== null);
+  const localIds = new Set(local.map((s) => s.id));
+  const runs = [
+    ...local.filter((s) => s.departmentId === d.id && s.kind === 'area').map((s) => ({ s, entered: hasEntries(s.id) })),
+    ...remote.filter((r) => r.departmentId === d.id && r.kind === 'area' && !localIds.has(r.id)).map((r) => ({ s: r, entered: hasEntries(r.id, r.items) })),
+  ];
+  const per = areas.map((a) => {
+    const mine = runs.filter((r) => r.s.areaId === a.id);
+    const open = mine.find((r) => r.s.status === 'open' && r.entered);
+    const done = mine.filter((r) => r.s.status === 'finished' || r.s.status === 'finished_exceptions')
+      .sort((x, y) => String(y.s.finishedAt).localeCompare(String(x.s.finishedAt)))[0];
+    return { a, open, done };
+  });
+  const segs: Seg[] = per.map((p) => (p.done ? 'done' : 'none'));
+  const doneAreas = segs.filter((x) => x === 'done').length;
+  const people = [...new Set(runs.filter((r) => r.entered || r.s.status !== 'open').flatMap((r) => r.s.people))];
+  const kind: DeptState['kind'] = per.some((p) => p.open) ? 'active' : areas.length && doneAreas === areas.length ? 'done' : doneAreas ? 'part' : quick?.selected.length ? 'quick' : 'idle';
+  const areaDetail = per.map((p) => `${p.a.name} ${p.open ? 'in progress' : p.done ? `✓ ${t(p.done.s.finishedAt)}` : 'not yet'}`).join(' · ');
+  const updated = runs.map((r) => r.s.updatedAt).sort().pop() ?? quick?.updatedAt ?? '';
+  return {
+    d, kind, segs, doneAreas, products, people, startedAt: null, finishedAt: null, reason: null,
+    quickCount: quick?.selected.length ?? 0, updatedAt: updated, areaDetail: areas.length ? areaDetail : undefined,
+  };
+}
+
 export function HomeScreen({ isAdmin }: { isAdmin: boolean }) {
   const { catalogue, checkedAt, error } = useCatalogue();
   const [toast, setToast] = useState('');
@@ -83,11 +119,16 @@ export function HomeScreen({ isAdmin }: { isAdmin: boolean }) {
 
   const local = useLive(async () => (day ? (await localDb().sessions.toArray()).filter((s) => s.tradingDate === day || (s.kind === 'quick' && s.status === 'open')) : []), [day], [] as LocalSession[]);
   const localAreas = useLive(async () => localDb().areas.toArray(), [], [] as LocalArea[]);
+  const areaRunIds = local.filter((s) => s.kind === 'area').map((s) => s.id);
+  const localItems = useLive(async () => (areaRunIds.length ? localDb().items.where('sessionId').anyOf(areaRunIds).toArray() : []), [areaRunIds.join()], [] as LocalItem[]);
 
-  const states = catalogue ? catalogue.departments.map((d) => stateFor(catalogue, d,
-    local.find((s) => s.departmentId === d.id && s.kind === 'full' && s.tradingDate === day), localAreas,
-    remote.find((r) => r.departmentId === d.id),
-    local.find((s) => s.departmentId === d.id && s.kind === 'quick' && s.status === 'open'))) : [];
+  const states = catalogue ? catalogue.departments.map((d) => {
+    const quick = local.find((s) => s.departmentId === d.id && s.kind === 'quick' && s.status === 'open');
+    if (d.restockByArea) return areaStateFor(catalogue, d, local.filter((s) => s.tradingDate === day), localItems, remote, quick);
+    return stateFor(catalogue, d,
+      local.find((s) => s.departmentId === d.id && s.kind === 'full' && s.tradingDate === day), localAreas,
+      remote.find((r) => r.departmentId === d.id && r.kind === 'full'), quick);
+  }) : [];
   const doneCount = states.filter((s) => s.kind === 'done' || s.kind === 'exceptions').length;
 
   return (
@@ -153,6 +194,7 @@ const STATUS: Record<DeptState['kind'], { icon: 'half' | 'bolt' | 'check' | 'war
   active: { icon: 'half', text: 'In progress' },
   quick: { icon: 'bolt', text: 'Quick restock saved' },
   done: { icon: 'check', text: 'Restocked' },
+  part: { icon: 'half', text: 'Partly restocked' },
   exceptions: { icon: 'warn', text: 'Finished with exceptions' },
   idle: { icon: 'circle', text: 'Not started' },
 };
@@ -161,7 +203,7 @@ const STATUS: Record<DeptState['kind'], { icon: 'half' | 'bolt' | 'check' | 'war
 function Lane({ s }: { s: DeptState }) {
   const unset = s.kind === 'idle' && s.segs.length === 0;
   const st = unset ? { icon: 'info' as const, text: 'Not set up yet' } : STATUS[s.kind];
-  const detail = unset ? 'An admin can add its areas and products' : s.kind === 'active' ? `${s.doneAreas} of ${s.segs.length} areas${s.people.length ? ` · ${s.people.join(', ')}` : ''}${s.startedAt ? ` · since ${t(s.startedAt)}` : ''}`
+  const detail = unset ? 'An admin can add its areas and products' : s.areaDetail ? s.areaDetail : s.kind === 'active' ? `${s.doneAreas} of ${s.segs.length} areas${s.people.length ? ` · ${s.people.join(', ')}` : ''}${s.startedAt ? ` · since ${t(s.startedAt)}` : ''}`
     : s.kind === 'quick' ? `${s.quickCount} on the list · full restock not started`
     : s.kind === 'done' ? `Finished ${t(s.finishedAt)}${s.people.length ? ` · ${s.people.join(', ')}` : ''}`
     : s.kind === 'exceptions' ? `${t(s.finishedAt)}${s.reason ? ` · ${s.reason}` : ''}`
@@ -184,7 +226,8 @@ function DepartmentCard({ s }: { s: DeptState }) {
   const { d } = s;
   const gold = d.theme === 'gold';
   const unset = s.kind === 'idle' && s.segs.length === 0;
-  const action = unset ? 'Not set up yet' : { active: 'Resume restock', quick: 'Continue quick restock', done: 'View summary', exceptions: 'View summary', idle: 'Start restock' }[s.kind];
+  const action = unset ? 'Not set up yet' : s.d.restockByArea ? (s.kind === 'active' ? 'Resume restock' : 'Choose an area')
+    : { active: 'Resume restock', quick: 'Continue quick restock', done: 'View summary', exceptions: 'View summary', idle: 'Start restock', part: 'Resume restock' }[s.kind];
   return (
     <Link href={`/d/${d.id}`} className={`dcard2 k-${unset ? 'unset' : s.kind} ${gold ? 'gold' : 'village'}`} aria-label={`${d.name}: ${unset ? 'Not set up yet' : `${STATUS[s.kind].text}. ${action}`}.`}>
       {/* The colour-block title, as staff know it: Village blue, or Gold Class gold */}

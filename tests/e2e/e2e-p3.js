@@ -5,6 +5,8 @@ const bcrypt = require('bcryptjs');
 const B = process.env.E2E_URL || 'http://localhost:3100', out = __dirname + '/out/';
 const sql = postgres(process.env.E2E_DATABASE_URL || 'postgres://vr:vr@localhost:5432/village_restock', { onnotice: () => {}, transform: postgres.camel });
 const ok = (c, m) => { if (!c) throw new Error('FAIL: ' + m); console.log('PASS:', m); };
+// Staff-entered products start as "+ Add": tap it first, then type the amount.
+const fillQty = async (pg, rowSel, v) => { if (await pg.$(`${rowSel} button.padd`)) { await pg.click(`${rowSel} button.padd`); await pg.waitForSelector(`${rowSel} .qty-input`); } await pg.fill(`${rowSel} .qty-input`, v); };
 const card = (name) => `article.card:has(h3:text-is("${name}"))`;
 const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes synced")', { timeout: 20000 });
 const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; for (;;) { const r = await q(); if (check(r)) return r; if (Date.now() > end) return r; await new Promise((res) => setTimeout(res, 300)); } };
@@ -28,17 +30,17 @@ const hasText = (p, sel, t, timeout = 10000) => p.locator(sel).filter({ hasText:
   await Bp.click('.dcard2:has-text("Kitchen")'); await Bp.click('button:has-text("Resume full restock")'); await Bp.waitForSelector(card('Tomatoes'));
 
   // Same device editing quickly is never a clash
-  await A.fill(`${card('Lemons')} .qty-input`, '3');
+  await fillQty(A, `${card('Lemons')}`, '3');
   await waitDb(() => sql`select current_qty from session_items where product_name = 'Lemons'`, (r) => r[0] && Number(r[0].currentQty) === 3);
-  await A.fill(`${card('Lemons')} .qty-input`, '4');
+  await fillQty(A, `${card('Lemons')}`, '4');
   await waitDb(() => sql`select current_qty from session_items where product_name = 'Lemons'`, (r) => r[0] && Number(r[0].currentQty) === 4);
   const [lem] = await sql`select current_qty, conflict from session_items where product_name = 'Lemons'`;
   ok(Number(lem.currentQty) === 4 && !lem.conflict, 'the same person changing their own count is not a clash');
 
   // Two people, two different counts for Tomatoes
   await A.route('**/api/**', (r) => r.abort());
-  await A.fill(`${card('Tomatoes')} .qty-input`, '5');
-  await Bp.fill(`${card('Tomatoes')} .qty-input`, '3');
+  await fillQty(A, `${card('Tomatoes')}`, '5');
+  await fillQty(Bp, `${card('Tomatoes')}`, '3');
   await waitDb(() => sql`select current_qty from session_items where product_name = 'Tomatoes'`, (r) => r[0] && Number(r[0].currentQty) === 3);
   await A.unroute('**/api/**'); await A.evaluate(() => window.dispatchEvent(new Event('online')));
   const [tom] = await waitDb(() => sql`select current_qty, conflict, updated_by from session_items where product_name = 'Tomatoes'`, (r) => r[0]?.conflict);

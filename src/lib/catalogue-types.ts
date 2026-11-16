@@ -10,6 +10,8 @@ export type DepartmentIcon = 'bar' | 'kitchen' | 'candy' | 'box';
 export interface CatDepartment {
   id: string; name: string; shortName: string; groupLabel: string;
   theme: DepartmentTheme; icon: DepartmentIcon; description: string; sortOrder: number;
+  /** Each area is restocked on its own (Candy Bar), instead of one full restock of every area. */
+  restockByArea?: boolean;
 }
 export interface CatArea {
   id: string; departmentId: string; name: string; guideText: string;
@@ -19,7 +21,11 @@ export interface CatArea {
   /** open: shown expanded · collapsed: tap to show · optional: collapsed and never required. */
   sectionMode?: 'open' | 'collapsed' | 'optional';
 }
-export interface CatLocation { id: string; name: string; sortOrder: number }
+export interface CatLocation {
+  id: string; name: string; sortOrder: number;
+  /** Shown once under this storeroom's heading on collection lists (e.g. "Use opened boxes first"). */
+  collectNote?: string;
+}
 export interface CatCategory { id: string; departmentId: string; name: string; sortOrder: number }
 export interface CatProduct {
   id: string; departmentId: string; categoryId: string | null; name: string;

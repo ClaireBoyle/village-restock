@@ -24,7 +24,13 @@ export default async function Overview({ searchParams }: { searchParams: Promise
       (select count(*) from session_areas a where a.session_id = s.id and a.status in ('complete', 'skipped'))::int as done,
       (select count(*) from check_areas ca where ca.department_id = d.id and ca.active)::int as total
     from departments d left join restock_sessions s on s.department_id = d.id and s.trading_date = ${today} and s.kind = 'full'
-    where d.active order by d.sort_order, d.name`;
+    where d.active and not coalesce((to_jsonb(d)->>'restock_by_area')::boolean, false) order by d.sort_order, d.name`;
+  // Departments restocked area by area (e.g. Candy Bar): each area restock tonight.
+  const byArea = await sql`
+    select d.name, s.id, s.status, s.people, (to_jsonb(s)->>'area_name') as area_name, s.started_at
+    from departments d join restock_sessions s on s.department_id = d.id and s.trading_date = ${today} and s.kind = 'area'
+    where d.active and (s.status <> 'open' or exists (select 1 from session_items i where i.session_id = s.id))
+    order by d.sort_order, s.started_at`;
   const [c] = await sql`
     select
       (select count(*) from departments where active)::int as departments,
@@ -65,7 +71,7 @@ export default async function Overview({ searchParams }: { searchParams: Promise
 
       <section className="panel" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <h2>Tonight&rsquo;s full restocks</h2><Link className="linkbtn" href="/admin/restocks">All restocks<Icon name="next" /></Link></div>
+          <h2>Tonight&rsquo;s restocks</h2><Link className="linkbtn" href="/admin/restocks">All restocks<Icon name="next" /></Link></div>
         <div className="rows">
           {tonight.map((t) => {
             const [cls, label] = !t.id ? ['s-none', 'Not started'] : t.status === 'finished' ? ['s-ok', 'Complete'] : t.status === 'finished_exceptions' ? ['s-warn', 'Finished with exceptions'] : ['s-info', `In progress \u00b7 ${t.done} of ${t.total} areas`];
@@ -74,6 +80,16 @@ export default async function Overview({ searchParams }: { searchParams: Promise
                 <div className="grow"><div className="title">{String(t.name)}</div>{t.people && (t.people as string[]).length ? <div className="meta">{(t.people as string[]).join(', ')}</div> : null}</div>
                 <span className={`badge ${cls}`}>{label}</span>
                 {t.id ? <Link className="btn small" href={`/admin/restocks/${t.id}`}>Details<Icon name="next" /></Link> : null}
+              </div>
+            );
+          })}
+          {byArea.map((t) => {
+            const [cls, label] = t.status === 'finished' ? ['s-ok', 'Complete'] : t.status === 'finished_exceptions' ? ['s-warn', 'Finished with exceptions'] : ['s-info', 'In progress'];
+            return (
+              <div key={String(t.id)} className="row">
+                <div className="grow"><div className="title">{String(t.name)} &middot; {String(t.areaName ?? 'Area')}</div>{t.people && (t.people as string[]).length ? <div className="meta">{(t.people as string[]).join(', ')}</div> : null}</div>
+                <span className={`badge ${cls}`}>{label}</span>
+                <Link className="btn small" href={`/admin/restocks/${t.id}`}>Details<Icon name="next" /></Link>
               </div>
             );
           })}

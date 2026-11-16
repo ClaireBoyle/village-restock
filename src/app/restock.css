@@ -862,3 +862,93 @@ button.pnote.open span{display:block}
 .psec .prows{padding:0 8px}
 .psec-hint{display:flex;gap:6px;align-items:flex-start;margin:0 14px 8px;font-size:13px;line-height:1.4;color:var(--ink-2)}
 .psec-hint .ic{width:15px;height:15px;flex:none;margin-top:2px;color:var(--d-accent)}
+
+/* =============================================================================
+   Candy Bar refinement: area picker, compact guide, product rows with a fixed photo slot
+   ========================================================================== */
+/* Area picker: one card per area, restocked on its own */
+.apick{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))}
+.type.acard{padding:14px 16px;gap:10px;border-radius:20px}
+.acard .ac-top{display:flex;gap:10px;align-items:flex-start;justify-content:space-between}
+.acard h2{font-size:21px;letter-spacing:-.02em}
+.acard .ac-t .meta{margin-top:2px}
+.ac-photos{display:flex;flex:none}
+.ac-photos img{width:36px;height:36px;border-radius:10px;object-fit:contain;background:#fff;padding:2px;box-shadow:0 0 0 2px var(--surface);margin-left:-8px}
+.ac-st{display:flex;flex-wrap:wrap;gap:6px}
+.ac-acts{display:flex;gap:8px;flex-wrap:wrap}
+.ac-acts .btn.primary{flex:1;min-width:160px}
+.acard.k-done{opacity:.92}
+.quick-link{display:flex;gap:10px;align-items:center;width:100%;min-height:56px;padding:8px 14px;border-radius:16px;border:1px solid var(--hair);background:var(--surface);color:var(--ink);text-align:left}
+.quick-link>.ic{width:20px;height:20px;flex:none;color:var(--d-accent)}
+.quick-link>.ic:last-child{color:var(--ink-2)}
+.quick-link span{flex:1;min-width:0;display:flex;flex-direction:column}
+.quick-link small{color:var(--ink-2);font-size:13px}
+.theme-navy .quick-link{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12)}
+
+/* One area on its own: no area list beside it */
+.chk-layout.one{grid-template-columns:minmax(0,1fr)}
+@media (min-width:860px){.chk-layout.one .prows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 8px;align-items:stretch}}
+
+/* A short area instruction: one or two lines, no card */
+.aguide-line{display:flex;gap:7px;align-items:flex-start;margin:0;padding:2px 2px 0;font-size:14px;line-height:1.4;color:var(--ink-2)}
+.aguide-line .ic{width:16px;height:16px;flex:none;margin-top:2px;color:var(--d-accent)}
+
+/* Storeroom reminder, once, under its heading */
+.room-note{display:flex;gap:7px;align-items:flex-start;margin:2px 0 2px;padding:7px 10px;border-radius:10px;font-size:13.5px;line-height:1.4;color:var(--ink);background:var(--d-soft)}
+.room-note .ic{width:16px;height:16px;flex:none;margin-top:2px;color:var(--d-accent)}
+
+/* Product rows: [photo] name + status · controls on the right. The photo slot is always there. */
+.card.prow,.theme-navy .card.prow{grid-template-columns:46px minmax(0,1fr) auto;gap:2px 10px;padding:6px 8px 6px 6px;min-height:58px;border:1px solid var(--hair);border-left:1px solid var(--hair);box-shadow:none}
+.theme-navy .card.prow{border-color:rgba(255,255,255,.08)}
+.card.prow>.pphoto{grid-column:1;grid-row:1/span 2;align-self:center}
+.card.prow>.pt{grid-column:2;grid-row:1/span 2;align-self:center}
+.card.prow>.pc{grid-column:3;grid-row:1/span 2;align-self:center}
+/* An area restock has no area list, so its name is the heading (also on phones). */
+.chk-layout.one .area-head h2{position:static;width:auto;height:auto;overflow:visible;clip:auto;font-size:20px}
+.chk-layout.one .area-head{display:flex;min-height:0}
+.card.prow>.pwide{grid-column:1/-1}
+.pphoto{width:46px;height:46px;border-radius:10px;padding:0;border:0;overflow:hidden;display:grid;place-items:center;background:#fff;box-shadow:none}
+.pphoto img{width:100%;height:100%;object-fit:contain;padding:3px;display:block}
+.pphoto.ph{background:color-mix(in srgb,var(--surface-2) 70%,transparent);color:var(--ink-2)}
+.theme-navy .pphoto.ph{background:rgba(255,255,255,.06)}
+.pphoto.ph .ic{width:20px;height:20px;opacity:.35}
+.card.prow .pt h3{font-size:15.5px;font-weight:600;line-height:1.25;overflow-wrap:break-word;word-break:normal;hyphens:auto}
+.card.prow .ps{font-size:12.5px}
+/* Untouched: neutral, nothing to do. Needed: a soft highlight. None needed (0): calm and quiet. */
+.card.prow.s-none,.theme-navy .card.prow.s-none{background:var(--surface)}
+.theme-navy .card.prow.s-none{background:rgba(255,255,255,.045)}
+.card.prow.s-warn,.theme-navy .card.prow.s-warn{background:color-mix(in srgb,var(--warn-bg) 55%,var(--surface));border-color:color-mix(in srgb,var(--warn-fill) 35%,transparent);box-shadow:inset 3px 0 0 var(--warn-fill)}
+.theme-navy .card.prow.s-warn{background:rgba(242,180,81,.12)}
+.card.prow.s-ok,.theme-navy .card.prow.s-ok{background:var(--surface);border-color:var(--hair)}
+.theme-navy .card.prow.s-ok{background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.06)}
+.card.prow.m-manual.s-ok .pt h3{font-weight:500;color:var(--ink-2)}
+.card.prow.s-bad,.theme-navy .card.prow.s-bad{box-shadow:inset 3px 0 0 var(--bad);border-color:var(--bad-line)}
+.card.prow.quiet,.theme-navy .card.prow.quiet{border-left-color:var(--hair)}
+.theme-navy .card.prow.quiet{border-color:rgba(255,255,255,.08)}
+/* "+ Add": one compact control until something is needed */
+.padd{min-width:92px;height:44px;padding:0 14px;display:inline-flex;align-items:center;justify-content:center;gap:5px;border-radius:12px;border:1px solid var(--hair);background:var(--surface-2);color:var(--ink);font-weight:600;font-size:15px;transition:transform .08s,background .15s}
+.padd .ic{width:18px;height:18px;stroke-width:2.4;color:var(--d-accent)}
+.padd:active{transform:scale(.95)}
+.theme-navy .padd{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.16);color:#fff}
+.pstep .pclear{color:var(--ink-2)}
+.m-manual .pstep .qty-input{width:52px}
+@media (max-width:640px){
+  .card.prow,.theme-navy .card.prow{grid-template-columns:44px minmax(0,1fr) auto;gap:2px 8px;padding:5px 6px 5px 5px;min-height:56px}
+  .pphoto{width:44px;height:44px}
+  .card.prow .pt h3{font-size:15px}
+  .pstep button{width:44px;height:44px}
+  .m-manual .pstep .qty-input{width:46px;height:44px}
+  .padd{min-width:84px}
+}
+@media (max-width:359px){
+  .card.prow,.theme-navy .card.prow{grid-template-columns:44px minmax(0,1fr)}
+  .card.prow>.pt{grid-row:1}
+  .card.prow>.pc{grid-row:2;grid-column:2/-1;justify-content:flex-start}
+}
+.pthumb.pphoto{width:46px;height:46px;border-radius:10px;box-shadow:none}
+@media (max-width:640px){.pthumb.pphoto{width:44px;height:44px}}
+/* Collected lines: clearly done (green tick, soft green tint), still easy to undo */
+.line.done,.theme-navy .line.done{background:color-mix(in srgb,var(--ok-bg) 70%,var(--surface));border-left-color:var(--ok)}
+.theme-navy .line.done{background:rgba(52,199,123,.16);border-color:rgba(52,199,123,.38)}
+.line.done .l-name b{text-decoration:line-through;text-decoration-thickness:1.5px;text-decoration-color:color-mix(in srgb,var(--ok) 70%,transparent)}
+.l-few{white-space:nowrap}

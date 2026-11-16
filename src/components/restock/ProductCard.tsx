@@ -46,6 +46,10 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note }: {
   const step = p.allowDecimal ? 0.5 : 1;
   // From blank, + gives 1 and − gives 0 (a quick way to say "none" / "empty").
   const bump = (dir: 1 | -1) => commit(Math.max(0, round2((value ?? 0) + dir * step)));
+  // "Staff enter" products start as a single "+ Add". Once added, − steps down to 0 ("none needed"),
+  // and − at 0 clears it back to untouched (blank = not entered, which is different from 0).
+  const progressive = p.method === 'manual';
+  const atZero = progressive && value === 0;
   const c = item.conflict;
   // Exception-based products ("staff enter", routine tasks): a blank row is simply fine,
   // so it isn't shown as a job to do. Only target-level counts are required.
@@ -57,13 +61,17 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note }: {
   let status: React.ReactNode;
   if (c) status = <><Icon name="warn" />Two different {p.method === 'routine' ? 'answers' : 'counts'}: choose below</>;
   else if (st === 'none') status = p.method === 'par' ? <>Not checked &middot; {target ?? 'no target set'}</> : <span className="sr-only">Not entered</span>;
+  else if (progressive && (need ?? 0) > 0) status = <><b>{formatQty(need!, p.unitSingular, p.unitPlural)}</b><span>to collect</span></>;
+  else if (progressive) status = <><Icon name="check" />None needed</>;
   else if (p.method === 'routine') status = item.routineChoice === 'needed' ? <><Icon name="up" />On the list</> : <><Icon name="check" />Not needed</>;
   else if ((need ?? 0) > 0) status = <>{target ? `${target} · ` : ''}<Icon name="up" /><b>{formatQty(need!, p.unitSingular, p.unitPlural)}</b><span className="lg">&nbsp;to collect</span></>;
   else status = <>{target ? `${target} · ` : ''}<Icon name="check" />{p.method === 'manual' ? 'None needed' : 'At target'}</>;
 
   const stepper = (
     <div className="pstep">
-      <button type="button" onClick={() => bump(-1)} aria-label={`One less ${p.productName}`}><Icon name="minus" /></button>
+      {atZero
+        ? <button type="button" className="pclear" onClick={() => commit(null)} aria-label={`Clear ${p.productName}`}><Icon name="x" /></button>
+        : <button type="button" onClick={() => bump(-1)} aria-label={`One less ${p.productName}`}><Icon name="minus" /></button>}
       <input className="qty-input" id={`q-${p.placementId}`} type="text" inputMode={p.allowDecimal ? 'decimal' : 'numeric'} enterKeyHint="next"
         value={text} placeholder="–" autoComplete="off" aria-describedby={`s-${p.placementId}`}
         aria-label={p.method === 'par' ? `${p.productName}: how many on the shelf` : `${p.productName}: how many needed`}
@@ -77,8 +85,11 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note }: {
   let controls: React.ReactNode = null;
   if (c) controls = null;
   else if (p.method === 'manual') {
-    // No "None" button: leaving it blank already means nothing is needed (0 can still be typed).
-    controls = stepper;
+    // Untouched: one compact Add. Leaving it alone already means nothing is needed.
+    controls = value === null && !err
+      ? <button type="button" className="padd" onClick={() => commit(1)}
+          aria-label={`Add ${p.productName}`}><Icon name="plus" />Add</button>
+      : stepper;
   } else if (p.method === 'par') {
     const full = value !== null && p.par !== null && value >= p.par;
     controls = <>
@@ -117,14 +128,11 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note }: {
   const routineText = p.method === 'routine' ? (p.instructions || 'Routine task') : null;
   return (
     <article className={`prow card s-${st} m-${p.method} ${quiet ? 'quiet' : ''}`} data-placement={p.placementId}>
-      <span className="pi" aria-hidden="true">
-        <Icon name={st === 'bad' ? 'warn' : st === 'none' ? 'circle' : st === 'warn' ? 'up' : 'check'} />
-      </span>
+      {/* A fixed photo slot, so adding a photo never moves anything. */}
+      {p.photoPath ? <ProductThumb src={p.photoPath} name={p.productName} credit={p.photoCredit} className="pphoto" />
+        : <span className="pphoto ph" aria-hidden="true"><Icon name="box" /></span>}
       <div className="pt">
-        <div className="pname">
-          <ProductThumb src={p.photoPath} name={p.productName} credit={p.photoCredit} className="pphoto" />
-          <h3>{p.productName}</h3>
-        </div>
+        <h3>{p.productName}</h3>
         {quiet && !showArea ? <p className="ps" id={`s-${p.placementId}`}>{status}</p>
           : <p className="ps" id={`s-${p.placementId}`}>{showArea ? <span className="parea">{p.areaName}{quiet ? '' : ' · '}</span> : null}{status}</p>}
         {routineText ? <p className="pnote task"><Icon name="task" />{routineText}</p> : null}

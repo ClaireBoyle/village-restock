@@ -31,9 +31,11 @@ export const opSchema = z.discriminatedUnion('type', [
   z.object({
     ...base, type: z.literal('session.start'),
     session: z.object({
-      id: z.uuid(), departmentId: z.uuid(), kind: z.enum(['full', 'quick']),
+      id: z.uuid(), departmentId: z.uuid(), kind: z.enum(['full', 'quick', 'area']),
       tradingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), startedAt: z.iso.datetime(),
-    }),
+      /** Area restocks: the one area this restock covers. */
+      areaId: z.uuid().nullable().optional(),
+    }).refine((x) => x.kind !== 'area' || !!x.areaId, { message: 'An area restock needs its area' }),
   }),
   z.object({
     ...base, type: z.literal('item.set'), sessionId: z.uuid(), placementId: z.uuid(), fields: itemFieldsSchema,
@@ -73,7 +75,9 @@ export interface SyncResponse { results: OpResult[]; serverTime: string }
 
 /** A session as the server knows it (for handover between devices). */
 export interface RemoteSession {
-  id: string; departmentId: string; kind: 'full' | 'quick'; tradingDate: string;
+  id: string; departmentId: string; kind: 'full' | 'quick' | 'area'; tradingDate: string;
+  /** Area restocks: the area it covers. */
+  areaId: string | null;
   status: 'open' | 'finished' | 'finished_exceptions' | 'unfinished';
   exceptionReason: string | null; note: string | null; people: string[]; startedAt: string; finishedAt: string | null; updatedAt: string;
   areas: { areaId: string; status: 'not_started' | 'in_progress' | 'complete' | 'skipped'; skipReason: string | null; updatedBy: string | null; updatedAt: string }[];

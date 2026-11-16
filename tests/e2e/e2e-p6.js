@@ -6,6 +6,8 @@ const bcrypt = require('bcryptjs');
 const B = process.env.E2E_URL || 'http://localhost:3100';
 const sql = postgres(process.env.E2E_DATABASE_URL || 'postgres://vr:vr@localhost:5432/village_restock', { onnotice: () => {}, transform: postgres.camel });
 const ok = (c, m) => { if (!c) throw new Error('FAIL: ' + m); console.log('PASS:', m); };
+// Staff-entered products start as "+ Add": tap it first, then type the amount.
+const fillQty = async (pg, rowSel, v) => { if (await pg.$(`${rowSel} button.padd`)) { await pg.click(`${rowSel} button.padd`); await pg.waitForSelector(`${rowSel} .qty-input`); } await pg.fill(`${rowSel} .qty-input`, v); };
 const has = (p, sel, t, ms = 10000) => p.locator(sel).filter({ hasText: t }).first().waitFor({ timeout: ms }).then(() => true, () => false);
 const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; for (;;) { const r = await q(); if (check(r)) return r; if (Date.now() > end) return r; await new Promise((res) => setTimeout(res, 300)); } };
 const drow = (n) => `article.dprow:has(h3:text-is("${n}"))`;
@@ -28,7 +30,7 @@ const prow = (n) => `article.prow:has(h3:text-is("${n}"))`;
   // Start Kitchen Restock first, without touching the planner
   await P.click('button:has-text("Start kitchen restock")'); await P.waitForSelector('article.prow');
   ok(await has(P, '.kreminder', 'You can use the Defrost Planner at any time'), 'non-blocking kitchen reminder at the top');
-  await P.fill(`${prow('Tomatoes')} .qty-input`, '3');
+  await fillQty(P, `${prow('Tomatoes')}`, '3');
   // Visit the planner from the reminder, then come back: progress kept
   await P.click('.kreminder a'); await P.waitForSelector('.dprow');
   ok(P.url().endsWith('/defrost'), 'reminder link opens the Defrost Planner');
@@ -73,7 +75,7 @@ const prow = (n) => `article.prow:has(h3:text-is("${n}"))`;
   // ---- Exception-based restocking (Candy Bar) ----
   await P.goto(B + '/'); await P.click('.dcard2:has-text("Candy")'); await P.click('text=Start full restock'); await P.waitForSelector('article.prow');
   const first = (await P.$$eval('article.prow h3', (els) => els.map((x) => x.textContent)))[0];
-  await P.fill(`${prow(first)} .qty-input`, '2');
+  await fillQty(P, `${prow(first)}`, '2');
   ok(await P.locator('.area-end:has-text("still needed")').count() === 0, 'no "still to check" demand for blank staff-entered products');
   await P.click('.dock .dock-acts button:has-text("Collect")'); await P.waitForSelector('.line');
   await P.click('.line .l-all'); await P.click('.dock button:has-text("Review")');

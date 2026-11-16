@@ -9,6 +9,8 @@ const bcrypt = require('bcryptjs');
 const B = process.env.E2E_URL || 'http://localhost:3100';
 const sql = postgres(process.env.E2E_DATABASE_URL || 'postgres://vr:vr@localhost:5432/village_restock', { onnotice: () => {}, transform: postgres.camel });
 const ok = (c, m) => { if (!c) throw new Error('FAIL: ' + m); console.log('PASS:', m); };
+// Staff-entered products start as "+ Add": tap it first, then type the amount.
+const fillQty = async (pg, rowSel, v) => { if (await pg.$(`${rowSel} button.padd`)) { await pg.click(`${rowSel} button.padd`); await pg.waitForSelector(`${rowSel} .qty-input`); } await pg.fill(`${rowSel} .qty-input`, v); };
 const png = fs.readFileSync(path.join(__dirname, '../../public/icons/icon-192.png'));
 
 const off = http.createServer((req, res) => {
@@ -65,7 +67,7 @@ const off = http.createServer((req, res) => {
   await P.click(`${row} .pthumb`); await P.waitForSelector('.photo-zoom');
   ok((await P.textContent('.photo-zoom')).includes('CC BY-SA'), 'full-size view shows the photo credit');
   await P.click('.photo-zoom');
-  await P.fill(`${row} .qty-input`, '3');
+  await fillQty(P, `${row}`, '3');
   await P.click('.dock .dock-acts button:has-text("Collect")'); await P.waitForSelector('.line');
   ok(await P.locator('.line[data-line="Maltesers"] .pthumb img').count() === 1, 'photo in the collection list');
   ok(errs.length === 0, 'no page errors ' + JSON.stringify(errs));

@@ -70,7 +70,7 @@ export async function openFullSession(departmentId: string, tradingDate: string,
     const res = await fetch(`/api/sessions?date=${tradingDate}`, { cache: 'no-store' });
     if (res.ok) {
       const { sessions } = (await res.json()) as { sessions: RemoteSession[] };
-      const remote = sessions.find((s) => s.departmentId === departmentId);
+      const remote = sessions.find((s) => s.departmentId === departmentId && s.kind === 'full');
       if (remote) {
         await importRemote(remote);
         const s = (await localDb().sessions.get(remote.id))!;
@@ -82,15 +82,48 @@ export async function openFullSession(departmentId: string, tradingDate: string,
   return startSession(departmentId, 'full', tradingDate, who);
 }
 
-export async function startSession(departmentId: string, kind: 'full' | 'quick', tradingDate: string, who: string): Promise<LocalSession> {
+/** Area restocks open tonight for one area: on this device, newest first. */
+export async function findOpenAreaSession(departmentId: string, areaId: string, tradingDate: string) {
+  const all = await localDb().sessions.where('departmentId').equals(departmentId).toArray();
+  return all.filter((s) => s.kind === 'area' && s.areaId === areaId && s.status === 'open' && s.tradingDate === tradingDate)
+    .sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0];
+}
+
+/**
+ * Open an area restock (e.g. Candy Bar's confection stand). Carries on with an unfinished one
+ * from tonight, on this device or (when online) one another device started, or starts a new one.
+ * Finished ones are never reused: restocking the same area again later is a new restock.
+ */
+export async function openAreaSession(departmentId: string, areaId: string, tradingDate: string, who: string): Promise<LocalSession> {
+  const local = await findOpenAreaSession(departmentId, areaId, tradingDate);
+  if (local) return local;
+  try {
+    const res = await fetch(`/api/sessions?date=${tradingDate}`, { cache: 'no-store' });
+    if (res.ok) {
+      const { sessions } = (await res.json()) as { sessions: RemoteSession[] };
+      // Only a restock with something entered is worth carrying on; an empty one is just started again.
+      const remote = sessions.filter((s) => s.departmentId === departmentId && s.kind === 'area' && s.areaId === areaId && s.status === 'open' && s.items.length)
+        .sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0];
+      if (remote && !(await localDb().sessions.get(remote.id))) {
+        await importRemote(remote);
+        const s = (await localDb().sessions.get(remote.id))!;
+        if (by(who) && !s.people.includes(by(who)!)) await localDb().sessions.update(s.id, { people: addPerson(s, who) });
+        return (await localDb().sessions.get(remote.id))!;
+      }
+    }
+  } catch { /* offline: start one on this device */ }
+  return startSession(departmentId, 'area', tradingDate, who, areaId);
+}
+
+export async function startSession(departmentId: string, kind: LocalSession['kind'], tradingDate: string, who: string, areaId: string | null = null): Promise<LocalSession> {
   const s: LocalSession = {
-    id: crypto.randomUUID(), departmentId, kind, tradingDate, status: 'open', exceptionReason: null,
+    id: crypto.randomUUID(), departmentId, kind, areaId: kind === 'area' ? areaId : null, tradingDate, status: 'open', exceptionReason: null,
     people: by(who) ? [by(who)!] : [], startedAt: now(), finishedAt: null, selected: [], curAreaId: null, updatedAt: now(),
   };
   const db = localDb();
   await db.transaction('rw', db.sessions, db.outbox, async () => {
     await db.sessions.add(s);
-    await queue({ type: 'session.start', session: { id: s.id, departmentId, kind, tradingDate, startedAt: s.startedAt } }, who);
+    await queue({ type: 'session.start', session: { id: s.id, departmentId, kind, tradingDate, startedAt: s.startedAt, ...(kind === 'area' ? { areaId } : {}) } }, who);
   });
   requestSync();
   return s;
@@ -183,7 +216,7 @@ export async function importRemote(remote: RemoteSession) {
     const existing = await db.sessions.get(remote.id);
     const status = remote.status === 'unfinished' ? 'unfinished' : remote.status;
     await db.sessions.put({
-      id: remote.id, departmentId: remote.departmentId, kind: remote.kind, tradingDate: remote.tradingDate,
+      id: remote.id, departmentId: remote.departmentId, kind: remote.kind, areaId: remote.areaId ?? existing?.areaId ?? null, tradingDate: remote.tradingDate,
       status: pendingSession && existing ? existing.status : status,
       exceptionReason: pendingSession && existing ? existing.exceptionReason : remote.exceptionReason,
       people: [...new Set([...(existing?.people ?? []), ...remote.people])],

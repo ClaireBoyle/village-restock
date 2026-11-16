@@ -24,7 +24,7 @@ export default async function RestockDetail({ params }: { params: Promise<{ id: 
       <div className="page-head">
         <div>
           <Link className="linkbtn" href="/admin/restocks"><Icon name="back" />All restocks</Link>
-          <h1>{String(s.departmentName)} &middot; {s.kind === 'full' ? 'Full restock' : 'Quick restock'}</h1>
+          <h1>{String(s.departmentName)} &middot; {s.kind === 'full' ? 'Full restock' : s.kind === 'area' ? `${String(s.areaName ?? 'Area')} restock` : 'Quick restock'}</h1>
           <p>{new Date(`${s.tradingDate}T12:00:00Z`).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })} &middot; started {time(s.startedAt)}{s.finishedAt ? `, finished ${time(s.finishedAt)}` : ''} &middot; {(s.people as string[]).join(', ') || 'No names'}</p>
         </div>
         <span className={`badge ${st.cls}`}>{st.label}</span>

@@ -6,6 +6,8 @@ const bcrypt = require('bcryptjs');
 const B = process.env.E2E_URL || 'http://localhost:3100', out = __dirname + '/out/';
 const sql = postgres(process.env.E2E_DATABASE_URL || 'postgres://vr:vr@localhost:5432/village_restock', { onnotice: () => {}, transform: postgres.camel });
 const ok = (c, m) => { if (!c) throw new Error('FAIL: ' + m); console.log('PASS:', m); };
+// Staff-entered products start as "+ Add": tap it first, then type the amount.
+const fillQty = async (pg, rowSel, v) => { if (await pg.$(`${rowSel} button.padd`)) { await pg.click(`${rowSel} button.padd`); await pg.waitForSelector(`${rowSel} .qty-input`); } await pg.fill(`${rowSel} .qty-input`, v); };
 const card = (name) => `article.card:has(h3:text-is("${name}"))`;
 
 (async () => {
@@ -128,7 +130,7 @@ const card = (name) => `article.card:has(h3:text-is("${name}"))`;
   await P.waitForSelector('.ag-photo img');
   ok(await P.locator('.ag-photo img').evaluate((i) => i.complete && i.naturalWidth > 0), 'area guide photo shows offline');
   await P.screenshot({ path: out + 'p4-card-photo.png' });
-  await P.fill(`${card('Tomatoes')} .qty-input`, '3');
+  await fillQty(P, `${card('Tomatoes')}`, '3');
   await P.waitForSelector('.pill:has-text("saved on device")', { timeout: 10000 }).catch(() => null);
   await ctx.setOffline(false);
   await P.waitForSelector('.pill.ok:has-text("All changes synced")', { timeout: 30000 });

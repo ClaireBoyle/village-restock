@@ -8,7 +8,7 @@ import {
 import { setArea, setItems, updateLocalSession } from '@/lib/client/restock-store';
 import { localDb } from '@/lib/client/local-db';
 import { PhotoZoom, ProductRow } from './ProductCard';
-import { AREA_BADGE, Badge, Dock, Ring, plural, timeOf } from './shared';
+import { AREA_BADGE, Badge, Dock, Ring, timeOf } from './shared';
 import type { RestockCtx } from './RestockApp';
 
 /** Remember, per area and per device, whether staff opened the full area guide (it starts as a two-line preview). */
@@ -50,7 +50,9 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
   // Exception-based: only missing target counts matter; a blank "staff enter" product just didn't need anything.
   const reqLeft = cur.placements.filter((p) => isRequired(p) && !chk(p)).length;
   const next = view.areas.find(({ area }) => area.id !== cur.area.id && !['complete', 'skipped'].includes(statusOf(area.id)));
-  const active = activePlacements('full', view.placements, recorded);
+  const active = activePlacements(session.kind, view.placements, recorded);
+  const byArea = session.kind === 'area';
+  const single = view.areas.length === 1;
   const lines = collectionLines(active, items);
   // What to show as progress. Target-level products need a count; everything else is exception-based,
   // so we count what was entered rather than "checked".
@@ -66,7 +68,10 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
   const all = progressOf(active);
 
   const notes = areaNotes(cur.placements);
-  const hasGuide = !!(cur.area.guideText || cur.area.guidePhotoPath || notes.shared.length);
+  // The area's own short instruction, when set, replaces the long note repeated on every product.
+  const sharedNotes = cur.area.guideText.trim() ? [] : notes.shared;
+  const hasGuide = !!(cur.area.guideText || cur.area.guidePhotoPath || sharedNotes.length);
+  const guideShort = !cur.area.guidePhotoPath && !sharedNotes.length && cur.area.guideText.trim().length <= 110 && !cur.area.guideText.includes('\n');
 
   // Save a product. If that was the last unchecked product in the area, the
   // area completes by itself (only on that change, so a reopened area isn't
@@ -105,7 +110,7 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
 
   const nextBtn = next
     ? <button className="btn primary" onClick={() => goArea(next.area.id)}>Next: {next.area.name}<Icon name="next" /></button>
-    : <button className="btn primary" onClick={() => ctx.go('collect')}>Collection list<Icon name="next" /></button>;
+    : <button className="btn primary" onClick={() => ctx.go(byArea && !lines.length ? 'finish' : 'collect')}>{byArea && !lines.length ? 'Finish' : 'Collection list'}<Icon name="next" /></button>;
 
   return (
     <>
@@ -119,8 +124,8 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
           <button className="iconbtn kr-x" onClick={hideReminder} aria-label="Hide reminder"><Icon name="x" /></button>
         </aside>
       ) : null}
-      <div className="chk-layout">
-        <nav className="rail" aria-label="Areas">
+      <div className={`chk-layout ${single ? 'one' : ''}`}>
+        {single ? null : <nav className="rail" aria-label="Areas">
           {view.areas.map(({ area, placements }) => {
             const s = statusOf(area.id), r = areaRecords.get(area.id);
             const g = progressOf(placements);
@@ -132,20 +137,21 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
               </button>
             );
           })}
-        </nav>
+        </nav>}
 
         <section className="area" aria-labelledby="area-name">
           <div className="area-head">
             <div className="ah-t">
               <h2 id="area-name">{cur.area.name}</h2>
               <p className="ah-sub">
-                {st === 'complete' ? <Badge st="ok">Complete</Badge> : st === 'skipped' ? <Badge st="skip" icon="skip">Skipped</Badge> : null}
-                <span>{areaLabel(cur.placements)}</span>
+                {st === 'complete' && !byArea ? <Badge st="ok">Complete</Badge> : st === 'skipped' ? <Badge st="skip" icon="skip">Skipped</Badge> : null}
+                {/* Target counts are worth tracking here; "N entered" is already in the bar at the bottom. */}
+                {progressOf(cur.placements).req ? <span>{areaLabel(cur.placements)}</span> : null}
               </p>
             </div>
             <div className="acts">
               {reqLeft > 0 && done > 0 && st !== 'skipped' ? <button className="btn small" onClick={firstUnchecked}><Icon name="down" /><span className="lg">Next to count</span><span className="sm">Next</span></button> : null}
-              {st !== 'complete' && st !== 'skipped' ? <button className="btn small" onClick={() => setSkipOpen(true)}><Icon name="skip" />Skip</button> : null}
+              {st !== 'complete' && st !== 'skipped' && !byArea ? <button className="btn small" onClick={() => setSkipOpen(true)}><Icon name="skip" />Skip</button> : null}
             </div>
           </div>
 
@@ -155,7 +161,10 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
               <button className="linkbtn" style={{ alignSelf: 'flex-start' }} onClick={() => setSkipOpen(false)}>Cancel</button></div>
           ) : null}
 
-          {hasGuide ? (
+          {hasGuide && guideShort ? (
+            // A short instruction: one compact line, no card.
+            <p className="aguide-line"><Icon name="info" /><span>{cur.area.guideText.trim()}</span></p>
+          ) : hasGuide ? (
             // Area instructions, once: a two-line preview that opens with a tap (remembered per area on this device).
             <section className={`aguide ${guideOpen ? 'open' : ''}`}>
               {cur.area.guidePhotoPath ? (
@@ -166,7 +175,7 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
               ) : <Icon name="info" />}
               <button className="ag-text" onClick={() => setGuideOpen(!guideOpen)} aria-expanded={guideOpen} aria-label={guideOpen ? 'Show less of the area guide' : 'Show all of the area guide'}>
                 {cur.area.guideText ? cur.area.guideText.split(/\n+/).map((t, i) => <span key={i}>{t}</span>) : null}
-                {notes.shared.map((t) => <span key={t}>{t}</span>)}
+                {sharedNotes.map((t) => <span key={t}>{t}</span>)}
               </button>
               <button className="ag-more linkbtn" onClick={() => setGuideOpen(!guideOpen)} tabIndex={-1} aria-hidden="true">{guideOpen ? 'Less' : 'More'}</button>
             </section>
@@ -211,10 +220,9 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
             <div className="banner s-none area-end"><Icon name="circle" /><div><b>{reqLeft} target {reqLeft === 1 ? 'count' : 'counts'} still needed</b><p>Count what&rsquo;s on the shelf, or tap Full.</p></div>
               <button className="btn" onClick={firstUnchecked}>Go to the first one</button>
               <button className="btn area-skip-end" onClick={() => { setSkipOpen(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}><Icon name="skip" />Skip area</button></div>
-          ) : (
+          ) : byArea ? null : (
             // Nothing required is missing: just a quiet pointer to the next area (no sign-off needed).
             <div className="area-end area-next">
-              <p className="meta">{left ? <>Only enter products that need restocking. {plural(left, 'product')} left blank (recorded as not entered).</> : 'Everything here has an answer.'}</p>
               {/* Optional: lets a reopened area count as done again. Never required to finish. */}
               {!left ? <button className="btn small" onClick={() => { pin(); void setArea(session.id, cur.area.id, 'complete', null, who); }}><Icon name="check" />Mark {cur.area.name} complete</button> : null}
               {nextBtn}
@@ -234,12 +242,14 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
             ))}</ul>
           </div>
         ) : null}
-        title={<>{all.req ? `${all.counted} of ${all.req} counted` : `${all.entered} entered`}<span className="dock-sep"> &middot; </span>
+        title={<>{all.req ? <>{`${all.counted} of ${all.req} counted`}<span className="dock-sep"> &middot; </span></> : null}
           <button type="button" className="dock-2 dock-review" onClick={() => setReview(!review)} disabled={!lines.length} aria-expanded={review} aria-controls="entered-list">
-            {lines.length} to collect{lines.length ? <Icon name={review ? 'down' : 'up'} /> : null}</button></>}
-        sub={next && st === 'complete' ? `Next area: ${next.area.name}` : undefined}>
+            {lines.length ? `${lines.length} to collect` : 'Nothing to collect yet'}{lines.length ? <Icon name={review ? 'down' : 'up'} /> : null}</button></>}
+        sub={next && st === 'complete' ? `Next area: ${next.area.name}` : byArea && !lines.length ? 'Tap + Add on anything that needs topping up' : undefined}>
         <button className="btn save-exit" onClick={ctx.saveAndExit} aria-label="Save and exit"><Icon name="save" /><span className="lg">Save and exit</span><span className="sm">Save &amp; exit</span></button>
-        <button className="btn primary big" onClick={() => ctx.go('collect')}><span className="lg">Collection list</span><span className="sm">Collect</span><Icon name="next" /></button>
+        {byArea && !lines.length
+          ? <button className="btn primary big" onClick={() => ctx.go('finish')}><span className="lg">Nothing needed: finish</span><span className="sm">Finish</span><Icon name="next" /></button>
+          : <button className="btn primary big" onClick={() => ctx.go('collect')}><span className="lg">Collection list</span><span className="sm">Collect</span><Icon name="next" /></button>}
       </Dock>
     </>
   );

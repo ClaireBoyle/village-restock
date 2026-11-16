@@ -35,8 +35,8 @@ export function DeptBand({ d, sub, right }: { d: CatDepartment; sub?: React.Reac
 
 export type Step = 'check' | 'collect' | 'finish';
 
-export function Stages({ kind, current, onGo }: { kind: 'full' | 'quick'; current: Step; onGo: (s: Step) => void }) {
-  const labels: [Step, string, string][] = [['check', kind === 'full' ? 'Check stock' : 'Pick products', kind === 'full' ? 'Check' : 'Pick'], ['collect', 'Collect', 'Collect'], ['finish', 'Finish', 'Finish']];
+export function Stages({ kind, current, onGo }: { kind: 'full' | 'quick' | 'area'; current: Step; onGo: (s: Step) => void }) {
+  const labels: [Step, string, string][] = [['check', kind === 'full' ? 'Check stock' : kind === 'area' ? 'What’s needed' : 'Pick products', kind === 'quick' ? 'Pick' : 'Check'], ['collect', 'Collect', 'Collect'], ['finish', 'Finish', 'Finish']];
   const idx = labels.findIndex(([s]) => s === current);
   return (
     <nav className="stages" aria-label="Restock steps">

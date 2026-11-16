@@ -6,6 +6,10 @@ import { formatQty, requiredForPar, round2 } from './restock-math';
 export type ShortReason = 'insufficient' | 'access' | 'time' | 'other';
 export type AreaStatus = 'not_started' | 'in_progress' | 'complete' | 'skipped';
 export type CardState = 'none' | 'ok' | 'warn' | 'bad';
+/** full: every area, once a night · quick: a picked list · area: one area on its own (e.g. Candy Bar's confection stand). */
+export type SessionKind = 'full' | 'quick' | 'area';
+/** Area restocks follow the full-restock rules, just for one area. */
+const asFull = (kind: SessionKind) => kind !== 'quick';
 
 /** Two devices entered different values for the same thing. The server kept "theirs". */
 export interface Conflict {
@@ -81,6 +85,8 @@ export interface DepartmentView {
   placements: PlacementView[];
   byId: Map<string, PlacementView>;
   locationOrder: Map<string, number>;
+  /** Storeroom reminders for the collection list, by storeroom id. */
+  locationNotes: Map<string, string>;
 }
 
 /** Arrange a department's catalogue area by area, in staff checking order. */
@@ -133,7 +139,15 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
     department, areas, placements,
     byId: new Map(placements.map((p) => [p.placementId, p])),
     locationOrder: new Map(cat.locations.map((l, i) => [l.id, l.sortOrder * 1000 + i])),
+    locationNotes: new Map(cat.locations.filter((l) => l.collectNote?.trim()).map((l) => [l.id, l.collectNote!.trim()])),
   };
+}
+
+/** The same view, narrowed to one area (and its sections): what an area restock covers. */
+export function scopeView(view: DepartmentView, areaId: string | null | undefined): DepartmentView {
+  const areas = view.areas.filter((a) => a.area.id === areaId);
+  const placements = areas.flatMap((a) => a.placements);
+  return { ...view, areas, placements, byId: new Map(placements.map((p) => [p.placementId, p])) };
 }
 
 // ---------------------------------------------------------------------------
@@ -335,7 +349,7 @@ export interface Exception { kind: 'area' | 'unchecked' | 'collect'; status: Are
  * shortage is NOT an exception: it's a recorded outcome managers act on.
  */
 export function exceptions(args: {
-  kind: 'full' | 'quick';
+  kind: SessionKind;
   view: DepartmentView;
   placements: PlacementView[];          // what this session covers (all, or the quick list)
   recordedAreas: Map<string, AreaStatus>;
@@ -343,7 +357,7 @@ export function exceptions(args: {
 }): Exception[] {
   const { kind, view, placements, recordedAreas, items } = args;
   const out: Exception[] = [];
-  if (kind === 'full') {
+  if (asFull(kind)) {
     for (const { area, placements: ps } of view.areas) {
       const st = areaStatus(recordedAreas.get(area.id), ps, items);
       const req = ps.filter(isRequired);
@@ -369,9 +383,9 @@ export function exceptions(args: {
 }
 
 /** Placements that still count: skipped areas are left out of collecting. */
-export function activePlacements(kind: 'full' | 'quick', placements: PlacementView[], recordedAreas: Map<string, AreaStatus>) {
+export function activePlacements(kind: SessionKind, placements: PlacementView[], recordedAreas: Map<string, AreaStatus>) {
   // Skipping an area also skips its sections (they're on the same screen).
-  return kind === 'full' ? placements.filter((p) => recordedAreas.get(p.screenAreaId ?? p.areaId) !== 'skipped') : placements;
+  return asFull(kind) ? placements.filter((p) => recordedAreas.get(p.screenAreaId ?? p.areaId) !== 'skipped') : placements;
 }
 
 // ---------------------------------------------------------------------------
@@ -436,14 +450,14 @@ export function outcomeLine(o: StockOutcome): string {
 
 /** The plain-text summary staff copy for managers. Leads with what we're low on or out of. */
 export function summaryText(args: {
-  departmentName: string; kind: 'full' | 'quick'; finishedLabel: string | null; exceptionReason: string | null;
+  departmentName: string; kind: SessionKind; finishedLabel: string | null; exceptionReason: string | null;
   people: string[]; view: DepartmentView; placements: PlacementView[]; recordedAreas: Map<string, AreaStatus>;
   skipReasons: Map<string, string>; items: Map<string, ItemState>; dateLabel: string;
 }): string {
   const { view, items, recordedAreas } = args;
   const L: string[] = [];
   L.push(`VILLAGE RESTOCK: ${args.departmentName}`);
-  L.push(`${args.kind === 'full' ? 'Full' : 'Quick'} restock \u00b7 ${args.finishedLabel ? `finished ${args.finishedLabel}` : 'not finished'} \u00b7 ${args.dateLabel}${args.people.length ? ` \u00b7 ${args.people.join(', ')}` : ''}`);
+  L.push(`${args.kind === 'full' ? 'Full' : args.kind === 'area' ? `${view.areas[0]?.area.name ?? 'Area'}` : 'Quick'} restock \u00b7 ${args.finishedLabel ? `finished ${args.finishedLabel}` : 'not finished'} \u00b7 ${args.dateLabel}${args.people.length ? ` \u00b7 ${args.people.join(', ')}` : ''}`);
   L.push(`Status: ${!args.finishedLabel ? 'In progress' : args.exceptionReason ? `Finished with exceptions (${args.exceptionReason})` : 'Complete'}`);
 
   const lines = collectionLines(activePlacements(args.kind, args.placements, recordedAreas), items);
@@ -466,18 +480,19 @@ export function summaryText(args: {
   const flaggedDone = lines.filter((l) => lineInfo(l, items).flagged && lineState(l, items) === 'done').map((l) => l.productName);
   if (flaggedDone.length) { L.push(''); L.push(`FLAGGED FOR MANAGER: ${flaggedDone.join(', ')}`); }
 
+  // Only missing target counts: a blank "staff enter" product simply didn't need anything.
   const notChecked: string[] = [];
-  if (args.kind === 'full') {
+  if (asFull(args.kind)) {
     for (const { area, placements } of view.areas) {
       const st = areaStatus(recordedAreas.get(area.id), placements, items);
       if (st === 'skipped') notChecked.push(`${area.name} skipped (${args.skipReasons.get(area.id) || 'no reason'})`);
       else if (st !== 'complete') {
-        const un = placements.filter((p) => !isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM)).map((p) => p.productName);
+        const un = placements.filter((p) => isRequired(p) && !isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM)).map((p) => p.productName);
         if (un.length) notChecked.push(`${area.name}: ${un.join(', ')}`);
       }
     }
   } else {
-    const un = args.placements.filter((p) => !isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM)).map((p) => p.productName);
+    const un = args.placements.filter((p) => isRequired(p) && !isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM)).map((p) => p.productName);
     if (un.length) notChecked.push(un.join(', '));
   }
   if (notChecked.length) { L.push(''); L.push('NOT CHECKED'); L.push(...notChecked.map((s) => `- ${s}`)); }

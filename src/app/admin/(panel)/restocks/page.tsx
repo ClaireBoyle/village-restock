@@ -12,7 +12,7 @@ export default async function Restocks() {
 
   return (
     <>
-      <div className="page-head"><div><h1>Restocks</h1><p>The last two weeks of full and quick restocks. Restocks still open after the 5 am cut-off are marked Unfinished.</p></div></div>
+      <div className="page-head"><div><h1>Restocks</h1><p>The last two weeks of restocks. Restocks still open after the 5 am cut-off are marked Unfinished.</p></div></div>
       {rows.length === 0 ? <section className="panel"><p className="meta">No restocks yet.</p></section> : null}
       {days.map((d) => {
         const dayRows = rows.filter((r) => r.tradingDate === d);
@@ -23,10 +23,10 @@ export default async function Restocks() {
               {dayRows.map((r: RestockRow) => (
                 <div key={r.id} className="row" style={{ flexWrap: 'wrap' }}>
                   <div className="grow" style={{ minWidth: 240 }}>
-                    <div className="title">{r.departmentName} &middot; {r.kind === 'full' ? 'Full restock' : 'Quick restock'}</div>
+                    <div className="title">{r.departmentName} &middot; {r.kind === 'full' ? 'Full restock' : r.kind === 'area' ? `${r.areaName ?? 'Area'} restock` : 'Quick restock'}</div>
                     <div className="meta">
                       {r.people.length ? r.people.join(', ') : 'No names'} &middot; started {time(r.startedAt)}{r.finishedAt ? `, finished ${time(r.finishedAt)}` : ''}
-                      {r.kind === 'full' ? ` · ${r.areasDone} of ${r.areasTotal} areas` : ` · ${r.itemsTouched} products`}
+                      {r.kind === 'full' ? ` · ${r.areasDone} of ${r.areasTotal} areas` : ` · ${r.itemsTouched} product${r.itemsTouched === 1 ? '' : 's'} entered`}
                     </div>
                     {r.exceptionReason ? <div className="meta">Reason: {r.exceptionReason}</div> : null}
                   </div>

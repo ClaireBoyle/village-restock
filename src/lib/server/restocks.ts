@@ -2,7 +2,7 @@
 import { db } from './db';
 import { loadCatalogue } from './catalogue';
 import { tradingDate } from '@/lib/restock-math';
-import { departmentView, summaryText, type AreaStatus, type Conflict, type ItemState, type PlacementView } from '@/lib/restock-logic';
+import { departmentView, scopeView, summaryText, type AreaStatus, type Conflict, type ItemState, type PlacementView } from '@/lib/restock-logic';
 
 export async function serverToday(): Promise<string> {
   const rows = await db()`select key, value from app_settings where key in ('timezone', 'trading_day_cutoff_hour')`;
@@ -20,7 +20,7 @@ export async function markUnfinished(): Promise<void> {
 }
 
 export interface RestockRow {
-  id: string; departmentName: string; theme: string; kind: 'full' | 'quick'; tradingDate: string; status: string;
+  id: string; departmentName: string; theme: string; kind: 'full' | 'quick' | 'area'; areaName: string | null; tradingDate: string; status: string;
   exceptionReason: string | null; people: string[]; startedAt: string; finishedAt: string | null;
   areasDone: number; areasTotal: number; itemsTouched: number; shortages: number; conflicts: number;
 }
@@ -30,7 +30,7 @@ const dateStr = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10
 export async function listRestocks(days = 14): Promise<RestockRow[]> {
   await markUnfinished();
   const rows = await db()`
-    select s.id, d.name as department_name, d.theme, s.kind, s.trading_date, s.status, s.exception_reason, s.people,
+    select s.id, d.name as department_name, d.theme, s.kind, (to_jsonb(s)->>'area_name') as area_name, s.trading_date, s.status, s.exception_reason, s.people,
       s.started_at, s.finished_at,
       (select count(*) from session_areas a where a.session_id = s.id and a.status in ('complete', 'skipped'))::int as areas_done,
       (select count(*) from check_areas ca where ca.department_id = s.department_id and ca.active)::int as areas_total,
@@ -39,6 +39,9 @@ export async function listRestocks(days = 14): Promise<RestockRow[]> {
       (select count(*) from session_items i where i.session_id = s.id and i.conflict is not null)::int as conflicts
     from restock_sessions s join departments d on d.id = s.department_id
     where s.trading_date >= (current_date - ${days}::int)
+      -- An area restock opened and left with nothing entered isn't worth listing.
+      and not (s.kind = 'area' and s.status <> 'finished' and s.status <> 'finished_exceptions'
+               and not exists (select 1 from session_items i where i.session_id = s.id))
     order by s.trading_date desc, d.sort_order, s.kind, s.started_at desc`;
   return rows.map((r) => ({ ...r, tradingDate: dateStr(r.tradingDate) })) as unknown as RestockRow[];
 }
@@ -74,7 +77,8 @@ export async function restockDetail(id: string) {
   const shortages = await sql`select * from shortages where session_id = ${id} order by product_name`;
 
   const cat = await loadCatalogue();
-  const view = departmentView(cat, String(s.departmentId));
+  const whole = departmentView(cat, String(s.departmentId));
+  const view = whole && s.kind === 'area' ? scopeView(whole, (s.areaId as string) ?? null) : whole;
   const itemMap = new Map<string, ItemState>(items.map((r) => [String(r.placementId), {
     currentQty: r.currentQty as number | null, requestedQty: r.requestedQty as number | null,
     routineChoice: r.routineChoice as ItemState['routineChoice'], collectedMode: r.collectedMode as ItemState['collectedMode'],
@@ -82,9 +86,9 @@ export async function restockDetail(id: string) {
     flagged: Boolean(r.flagged), conflict: (r.conflict as Conflict | null) ?? null,
   }]));
   const recorded = new Map<string, AreaStatus>(areas.map((a) => [String(a.checkAreaId), a.status as AreaStatus]));
-  const placements: PlacementView[] = view ? (s.kind === 'full' ? view.placements : view.placements.filter((p) => itemMap.has(p.placementId))) : [];
+  const placements: PlacementView[] = view ? (s.kind !== 'quick' ? view.placements : view.placements.filter((p) => itemMap.has(p.placementId))) : [];
   const summary = view ? summaryText({
-    departmentName: String(s.departmentName), kind: s.kind as 'full' | 'quick',
+    departmentName: String(s.departmentName), kind: s.kind as 'full' | 'quick' | 'area',
     finishedLabel: s.finishedAt ? new Date(s.finishedAt as string).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', timeZone: cat.settings.timeZone }).toLowerCase() : null,
     exceptionReason: (s.exceptionReason as string) ?? null, people: (s.people as string[]) ?? [], view, placements, recordedAreas: recorded,
     skipReasons: new Map(areas.map((a) => [String(a.checkAreaId), String(a.skipReason ?? '')])), items: itemMap,

@@ -55,6 +55,7 @@ const departmentSchema = z.object({
   icon: z.enum(['bar', 'kitchen', 'candy', 'box']),
   description: optText(160),
   active: checkbox,
+  restockByArea: checkbox,
 });
 
 export async function saveDepartment(_: ActionResult, form: FormData): Promise<ActionResult> {
@@ -66,11 +67,14 @@ export async function saveDepartment(_: ActionResult, form: FormData): Promise<A
     if (d.id) {
       await db()`update departments set name = ${d.name}, short_name = ${d.shortName}, group_label = ${d.groupLabel},
         theme = ${d.theme}, icon = ${d.icon}, description = ${d.description}, active = ${d.active} where id = ${d.id}`;
+      if (await hasColumn('departments', 'restock_by_area')) await db()`update departments set restock_by_area = ${d.restockByArea} where id = ${d.id}`;
+      else if (d.restockByArea) return { error: 'Run db/migrations/009_area_restocks.sql in Supabase first, then try again.' };
       return done('Department saved.');
     }
     const sort = await nextSort('departments');
-    await db()`insert into departments (name, short_name, group_label, theme, icon, description, sort_order)
-      values (${d.name}, ${d.shortName}, ${d.groupLabel}, ${d.theme}, ${d.icon}, ${d.description}, ${sort})`;
+    const [row] = await db()`insert into departments (name, short_name, group_label, theme, icon, description, sort_order)
+      values (${d.name}, ${d.shortName}, ${d.groupLabel}, ${d.theme}, ${d.icon}, ${d.description}, ${sort}) returning id`;
+    if (d.restockByArea && await hasColumn('departments', 'restock_by_area')) await db()`update departments set restock_by_area = true where id = ${String(row.id)}`;
     return done(`${d.name} added.`);
   } catch (e) { return fail(e); }
 }
@@ -135,7 +139,12 @@ export async function saveCategory(_: ActionResult, form: FormData): Promise<Act
   } catch (e) { return fail(e); }
 }
 
-const locationSchema = z.object({ id: optUuid, name: text(60, 'Storeroom name'), active: checkbox });
+const locationSchema = z.object({ id: optUuid, name: text(60, 'Storeroom name'), active: checkbox, collectNote: optText(200).optional() });
+
+async function hasColumn(table: string, column: string) {
+  const [{ has }] = await db()`select exists (select 1 from information_schema.columns where table_name = ${table} and column_name = ${column}) as has`;
+  return Boolean(has);
+}
 
 export async function saveLocation(_: ActionResult, form: FormData): Promise<ActionResult> {
   await requireAdmin();
@@ -145,6 +154,7 @@ export async function saveLocation(_: ActionResult, form: FormData): Promise<Act
   try {
     if (l.id) {
       await db()`update storage_locations set name = ${l.name}, active = ${l.active} where id = ${l.id}`;
+      if (l.collectNote !== undefined && await hasColumn('storage_locations', 'collect_note')) await db()`update storage_locations set collect_note = ${l.collectNote} where id = ${l.id}`;
       return done('Storeroom saved.');
     }
     const sort = await nextSort('storage_locations');

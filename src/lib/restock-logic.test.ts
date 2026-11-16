@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Catalogue } from './catalogue-types';
-import { activePlacements, areaNotes, isRequired,
+import { activePlacements, areaNotes, isRequired, scopeView,
   EMPTY_ITEM, areaStatus, cardState, isChecked, collectionLines, departmentView, exceptions, gotAllUpdates,
   gotFewerUpdates, groupByStoreroom, lineGot, lineState, needOf, stockOutcomes, summaryText, type AreaStatus, type ItemState,
 } from './restock-logic';
@@ -290,3 +290,35 @@ describe('area sections (Back bench + Other FOH spirits + optional Spirits cupbo
   });
 });
 
+
+describe('area restocks (Candy Bar: each area on its own)', () => {
+  const recorded = (o: Record<string, AreaStatus>) => new Map(Object.entries(o));
+  const dry = scopeView(kitchen, 'dry');
+  it('scopes the view, products and collection list to one area', () => {
+    expect(dry.areas.map((a) => a.area.name)).toEqual(['Dry shelf']);
+    expect(dry.placements.map((p) => p.productName)).toEqual(['Cloths', 'Sauce']);
+    expect(dry.byId.has('p-tom')).toBe(false);
+    const m = items({ 'p-tom': { currentQty: 2 }, 'p-cloth': { requestedQty: 3 } });
+    expect(collectionLines(dry.placements, m).map((l) => l.productName)).toEqual(['Cloths']);
+  });
+  it('only that area\'s target counts and collecting count towards finishing', () => {
+    // Fridge 1 untouched: not this restock's business
+    const m = items({ 'p-sauce': { currentQty: 4 }, 'p-cloth': { requestedQty: 1, collectedMode: 'all', collectedQty: 1 } });
+    expect(exceptions({ kind: 'area', view: dry, placements: dry.placements, recordedAreas: recorded({}), items: m })).toEqual([]);
+    expect(exceptions({ kind: 'area', view: dry, placements: dry.placements, recordedAreas: recorded({}), items: items({}) }).map((e) => e.text))
+      .toEqual(['Dry shelf: 1 target count missing']);
+  });
+  it('untouched staff-enter products are not "not checked" in the summary', () => {
+    const m = items({ 'p-sauce': { currentQty: 4 } });
+    const text = summaryText({ departmentName: 'Kitchen', kind: 'area', finishedLabel: '9:00 pm', exceptionReason: null, people: [],
+      view: dry, placements: dry.placements, recordedAreas: recorded({}), skipReasons: new Map(), items: m, dateLabel: 'Mon 16 Nov' });
+    expect(text).toContain('Dry shelf restock');
+    expect(text).not.toContain('NOT CHECKED');
+    expect(text).not.toContain('Cloths');
+  });
+  it('a storeroom reminder is available by storeroom', () => {
+    const v = departmentView({ ...cat, locations: cat.locations.map((l) => (l.id === 'dryst' ? { ...l, collectNote: ' Use opened boxes first. ' } : l)) }, 'k')!;
+    expect(v.locationNotes.get('dryst')).toBe('Use opened boxes first.');
+    expect(v.locationNotes.has('cool')).toBe(false);
+  });
+});

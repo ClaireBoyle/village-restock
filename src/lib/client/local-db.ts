@@ -14,7 +14,9 @@ export type SessionStatus = 'open' | 'finished' | 'finished_exceptions' | 'unfin
 export interface LocalSession {
   id: string;
   departmentId: string;
-  kind: 'full' | 'quick';
+  kind: 'full' | 'quick' | 'area';
+  /** Area restocks: the one area this restock covers. */
+  areaId?: string | null;
   tradingDate: string;
   status: SessionStatus;
   exceptionReason: string | null;

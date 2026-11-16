@@ -5,6 +5,8 @@ const postgres = require('postgres');
 const B = process.env.E2E_URL || 'http://localhost:3100', out = __dirname + '/out/';
 const sql = postgres(process.env.E2E_DATABASE_URL || 'postgres://vr:vr@localhost:5432/village_restock', { onnotice: () => {}, transform: postgres.camel });
 const ok = (c, m) => { if (!c) throw new Error('FAIL: ' + m); console.log('PASS:', m); };
+// Staff-entered products start as "+ Add": tap it first, then type the amount.
+const fillQty = async (pg, rowSel, v) => { if (await pg.$(`${rowSel} button.padd`)) { await pg.click(`${rowSel} button.padd`); await pg.waitForSelector(`${rowSel} .qty-input`); } await pg.fill(`${rowSel} .qty-input`, v); };
 const card = (name) => `article.card:has(h3:text-is("${name}"))`;
 const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; for (;;) { const r = await q(); if (check(r)) return r; if (Date.now() > end) return r; await new Promise((res) => setTimeout(res, 300)); } };
 const hasText = (p, sel, t) => p.locator(sel).filter({ hasText: t }).first().waitFor({ timeout: 8000 }).then(() => true, () => false);
@@ -28,20 +30,20 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
   await A.click('.who'); await A.fill('#staffname', 'Sam'); await A.click('.sheet .btn.primary');
   await A.click('.dcard2:has-text("Kitchen")'); await A.click('text=Start full restock');
   await A.waitForSelector(card('Tomatoes'));
-  await A.fill(`${card('Tomatoes')} .qty-input`, '2');
+  await fillQty(A, `${card('Tomatoes')}`, '2');
   ok(await hasText(A, `${card('Tomatoes')} .ps`, '6'), 'scenario 1: 2 tomatoes vs target 8 -> collect 6');
-  await A.fill(`${card('Lemons')} .qty-input`, '12');
+  await fillQty(A, `${card('Lemons')}`, '12');
   ok(await hasText(A, `${card('Lemons')} .ps`, 'At target'), 'scenario 2: 12 lemons vs target 10 -> collect 0');
   ok((await A.textContent(`${card('Cos lettuce')} .ps`)).includes('Not checked'), 'scenario 3: blank box shows Not checked');
-  await A.fill(`${card('Shredded cheese')} .qty-input`, '1.5');
+  await fillQty(A, `${card('Shredded cheese')}`, '1.5');
   ok(await hasText(A, `${card('Shredded cheese')} .ps`, '1 kg'), 'decimal product: 1.5 of 2.5 kg -> collect 1');
-  await A.fill(`${card('Cos lettuce')} .qty-input`, '2.5');
+  await fillQty(A, `${card('Cos lettuce')}`, '2.5');
   await A.waitForSelector(`${card('Cos lettuce')} .err`); ok(true, 'whole-unit product rejects 2.5 with a message');
   await A.click(`${card('Cos lettuce')} button:has-text("Full")`);
   await A.waitForSelector('.banner.s-ok:has-text("Fridge 1 complete")'); ok(true, 'Fridge 1 completes by itself once every product is checked');
   await A.click('.banner-toggle'); await A.waitForSelector('button:has-text("Mark Fridge 1 complete")');
   ok(await A.isVisible('.area-btn:has-text("Fridge 1") >> text=counted'), 'tapping "Fridge 1 complete" reopens the area');
-  await A.fill(`${card('Lemons')} .qty-input`, '11'); await A.waitForTimeout(800);
+  await fillQty(A, `${card('Lemons')}`, '11'); await A.waitForTimeout(800);
   ok(await A.isVisible('button:has-text("Mark Fridge 1 complete")'), 'editing a reopened area does not snap it shut again');
   await A.click('button:has-text("Mark Fridge 1 complete")');
   await A.waitForSelector('.banner.s-ok:has-text("Fridge 1 complete")'); ok(true, 'Mark complete still works after reopening');
@@ -68,7 +70,7 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
   await Bp.waitForSelector('.area-btn:has-text("Fridge 1") >> text=Complete');
   ok(await Bp.inputValue(`${card('Tomatoes')} .qty-input`).catch(() => '') === '' || true, 'joined');
   await Bp.click('.area-btn:has-text("Fridge 2")'); await Bp.waitForSelector(card('Milk'));
-  await Bp.fill(`${card('Milk')} .qty-input`, '3');
+  await fillQty(Bp, `${card('Milk')}`, '3');
   for (const n of ['Butter portions', 'Aioli', 'Chicken tenders']) await Bp.click(`${card(n)} button:has-text("Full")`);
   await Bp.waitForSelector('.banner.s-ok:has-text("Fridge 2 complete")'); await waitSynced(Bp);
   ok(true, 'second device completes Fridge 2');
@@ -84,7 +86,7 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
   // ---------- Offline on device A ----------
   await A.route('**/api/**', (r) => r.abort());
   await A.click('.area-btn:has-text("Freezer 1")'); await A.waitForSelector(card('Fries'));
-  await A.fill(`${card('Fries')} .qty-input`, '1');
+  await fillQty(A, `${card('Fries')}`, '1');
   await A.click(`${card('Brioche buns')} button:has-text("Full")`);
   await A.click(`${card('Vanilla ice cream')} button:has-text("Full")`);
   await A.waitForSelector('.banner.s-ok:has-text("Freezer 1 complete")');
@@ -143,7 +145,7 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
   ok(await hasText(A, '.lane:nth-child(2)', 'Finished with exceptions'), 'home shows Kitchen finished with exceptions');
   await A.click('.dcard2:has-text("Candy Bar")'); await A.click('text=Start quick restock');
   await A.fill('#qsearch', 'large'); await A.click('.qrow:has-text("Large cups") button:has-text("Add")');
-  await A.waitForSelector(card('Large cups')); await A.fill(`${card('Large cups')} .qty-input`, '1');
+  await A.waitForSelector(card('Large cups')); await fillQty(A, `${card('Large cups')}`, '1');
   await A.click('.dock button:has-text("Collection list")'); await A.waitForSelector('.line:has-text("Large cups")');
   ok(await hasText(A, '.line[data-line="Large cups"] .l-qty', '3'), 'quick restock: 1 of 4 sleeves -> collect 3');
   await A.click('.line:has-text("Large cups") button:has-text("Got all")');

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
   EMPTY_ITEM, SHORT_REASONS, activePlacements, clearCollectedUpdates, collectionLines, gotAllUpdates, gotFewerUpdates,
-  groupByStoreroom, isChecked, lineGot, lineInfo, lineState, type CollectionLine, type ItemState, type ShortReason,
+  groupByStoreroom, isChecked, isRequired, lineGot, lineInfo, lineState, type CollectionLine, type ItemState, type ShortReason,
 } from '@/lib/restock-logic';
 import { formatQty, round2 } from '@/lib/restock-math';
 import { setItems } from '@/lib/client/restock-store';
@@ -19,7 +19,10 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
   const groups = groupByStoreroom(lines, view.locationOrder);
   const handled = lines.filter((l) => ['done', 'short'].includes(lineState(l, items))).length;
   const shorts = lines.filter((l) => lineState(l, items) === 'short' && lineInfo(l, items).reason === 'insufficient').length;
-  const unchecked = covered.filter((p) => !isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM));
+  // Only missing target counts: a blank "staff enter" product just didn't need anything.
+  const unchecked = covered.filter((p) => isRequired(p) && !isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM));
+  // One area (an area restock): every line is for it, so don't repeat its name on each line.
+  const oneArea = view.areas.length === 1 ? view.areas[0].area.name : null;
   const write = (ups: { placementId: string; fields: Partial<ItemState> }[]) => void setItems(session.id, ups, who);
 
   return (
@@ -30,23 +33,28 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
         {unchecked.length ? (
           <button className="col-note" onClick={() => ctx.go('check')}><Icon name="circle" /><span><b>{plural(unchecked.length, 'product')} not checked</b> <span className="lg">, so not on this list</span></span><span className="col-go">Check them<Icon name="next" /></span></button>
         ) : null}
-        {lines.length === 0 ? <p className="empty">Nothing to collect. Everything checked is at target.</p> : (
+        {lines.length === 0 ? <p className="empty">{session.kind === 'area' ? 'Nothing to collect. Nothing was entered as needed.' : 'Nothing to collect. Everything checked is at target.'}</p> : (
           <div className="rooms">
-            {groups.map((g) => <Room key={g.name} name={g.name} lines={g.lines} items={items} write={write} />)}
+            {groups.map((g) => <Room key={g.name} name={g.name} lines={g.lines} items={items} write={write} oneArea={oneArea}
+              note={g.lines[0].locationId ? view.locationNotes.get(g.lines[0].locationId) : undefined} />)}
           </div>
         )}
       </main>
       <Dock icon={handled === lines.length ? 'check' : 'list'} progress={lines.length ? handled / lines.length : 1}
         title={lines.length ? <>{handled} of {lines.length} collected{shorts ? <span className="short-tag">{plural(shorts, 'short')}</span> : null}</> : 'Nothing to collect'}>
         <button className="btn save-exit" onClick={ctx.saveAndExit} aria-label="Save and exit"><Icon name="save" /><span className="lg">Save and exit</span><span className="sm">Save &amp; exit</span></button>
-        <button className="btn primary big" onClick={() => ctx.go('finish')}><span className="lg">Review and finish</span><span className="sm">Review</span><Icon name="next" /></button>
+        <button className="btn primary big" onClick={() => ctx.go('finish')}><span className="lg">Review and finish</span><span className="sm">{lines.length ? 'Review' : 'Finish'}</span><Icon name="next" /></button>
       </Dock>
     </>
   );
 }
 
 /** One storeroom: header with progress, folds away once everything in it is collected. */
-function Room({ name, lines, items, write }: { name: string; lines: CollectionLine[]; items: Map<string, ItemState>; write: (u: { placementId: string; fields: Partial<ItemState> }[]) => void }) {
+function Room({ name, lines, items, write, note, oneArea }: {
+  name: string; lines: CollectionLine[]; items: Map<string, ItemState>; write: (u: { placementId: string; fields: Partial<ItemState> }[]) => void;
+  /** The storeroom's reminder (e.g. "Use opened boxes first"), shown once under its heading. */
+  note?: string; oneArea: string | null;
+}) {
   const doneN = lines.filter((l) => ['done', 'short'].includes(lineState(l, items))).length;
   const complete = doneN === lines.length;
   // Folded only if it was already finished when the list opened: never snaps shut under someone's finger.
@@ -59,12 +67,13 @@ function Room({ name, lines, items, write }: { name: string; lines: CollectionLi
         <span className="room-bar" aria-hidden="true"><i style={{ width: `${Math.round((doneN / lines.length) * 100)}%` }} /></span>
         <Icon name={open ? 'up' : 'down'} />
       </button>
-      {open ? <div className="room-lines">{lines.map((l) => <Line key={l.key} line={l} items={items} write={write} />)}</div> : null}
+      {open && note ? <p className="room-note"><Icon name="info" /><span>{note}</span></p> : null}
+      {open ? <div className="room-lines">{lines.map((l) => <Line key={l.key} line={l} items={items} write={write} oneArea={oneArea} />)}</div> : null}
     </section>
   );
 }
 
-function Line({ line, items, write }: { line: CollectionLine; items: Map<string, ItemState>; write: (u: { placementId: string; fields: Partial<ItemState> }[]) => void }) {
+function Line({ line, items, write, oneArea }: { line: CollectionLine; items: Map<string, ItemState>; write: (u: { placementId: string; fields: Partial<ItemState> }[]) => void; oneArea: string | null }) {
   const st = lineState(line, items);
   const info = lineInfo(line, items);
   const got = lineGot(line, items);
@@ -90,7 +99,7 @@ function Line({ line, items, write }: { line: CollectionLine; items: Map<string,
     right = <button className="btn good l-all" onClick={() => write(gotAllUpdates(line))}><Icon name="check" />Done</button>;
   } else if (!showFewer) {
     right = <div className="l-acts">
-      <button className="btn l-few" onClick={() => { setFewer(true); setFewerValues(Math.max(0, Math.floor(line.total) - 1), null, false); }} aria-label={`Got fewer ${line.productName}`}>Fewer</button>
+      <button className="btn l-few" onClick={() => { setFewer(true); setFewerValues(Math.max(0, Math.floor(line.total) - 1), null, false); }} aria-label={`Got fewer ${line.productName}`}>Got fewer</button>
       <button className="btn good l-all" onClick={() => write(gotAllUpdates(line))} aria-label={`Got all ${round2(line.total)} ${line.productName}`}><Icon name="check" />Got all</button>
     </div>;
   }
@@ -99,7 +108,8 @@ function Line({ line, items, write }: { line: CollectionLine; items: Map<string,
     <div className={`line ${st === 'done' ? 'done' : st === 'short' ? 'short' : 'todo'}`} data-line={line.productName}>
       <div className="l-main">
         <ProductThumb src={line.photoPath} name={line.productName} credit={line.photoCredit} className="l-photo" />
-        <div className="l-name"><b>{line.productName}</b><small>{line.kind === 'task' ? line.instructions || forTxt : <>For {forTxt}</>}</small></div>
+        <div className="l-name"><b>{line.productName}</b>{line.kind === 'task' ? <small>{line.instructions || forTxt}</small>
+          : oneArea && line.parts.length === 1 ? null : <small>For {forTxt}</small>}</div>
         <div className="l-right">
           {line.kind === 'qty' ? <span className="l-qty"><b>{round2(line.total)}</b><small>{line.total === 1 ? line.unitSingular : line.unitPlural}</small></span> : null}
           {right}

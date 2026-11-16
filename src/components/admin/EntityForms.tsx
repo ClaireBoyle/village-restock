@@ -9,6 +9,8 @@ const stack: React.CSSProperties = { display: 'flex', flexDirection: 'column', g
 export interface DepartmentRow {
   id: string; name: string; shortName: string; groupLabel: string; theme: 'village' | 'gold';
   icon: 'bar' | 'kitchen' | 'candy' | 'box'; description: string; active: boolean;
+  /** Each area restocked on its own (needs migration 009). */
+  restockByArea?: boolean;
 }
 
 export function DepartmentForm({ d }: { d?: DepartmentRow }) {
@@ -27,6 +29,8 @@ export function DepartmentForm({ d }: { d?: DepartmentRow }) {
           <select id={`di-${k}`} name="icon" defaultValue={d?.icon ?? 'box'}><option value="bar">Cocktail glass (bar)</option><option value="kitchen">Chef&rsquo;s hat (kitchen)</option><option value="candy">Popcorn (candy bar)</option><option value="box">Box (general)</option></select></div>
       </div>
       <label className="check"><input type="checkbox" name="active" defaultChecked={d ? d.active : true} />Show to staff</label>
+      <label className="check"><input type="checkbox" name="restockByArea" defaultChecked={d?.restockByArea ?? false} />Restock each area separately
+        <span className="meta" style={{ fontWeight: 400 }}>&nbsp;Staff pick one area, enter what it needs, collect and finish it, at any time and in any order (e.g. Candy Bar). Otherwise every area is checked in one full restock.</span></label>
       <div><SubmitButton>{d ? 'Save department' : 'Add department'}</SubmitButton></div>
     </ActionForm>
   );
@@ -81,13 +85,15 @@ export function CategoryForm({ departmentId, c }: { departmentId: string; c?: { 
   );
 }
 
-export function LocationForm({ l }: { l?: { id: string; name: string; active: boolean } }) {
+export function LocationForm({ l }: { l?: { id: string; name: string; active: boolean; collectNote?: string } }) {
   const k = l?.id ?? 'new';
   return (
     <ActionForm action={saveLocation} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }} resetOnSuccess={!l}>
       {l ? <input type="hidden" name="id" value={l.id} /> : null}
       <div className="field" style={{ flex: '1 1 240px' }}><label htmlFor={`ln-${k}`}>{l ? 'Storeroom name' : 'New storeroom'}</label>
         <input id={`ln-${k}`} name="name" defaultValue={l?.name} required maxLength={60} placeholder="e.g. Alcohol Storeroom" /></div>
+      {l ? <div className="field" style={{ flex: '2 1 320px' }}><label htmlFor={`lc-${k}`}>Collection reminder (optional)</label>
+        <input id={`lc-${k}`} name="collectNote" defaultValue={l.collectNote ?? ''} maxLength={200} placeholder="Shown once under this storeroom on collection lists, e.g. Use opened boxes first." /></div> : null}
       {l ? <label className="check"><input type="checkbox" name="active" defaultChecked={l.active} />In use</label> : <input type="hidden" name="active" value="on" />}
       <SubmitButton className="btn">{l ? 'Save' : 'Add storeroom'}</SubmitButton>
     </ActionForm>

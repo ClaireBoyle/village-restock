@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
-  EXCEPTION_REASONS, EMPTY_ITEM, SHORT_REASONS, activePlacements, areaStatus, collectionLines, exceptions, isChecked,
+  EXCEPTION_REASONS, EMPTY_ITEM, SHORT_REASONS, activePlacements, areaStatus, collectionLines, exceptions, isChecked, isRequired,
   lineGot, lineInfo, lineState, outcomeLine, stockOutcomes, type StockOutcome,
 } from '@/lib/restock-logic';
 import { formatQty, round2 } from '@/lib/restock-math';
@@ -33,6 +33,9 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
   const finalNote = note.trim() ? note.trim() : null;
   const finished = session.status === 'finished' || session.status === 'finished_exceptions';
   const ex = finished ? [] : exceptions({ kind: session.kind, view, placements, recordedAreas: recorded, items });
+  // Area restocks (e.g. Candy Bar's confection stand) are named after their area.
+  const areaName = session.kind === 'area' ? view.areas[0]?.area.name ?? 'Area' : null;
+  const emailed = session.kind !== 'quick';
 
   const covered = activePlacements(session.kind, placements, recorded);
   const lines = collectionLines(covered, items);
@@ -47,7 +50,8 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
   // Products nobody checked, grouped by area ("Fridge 2: Milk, Butter portions")
   const uncheckedByArea = new Map<string, string[]>();
   for (const p of covered) {
-    if (isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM)) continue;
+    // Only missing target counts: a blank "staff enter" product just wasn't needed.
+    if (!isRequired(p) || isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM)) continue;
     uncheckedByArea.set(p.areaName, [...(uncheckedByArea.get(p.areaName) ?? []), p.productName]);
   }
 
@@ -90,21 +94,23 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
             <div className={`finish-meta finish-hero ${session.status === 'finished_exceptions' ? 's-warn' : 's-ok'}`}>
               <span className="fh-icon"><Icon name={session.status === 'finished_exceptions' ? 'warn' : 'check'} /></span>
               <div>
-                <h2>{session.status === 'finished_exceptions' ? 'Finished with exceptions' : 'Restock complete'}</h2>
+                <h2>{session.status === 'finished_exceptions' ? 'Finished with exceptions' : areaName ? `${areaName} restocked` : 'Restock complete'}</h2>
                 <p>Finished at {timeOf(session.finishedAt)}{session.people.length ? <> &middot; {session.people.join(', ')}</> : null}</p>
                 {session.exceptionReason ? <p className="fh-reason"><Icon name="warn" />{session.exceptionReason}</p> : null}
               </div>
             </div>
             {session.note ? (
-              <section className="note-sent"><h3><Icon name="list" />Comments{session.kind === 'full' ? ' sent to managers' : ''}</h3><p>{session.note}</p></section>
+              <section className="note-sent"><h3><Icon name="list" />Comments{emailed ? ' sent to managers' : ''}</h3><p>{session.note}</p></section>
             ) : null}
             {report}
           </>
         ) : (
           <>
-            <h2 className="finish-title">Finish restock</h2>
+            <h2 className="finish-title">{areaName ? `Finish ${areaName}` : 'Finish restock'}</h2>
             {ex.length === 0 ? (
-              <section className="ready s-ok"><h2><Icon name="check" />Ready to finish</h2><p>Every target count is in and every item is collected or recorded.</p></section>
+              <section className="ready s-ok"><h2><Icon name="check" />Ready to finish</h2><p>{
+                areaName ? (lines.length ? 'Everything entered is collected or recorded.' : 'Nothing was needed from the storeroom.')
+                  : 'Every target count is in and every item is collected or recorded.'}</p></section>
             ) : (
               <section className="ready s-warn"><h2><Icon name="warn" />Still to do</h2>
                 <ul className="exlist compact">{ex.map((e) => (
@@ -133,7 +139,7 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
 
             <section className="note-box">
               <label htmlFor="finish-note"><b>Comments for managers</b> <span className="muted">(optional)</span></label>
-              <p className="meta">{session.kind === 'full' ? 'Added to the email managers get when you finish.' : 'Saved with this restock for managers to see.'} For example: a broken fridge, a delivery that didn&rsquo;t arrive.</p>
+              <p className="meta">{emailed ? 'Added to the email managers get when you finish.' : 'Saved with this restock for managers to see.'} For example: a broken fridge, a delivery that didn&rsquo;t arrive.</p>
               <textarea id="finish-note" rows={3} maxLength={1000} value={note} onChange={(e) => editNote(e.target.value)} placeholder="Anything managers should know?" />
             </section>
 
@@ -152,14 +158,14 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
             ? (sync.connection === 'offline' ? `${plural(sync.pending, 'change')} will upload when there’s a connection. Nothing will be lost.` : 'Sending to the server now.')
             : 'Managers can see this restock.'}>
           <button className="btn" onClick={() => void reopenSession(session.id, who)}>Reopen</button>
-          <button className="btn primary big" onClick={ctx.done}><Icon name="home" />Back to home</button>
+          <button className="btn primary big" onClick={ctx.done}><Icon name={areaName ? 'back' : 'home'} />{ctx.doneLabel}</button>
         </Dock>
       ) : (
         <Dock icon={ex.length ? 'warn' : 'check'} title={ex.length ? 'Not finished yet' : 'Ready to finish'}
-          sub={ex.length ? 'Finish restock unlocks once target counts and collecting are done' : 'Ready: blank products were left as not entered'}>
+          sub={ex.length ? 'Finish restock unlocks once target counts and collecting are done' : areaName ? 'Products left blank weren’t needed' : 'Ready: blank products were left as not entered'}>
           <button className="btn save-exit" onClick={ctx.saveAndExit} aria-label="Save and exit"><Icon name="save" /><span className="lg">Save and exit</span><span className="sm">Save &amp; exit</span></button>
           {ex.length ? <button className="btn caution big" onClick={() => { setExOpen(true); window.setTimeout(() => document.getElementById('expanel')?.scrollIntoView({ block: 'start' }), 50); }}><span className="lg">Finish with exceptions&hellip;</span><span className="sm">With exceptions&hellip;</span></button> : null}
-          <button className="btn good big" disabled={ex.length > 0} onClick={() => { void finishSession(session.id, null, who, finalNote); window.scrollTo({ top: 0 }); }}><Icon name="check" />Finish restock</button>
+          <button className="btn good big" disabled={ex.length > 0} onClick={() => { void finishSession(session.id, null, who, finalNote); window.scrollTo({ top: 0 }); }}><Icon name="check" />{areaName ? 'Finish' : 'Finish restock'}</button>
         </Dock>
       )}
     </>
