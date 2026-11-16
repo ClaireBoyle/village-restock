@@ -964,3 +964,7 @@ body:has(.theme-gold) { background: #241B10; }
 .danger-zone > summary .ic { width: 18px; height: 18px; }
 .move button.pending .ic { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+/* Arrange: a subheading is its own row (a divider) that products move past */
+.arr-list li.arr-hrow { background: var(--surface-2); border-style: dashed; }
+.arr-hrow input { flex: 1; min-width: 0; min-height: 40px; font-weight: 700; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; }
+.arr-hx { width: 40px; height: 40px; min-height: 40px; flex: none; }

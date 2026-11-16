@@ -81,8 +81,8 @@ const BEER = ['Heineken Zero', 'James Squire Ginger Beer', 'Little Creatures Rog
   await A.goto(B + '/admin/login'); await A.fill('#email', 'admin@example.com'); await A.fill('#password', 'correct-horse-1'); await A.click('button.btn.primary'); await A.waitForURL(/\/admin$/);
   const [{ id: areaId }] = await sql`select a.id from check_areas a join departments d on d.id = a.department_id where d.name = 'Gold Class Bar' and a.name = 'BOH bar fridge'`;
   await A.goto(`${B}/admin/arrange/${areaId}`); await A.waitForSelector('.arr-list');
-  ok(await A.inputValue('.arr-head input >> nth=0') === 'Mixers, Water & Milk' && await A.inputValue('.arr-head input >> nth=1') === 'Beer, Cider & Hard Soda', 'Admin > Arrange shows both subheadings');
-  await A.fill('.arr-head input >> nth=1', 'Beer & Cider'); await A.click('button:has-text("Save order")');
+  ok(await A.inputValue('.arr-hrow input >> nth=0') === 'Mixers, Water & Milk' && await A.inputValue('.arr-hrow input >> nth=1') === 'Beer, Cider & Hard Soda', 'Admin > Arrange shows both subheadings as rows');
+  await A.fill('.arr-hrow input >> nth=1', 'Beer & Cider'); await A.click('button:has-text("Save order")');
   ok(await has(A, '.arr-bar', 'Order saved'), 'manager can rename a subheading and save');
   const [h] = await sql`select heading from product_placements where heading like 'Beer%'`;
   ok(h.heading === 'Beer & Cider', 'subheading saved');
@@ -101,6 +101,24 @@ const BEER = ['Heineken Zero', 'James Squire Ginger Beer', 'Little Creatures Rog
   await has(A, '.arr-bar', 'Order saved');
   const [first] = await sql`select p.name, pl.heading from product_placements pl join products p on p.id = pl.product_id where pl.check_area_id = ${areaId} order by pl.sort_order limit 1`;
   ok(first.name === 'Apple Juice' && first.heading === 'Mixers, Water & Milk', 'saving in Arrange moves the first subheading to the top product');
+
+  // ---- Arrange: moving a product past a subheading row (headings stay put) ----
+  await A.goto(`${B}/admin/arrange/${areaId}`); await A.waitForSelector('.arr-hrow');
+  const arrNames = async () => A.$$eval('.arr-list li', (els) => els.map((e) => (e.classList.contains('arr-hrow') ? `# ${e.querySelector('input').value}` : e.querySelector('.arr-t b').textContent)));
+  const l1 = await arrNames();
+  const second = l1[2]; // the product under the first heading after the top one
+  await A.click(`button[aria-label="Move ${second} up"]`);
+  const l2 = await arrNames();
+  ok(l2[0] === '# Mixers, Water & Milk' && l2[1] === second, `moving ${second} to the top keeps it under the first subheading`);
+  const firstBeer = l1[l1.indexOf('# Beer & Cider') + 1];
+  await A.click(`button[aria-label="Move ${firstBeer} up"]`);
+  const l3 = await arrNames();
+  ok(l3.indexOf(firstBeer) === l3.indexOf('# Beer & Cider') - 1, `moving ${firstBeer} up past the Beer & Cider row puts it in the group above`);
+  await A.click('button:has-text("Save order")'); await has(A, '.arr-bar', 'Order saved');
+  const saved = await sql`select p.name, pl.heading from product_placements pl join products p on p.id = pl.product_id where pl.check_area_id = ${areaId} and p.status = 'active' order by pl.sort_order`;
+  const bi = saved.findIndex((r) => r.heading === 'Beer & Cider');
+  ok(saved[0].name === second && saved[0].heading === 'Mixers, Water & Milk' && saved[bi - 1].name === firstBeer && !saved[bi - 1].heading, 'saved exactly as arranged');
+  await A.click(`button[aria-label="Move ${firstBeer} down"]`); await A.click('button:has-text("Save order")'); await has(A, '.arr-bar', 'Order saved');
 
   // ---- Products page arrows reorder within an area ----
   const order = async () => (await sql`select p.name from product_placements pl join products p on p.id = pl.product_id
