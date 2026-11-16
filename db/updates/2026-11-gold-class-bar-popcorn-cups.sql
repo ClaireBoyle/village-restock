@@ -33,7 +33,9 @@ begin
     where not exists (select 1 from categories where department_id = dept and lower(name) = 'packaging');
   cat := (select id from categories where department_id = dept and lower(name) = 'packaging');
   for i in 1 .. array_length(list, 1) loop
-    area := (select id from check_areas where department_id = dept and lower(name) = list[i][1]);
+    -- (found by name, also after a rename such as "Cups, Lids & Straws storage")
+    area := (select id from check_areas where department_id = dept and active
+             and lower(name) like case when list[i][1] = 'popcorn boxes' then 'popcorn%' else 'cups%lids%' end order by sort_order limit 1);
     if area is null then
       insert into check_areas (department_id, name, sort_order)
         values (dept, case when list[i][1] = 'popcorn boxes' then 'Popcorn boxes' else 'Cups/lids storage' end, 50) returning id into area;
