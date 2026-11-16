@@ -82,7 +82,9 @@ begin
   end loop;
 
   -- 3. Spirits cupboard: an optional, collapsed section of the Back bench.
-  bench := (select id from check_areas where department_id = dept and lower(name) = 'back bench');
+  -- (the section of Back shelves once the spirits have their own area: see 2026-11-gold-class-bar-back-shelves.sql)
+  bench := coalesce((select id from check_areas where department_id = dept and lower(name) = 'back shelves'),
+                    (select id from check_areas where department_id = dept and lower(name) = 'back bench'));
   cupboard := (select id from check_areas where department_id = dept and lower(name) = 'spirits cupboard');
   if bench is not null and cupboard is not null
      and exists (select 1 from information_schema.columns where table_name = 'check_areas' and column_name = 'parent_area_id')

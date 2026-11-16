@@ -166,6 +166,22 @@ const contrast = (P, sel) => P.$eval(sel, (el) => {
     'Walk in fridge follows the shelves: ' + wl.slice(0, 13).join(' | ') + ' … ' + wl.slice(wl.indexOf('# Bottom shelf · Water & Wine'), wl.indexOf('# Bottom shelf · Water & Wine') + 3).join(' | '));
   const [{ n: oj }] = await sql`select count(*)::int as n from products p join departments d on d.id = p.department_id where d.name = 'Gold Class Bar' and p.name = 'Orange Juice' and p.status = 'active'`;
   ok(oj === 1, 'the juices are the same products as in the BOH bar fridge (no duplicates)');
+  // Back shelves: the spirits get their own area after the Back bench (applied twice)
+  await sql.file('db/updates/2026-11-gold-class-bar-back-shelves.sql');
+  await sql.file('db/updates/2026-11-gold-class-bar-back-shelves.sql');
+  await sql`delete from restock_sessions`;
+  await W.reload(); await W.waitForSelector('.dcard2, article.prow, .type-full');
+  await W.goto(B + '/'); await W.waitForSelector('.dcard2'); await W.click('.dcard2:has-text("Bar") >> nth=0');
+  await W.click('.type-full button.btn.primary'); await W.waitForSelector('article.prow');
+  const tabs = await W.$$eval('.area-btn b', (els) => els.map((e) => e.textContent));
+  ok(tabs.indexOf('Back shelves') === tabs.indexOf('Back bench') + 1 && !tabs.includes('Spirits cupboard'), 'Back shelves is its own area, right after the Back bench: ' + tabs.join(', '));
+  await goArea(W, 'Back bench');
+  const bb = await W.$$eval('.area > .prows > *', (els) => els.map((e) => (e.classList.contains('phead') ? `# ${e.textContent}` : e.querySelector('h3')?.textContent)));
+  ok(bb[0] === '# Red Wines' && bb.filter((x) => !x.startsWith('#')).length === 11 && await W.locator('.psec').count() === 0, 'Back bench: just the red wines');
+  await goArea(W, 'Back shelves');
+  const bs = await W.$$eval('.area > .prows > .phead', (els) => els.map((e) => e.textContent.replace(/\d.*$/, '').trim()));
+  ok(JSON.stringify(bs) === JSON.stringify(['Vodka', 'Gin & Tequila', 'Whisky & Bourbon', 'Rum', 'Liqueurs']) && await has(W, '.psec.optional', 'Spirits cupboard'),
+    'Back shelves: spirits by category, with the optional Spirits cupboard section');
   await cw.close();
   ok(errs.length === 0, 'no page errors ' + JSON.stringify(errs));
   await b.close(); await sql.end();
