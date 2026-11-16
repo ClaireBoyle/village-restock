@@ -88,6 +88,20 @@ const BEER = ['Heineken Zero', 'James Squire Ginger Beer', 'Little Creatures Rog
   ok(h.heading === 'Beer & Cider', 'subheading saved');
   await A.screenshot({ path: `${OUT}/p11-arrange.png` });
 
+  // ---- A product moved above the first subheading joins that group ----
+  await sql`update product_placements pl set sort_order = 0 from products p where p.id = pl.product_id and p.name = 'Apple Juice'`;
+  await sql`update app_settings set value = to_jsonb((value)::text::int + 1) where key = 'catalogue_version'`;
+  const cx = await b.newContext({ ...devices['iPhone 13'] }); const X = await cx.newPage();
+  await X.goto(B + '/'); await X.waitForSelector('.dcard2'); await X.click('.dcard2:has-text("Bar") >> nth=0'); await X.click('.type-full button.btn.primary'); await X.waitForSelector('article.prow');
+  const top = await X.$$eval('.area > .prows > *', (els) => els.slice(0, 3).map((e) => (e.classList.contains('phead') ? `# ${e.textContent}` : e.querySelector('h3')?.textContent)));
+  ok(top[0] === '# Mixers, Water & Milk' && top[1] === 'Apple Juice' && top[2] === 'Cranberry Juice', 'a product moved to the top sits under the first subheading: ' + top.join(' | '));
+  await cx.close();
+  await A.goto(`${B}/admin/arrange/${areaId}`); await A.waitForSelector('.arr-list');
+  await A.click('.arr-list li:has-text("Orange Juice") button[aria-label^="Move Orange Juice up"]'); await A.click('button:has-text("Save order")');
+  await has(A, '.arr-bar', 'Order saved');
+  const [first] = await sql`select p.name, pl.heading from product_placements pl join products p on p.id = pl.product_id where pl.check_area_id = ${areaId} order by pl.sort_order limit 1`;
+  ok(first.name === 'Apple Juice' && first.heading === 'Mixers, Water & Milk', 'saving in Arrange moves the first subheading to the top product');
+
   // ---- Admin can delete a product; history keeps it ----
   const [oj] = await sql`select p.id from products p join departments d on d.id = p.department_id where d.name = 'Gold Class Bar' and p.name = 'Orange Juice'`;
   const [{ n: histBefore }] = await waitDb(() => sql`select count(*)::int as n from session_items where product_name = 'Orange Juice'`, (r) => r[0].n > 0);

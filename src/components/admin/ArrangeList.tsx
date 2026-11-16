@@ -38,9 +38,13 @@ export function ArrangeList({ areaId, items: initial }: { areaId: string; items:
     move(from, to);
   };
   const save = () => start(async () => {
-    const r = await saveAreaOrder(areaId, items.map((i) => i.id), Object.fromEntries(items.map((i) => [i.id, i.heading?.trim() || null])));
+    // A product moved above the first subheading joins that group: the heading moves to the top.
+    const f = items.findIndex((i) => i.heading?.trim());
+    const list = f > 0 ? items.map((i, n) => (n === 0 ? { ...i, heading: items[f].heading } : n === f ? { ...i, heading: null } : i)) : items;
+    if (list !== items) setItems(list);
+    const r = await saveAreaOrder(areaId, list.map((i) => i.id), Object.fromEntries(list.map((i) => [i.id, i.heading?.trim() || null])));
     if (r?.error) setMsg({ ok: false, text: r.error });
-    else { setSaved(items); setMsg({ ok: true, text: 'Order saved. Devices get it next time they connect.' }); router.refresh(); }
+    else { setSaved(list); setMsg({ ok: true, text: 'Order saved. Devices get it next time they connect.' }); router.refresh(); }
   });
 
   if (items.length === 0) return <section className="panel"><p className="meta">No products in this area yet.</p></section>;

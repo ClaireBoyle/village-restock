@@ -113,7 +113,10 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
    * folded with a tap on the heading (they start open, so nothing needs an extra tap).
    */
   const LONG = 15; // only very long groups (e.g. 31 spirits); shorter ones never fold
-  const renderList = (ps: typeof cur.placements) => {
+  const renderList = (list: typeof cur.placements) => {
+    // Products moved above the first subheading belong to that first group (the list starts with its heading).
+    const f = list.findIndex((x) => x.heading);
+    const ps = f > 0 ? list.map((x, n) => (n === 0 ? { ...x, heading: list[f].heading } : n === f ? { ...x, heading: null } : x)) : list;
     const out: React.ReactNode[] = [];
     let i = 0;
     while (i < ps.length) {
