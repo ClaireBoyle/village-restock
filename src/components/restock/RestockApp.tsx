@@ -7,10 +7,10 @@ import { useCatalogue } from '@/lib/client/use-catalogue';
 import { useLive, useResetIds, useStaffName } from '@/lib/client/hooks';
 import { localDb, type LocalArea, type LocalSession } from '@/lib/client/local-db';
 import { findOpenQuickSession, openAreaSession, openFullSession, startSession } from '@/lib/client/restock-store';
-import { EMPTY_ITEM, departmentView, scopeView, type AreaStatus, type DepartmentView, type ItemState, type PlacementView } from '@/lib/restock-logic';
+import { EMPTY_ITEM, departmentView, scopeView, suggestions, usesRefill, withSuggestions, type AreaStatus, type Suggestion, type DepartmentView, type ItemState, type PlacementView } from '@/lib/restock-logic';
 import { tradingDate } from '@/lib/restock-math';
 import { CheckStep } from './CheckStep';
-import { CollectStep } from './CollectStep';
+import { CollectStep, RefillStep } from './CollectStep';
 import { FinishStep } from './FinishStep';
 import { QuickStep } from './QuickStep';
 import { OfflineBanner, TopControls } from './SyncControls';
@@ -25,7 +25,14 @@ export interface RestockCtx {
   session: LocalSession;
   /** The placements this restock covers: the whole department, or the quick list. */
   placements: PlacementView[];
+  /** As they count: Refill FOH suggestions included until staff change them. */
   items: Map<string, ItemState>;
+  /** What staff actually entered (no suggestions), for knowing whether a suggestion was changed. */
+  rawItems: Map<string, ItemState>;
+  /** Refill FOH: what's suggested for each upstairs spot from what was grabbed for FOH. */
+  suggested: Map<string, Suggestion>;
+  /** This restock uses the Refill FOH flow (Check FOH → Refill FOH → Check BOH → Collect → Finish). */
+  refill: boolean;
   areaRecords: Map<string, LocalArea>;
   recorded: Map<string, AreaStatus>;
   who: string;
@@ -46,7 +53,7 @@ function readUrl(): { mode: Mode | null; step: Step; quickId: string | null; are
   const m = p.get('mode');
   const mode = m === 'full' || m === 'quick' || m === 'area' ? (m as Mode) : null;
   const s = p.get('step');
-  return { mode, step: s === 'collect' || s === 'finish' ? s : 'check', quickId: p.get('s'), areaId: p.get('a') };
+  return { mode, step: s === 'collect' || s === 'finish' || s === 'refill' || s === 'boh' ? s : 'check', quickId: p.get('s'), areaId: p.get('a') };
 }
 
 /**
@@ -236,18 +243,24 @@ export function RestockApp({ departmentId, isAdmin = false }: { departmentId: st
 
   if (!session) return <div className={themeCls}>{top}<main className="wrap restock-main"><p className="meta">Opening restock&hellip;</p></main></div>;
 
-  const items = new Map<string, ItemState>(itemRows.map((r) => [r.placementId, { ...EMPTY_ITEM, ...r }]));
+  const rawItems = new Map<string, ItemState>(itemRows.map((r) => [r.placementId, { ...EMPTY_ITEM, ...r }]));
   const areaRecords = new Map(areaRows.map((a) => [a.areaId, a]));
   const recorded = new Map<string, AreaStatus>(areaRows.filter((a) => a.status !== 'not_started').map((a) => [a.areaId, a.status as AreaStatus]));
+  // Refill FOH: what's grabbed upstairs is suggested for that spot's downstairs list.
+  const refill = usesRefill(session.kind, view);
+  const suggested = refill ? suggestions(session.kind, view, rawItems, recorded) : new Map<string, Suggestion>();
+  const items = refill ? withSuggestions(session.kind, view, rawItems, recorded) : rawItems;
+  // Steps only the Refill FOH flow has fall back to the plain ones elsewhere.
+  const shownStep: Step = refill ? step : step === 'refill' || step === 'boh' ? 'check' : step;
   // An area restock sees only its own area: its products, its collection list, its finish.
   const scoped = session.kind === 'area' ? scopeView(view, session.areaId) : view;
   const placements = session.kind === 'quick' ? session.selected.map((id) => view.byId.get(id)).filter((p): p is PlacementView => Boolean(p)) : scoped.placements;
   const byArea = session.kind === 'area';
 
   const ctx: RestockCtx = {
-    view: scoped, session, placements, items, areaRecords, recorded, who, go, hasDefrost,
+    view: scoped, session, placements, items, rawItems, suggested, refill, areaRecords, recorded, who, go, hasDefrost,
     // Restock screens: one slim step bar, no banner, so products start near the top of the screen.
-    header: <div className="rbar"><Stages kind={session.kind} current={step} onGo={go} /></div>,
+    header: <div className="rbar"><Stages kind={session.kind} current={shownStep} onGo={go} refill={refill} /></div>,
     // Area restocks go back to choosing an area, where this one shows as saved (or done).
     saveAndExit: byArea ? toChooser : () => router.push('/?saved=1'),
     done: byArea ? toChooser : () => router.push('/'),
@@ -257,8 +270,10 @@ export function RestockApp({ departmentId, isAdmin = false }: { departmentId: st
   return (
     <div className={themeCls}>
       {top}
-      {step === 'check' ? (session.kind !== 'quick' ? <CheckStep ctx={ctx} /> : <QuickStep ctx={ctx} />)
-        : step === 'collect' ? <CollectStep ctx={ctx} /> : <FinishStep ctx={ctx} />}
+      {shownStep === 'check' ? (session.kind !== 'quick' ? <CheckStep key="foh" ctx={ctx} phase={refill ? 'foh' : 'all'} /> : <QuickStep ctx={ctx} />)
+        : shownStep === 'boh' ? <CheckStep key="boh" ctx={ctx} phase="boh" />
+        : shownStep === 'refill' ? <RefillStep ctx={ctx} />
+        : shownStep === 'collect' ? <CollectStep ctx={ctx} /> : <FinishStep ctx={ctx} />}
     </div>
   );
 }

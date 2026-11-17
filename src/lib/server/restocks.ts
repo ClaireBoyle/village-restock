@@ -2,7 +2,7 @@
 import { db } from './db';
 import { loadCatalogue } from './catalogue';
 import { tradingDate } from '@/lib/restock-math';
-import { departmentView, scopeView, summaryText, type AreaStatus, type Conflict, type ItemState, type PlacementView } from '@/lib/restock-logic';
+import { departmentView, scopeView, summaryText, withSuggestions, type AreaStatus, type Conflict, type ItemState, type PlacementView } from '@/lib/restock-logic';
 
 export async function serverToday(): Promise<string> {
   const rows = await db()`select key, value from app_settings where key in ('timezone', 'trading_day_cutoff_hour')`;
@@ -91,7 +91,8 @@ export async function restockDetail(id: string) {
     departmentName: String(s.departmentName), kind: s.kind as 'full' | 'quick' | 'area',
     finishedLabel: s.finishedAt ? new Date(s.finishedAt as string).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', timeZone: cat.settings.timeZone }).toLowerCase() : null,
     exceptionReason: (s.exceptionReason as string) ?? null, people: (s.people as string[]) ?? [], view, placements, recordedAreas: recorded,
-    skipReasons: new Map(areas.map((a) => [String(a.checkAreaId), String(a.skipReason ?? '')])), items: itemMap,
+    skipReasons: new Map(areas.map((a) => [String(a.checkAreaId), String(a.skipReason ?? '')])),
+    items: withSuggestions(s.kind as 'full' | 'quick' | 'area', view, itemMap, recorded),
     dateLabel: new Date(`${dateStr(s.tradingDate)}T12:00:00Z`).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }),
   }) : '';
   const session = { ...s, tradingDate: dateStr(s.tradingDate) } as Record<string, unknown> & { tradingDate: string; people: string[] };

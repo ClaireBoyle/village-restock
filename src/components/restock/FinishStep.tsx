@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
-  EXCEPTION_REASONS, EMPTY_ITEM, SHORT_REASONS, activePlacements, areaStatus, collectionLines, exceptions, isChecked, isRequired,
+  EXCEPTION_REASONS, EMPTY_ITEM, SHORT_REASONS, activePlacements, areaStatus, collectPlacements, collectionLines, exceptions, isChecked, isRequired,
   lineGot, lineInfo, lineState, stockOutcomes, type StockOutcome,
 } from '@/lib/restock-logic';
 import { formatQty, round2 } from '@/lib/restock-math';
@@ -38,7 +38,7 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
   const emailed = session.kind !== 'quick';
 
   const covered = activePlacements(session.kind, placements, recorded);
-  const lines = collectionLines(covered, items);
+  const lines = collectionLines(collectPlacements(session.kind, placements, recorded), items);
   const notCollected: [string, string][] = [], collected: [string, string][] = [];
   for (const l of lines) {
     const st = lineState(l, items), info = lineInfo(l, items), got = lineGot(l, items);

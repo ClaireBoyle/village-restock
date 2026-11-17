@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Catalogue } from './catalogue-types';
-import { activePlacements, areaNotes, isRequired, scopeView,
+import { activePlacements, areaNotes, isRequired, scopeView, collectPlacements, phaseAreas, refillLines, suggestions, usesRefill, withSuggestions,
   EMPTY_ITEM, areaStatus, cardState, isChecked, collectionLines, departmentView, exceptions, gotAllUpdates,
   gotFewerUpdates, groupByStoreroom, lineGot, lineState, needOf, stockOutcomes, summaryText, type AreaStatus, type ItemState,
 } from './restock-logic';
@@ -333,5 +333,67 @@ describe('area restocks (Candy Bar: each area on its own)', () => {
     const v = departmentView({ ...cat, locations: cat.locations.map((l) => (l.id === 'dryst' ? { ...l, collectNote: ' Use opened boxes first. ' } : l)) }, 'k')!;
     expect(v.locationNotes.get('dryst')).toBe('Use opened boxes first.');
     expect(v.locationNotes.has('cool')).toBe(false);
+  });
+});
+
+describe('Refill FOH: grab upstairs for front of house, then replace it from downstairs', () => {
+  const recorded = (o: Record<string, AreaStatus>) => new Map(Object.entries(o));
+  const P = (id: string, name: string, unit: [string, string], loc: string) => ({ id, departmentId: 'gb', categoryId: null, name, unitSingular: unit[0], unitPlural: unit[1], method: 'manual' as const, allowDecimal: false, instructions: '', defaultLocationId: loc, sortOrder: 1, affects: [], photoPath: null });
+  const pl = (id: string, productId: string, checkAreaId: string, extra: Record<string, unknown> = {}) => ({ id, productId, checkAreaId, parLevel: null, locationId: null, instructions: null, sortOrder: 1, ...extra });
+  const A = (id: string, name: string, sortOrder: number, parentAreaId: string | null = null) => ({ id, departmentId: 'gb', name, guideText: '', guidePhotoPath: null, sortOrder, parentAreaId, sectionMode: 'open' as const });
+  const bar: Catalogue = {
+    ...cat,
+    departments: [{ id: 'gb', name: 'Gold Class Bar', shortName: 'Bar', groupLabel: '', theme: 'gold', icon: 'bar', description: '', sortOrder: 1 }],
+    areas: [A('bohf', 'BOH bar fridge', 1), A('ups', 'Upstairs cupboards', 2), A('wine', 'Wine cupboard', 3, 'ups'), A('beerf', 'FOH beer fridge', 4), A('bench', 'Back bench', 5)],
+    locations: [{ id: 'alc', name: 'Alcohol storeroom', sortOrder: 1 }, { id: 'wif', name: 'Walk in fridge(Downstairs)', sortOrder: 2 }],
+    products: [P('shz', 'Red Claw Shiraz', ['bottle', 'bottles'], 'alc'), P('hei', 'Heineken', ['pack', 'packs'], 'alc'), P('spk', 'Sparkling 330ml', ['bottle', 'bottles'], 'wif'),
+      P('cur', 'Curatif Negroni', ['bottle', 'bottles'], 'alc'), P('syr', 'Vanilla Syrup', ['bottle', 'bottles'], 'alc')],
+    placements: [
+      pl('hei-boh', 'hei', 'bohf'), pl('spk-boh', 'spk', 'bohf'), pl('shz-wine', 'shz', 'wine'),
+      pl('hei-foh', 'hei', 'beerf', { pickupAreaId: 'bohf', unitSingular: 'bottle', unitPlural: 'bottles' }),
+      pl('spk-foh', 'spk', 'beerf', { pickupAreaId: 'bohf', pickupSuggest: true }),
+      pl('cur-foh', 'cur', 'beerf'),
+      pl('shz-bench', 'shz', 'bench', { pickupAreaId: 'wine', pickupSuggest: true }),
+      pl('syr-bench', 'syr', 'bench'),
+    ],
+  };
+  const v = departmentView(bar, 'gb')!;
+  it('splits the screens into front of house and the upstairs pickup spots', () => {
+    expect(usesRefill('full', v)).toBe(true);
+    expect(usesRefill('quick', v)).toBe(false);
+    expect(phaseAreas(v, 'foh').map((a) => a.area.name)).toEqual(['FOH beer fridge', 'Back bench']);
+    expect(phaseAreas(v, 'boh').map((a) => a.area.name)).toEqual(['BOH bar fridge', 'Upstairs cupboards']);
+    expect(v.byId.get('hei-foh')).toMatchObject({ unitPlural: 'bottles', pickupAreaName: 'BOH bar fridge', pickupSuggest: false });
+    expect(v.byId.get('hei-boh')!.unitPlural).toBe('packs');
+  });
+  it('lists upstairs pickups on Refill FOH by spot, and keeps them off the downstairs list', () => {
+    const m = items({ 'hei-foh': { requestedQty: 3 }, 'shz-bench': { requestedQty: 1 }, 'cur-foh': { requestedQty: 2 }, 'syr-bench': { requestedQty: 1 } });
+    const r = refillLines('full', v.placements, recorded({}), m);
+    expect(groupByStoreroom(r, v.pickupOrder).map((g) => [g.name, g.lines.map((l) => `${l.total} ${l.unitPlural} ${l.productName}`)]))
+      .toEqual([['BOH bar fridge', ['3 bottles Heineken']], ['Wine cupboard', ['1 bottles Red Claw Shiraz']]]);
+    const down = collectionLines(collectPlacements('full', v.placements, recorded({})), withSuggestions('full', v, m, recorded({})));
+    // Curatif and syrups straight from downstairs; the Shiraz taken upstairs is suggested for the Wine cupboard; beers are not.
+    expect(down.map((l) => [l.productName, l.total, l.parts[0].areaName])).toEqual([['Red Claw Shiraz', 1, 'Wine cupboard'], ['Curatif Negroni', 2, 'FOH beer fridge'], ['Vanilla Syrup', 1, 'Back bench']]);
+  });
+  it('the suggestion stands until staff change it; what they leave is final', () => {
+    const base = { 'shz-bench': { requestedQty: 1 }, 'spk-foh': { requestedQty: 4 } };
+    expect([...suggestions('full', v, items(base), recorded({}))]).toEqual([['spk-boh', { qty: 4, from: [{ areaName: 'FOH beer fridge', need: 4 }] }], ['shz-wine', { qty: 1, from: [{ areaName: 'Back bench', need: 1 }] }]]);
+    const kept = withSuggestions('full', v, items(base), recorded({}));
+    expect(kept.get('shz-wine')!.requestedQty).toBe(1);
+    // Changed to 3: 3 in total (not 1 + 3). Removed: 0.
+    expect(withSuggestions('full', v, items({ ...base, 'shz-wine': { requestedQty: 3 } }), recorded({})).get('shz-wine')!.requestedQty).toBe(3);
+    expect(withSuggestions('full', v, items({ ...base, 'shz-wine': { requestedQty: 0 } }), recorded({})).get('shz-wine')!.requestedQty).toBe(0);
+    // A skipped front-of-house area suggests nothing.
+    expect(suggestions('full', v, items(base), recorded({ bench: 'skipped' })).has('shz-wine')).toBe(false);
+  });
+  it('beer singles and packs never merge, and quick restocks keep the plain list', () => {
+    const m = items({ 'hei-foh': { requestedQty: 3 }, 'hei-boh': { requestedQty: 1 } });
+    const q = collectionLines(collectPlacements('quick', v.placements, recorded({})), m);
+    expect(q.map((l) => `${l.total} ${l.unitPlural}`)).toEqual(['1 packs', '3 bottles']);
+    expect(collectionLines(collectPlacements('full', v.placements, recorded({})), m).map((l) => `${l.total} ${l.unitPlural}`)).toEqual(['1 packs']);
+  });
+  it('the summary only reports the downstairs run', () => {
+    const m = withSuggestions('full', v, items({ 'shz-bench': { requestedQty: 1 }, 'hei-foh': { requestedQty: 2 } }), recorded({}));
+    expect(exceptions({ kind: 'full', view: v, placements: v.placements, recordedAreas: recorded({}), items: m }).map((e) => e.detail)).toEqual(['Red Claw Shiraz']);
   });
 });

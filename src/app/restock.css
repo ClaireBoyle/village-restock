@@ -1080,3 +1080,11 @@ button.pnote.open span{display:block}
 }
 .lrow .l-link,.lrow .l-few{border:0;background:none;box-shadow:none;grid-area:auto;color:var(--accent);min-width:0}
 .gc .lrow .l-link{color:var(--d-accent)}
+
+/* Refill FOH flow: five steps in the slim step bar (short labels on phones). */
+.rbar .stages.five{grid-template-columns:repeat(5,minmax(0,1fr))}
+@media (min-width:920px){.rbar .stages.five{max-width:760px}}
+@media (max-width:520px){.rbar .stages.five .stage{padding-left:2px;padding-right:2px;gap:4px}.rbar .stages.five .n{width:20px;height:20px;font-size:.72rem}}
+.refill-intro{margin:4px 0 10px}
+/* Five steps need the short labels a little sooner (tablets in portrait keep the full ones). */
+@media (max-width:720px){.rbar .stages.five .stage .lg{display:none!important}.rbar .stages.five .stage .sm{display:inline!important}}

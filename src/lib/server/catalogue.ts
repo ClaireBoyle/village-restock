@@ -37,7 +37,10 @@ export async function loadCatalogue(): Promise<Catalogue> {
       where p.status = 'active' order by p.sort_order, p.name`;
     const placements = await tx`
       select pl.id, pl.product_id, pl.check_area_id, pl.par_level, pl.location_id, pl.instructions, pl.sort_order,
-             (to_jsonb(pl)->>'heading') as heading
+             (to_jsonb(pl)->>'heading') as heading,
+             -- Refill FOH (migration 012): read via jsonb so the app still works before it runs
+             (to_jsonb(pl)->>'pickup_area_id') as pickup_area_id, coalesce((to_jsonb(pl)->>'pickup_suggest')::boolean, false) as pickup_suggest,
+             (to_jsonb(pl)->>'unit_singular') as unit_singular, (to_jsonb(pl)->>'unit_plural') as unit_plural
       from product_placements pl
       join products p on p.id = pl.product_id and p.status = 'active'
       join check_areas a on a.id = pl.check_area_id and a.active

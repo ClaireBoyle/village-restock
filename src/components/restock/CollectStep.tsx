@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
-  EMPTY_ITEM, SHORT_REASONS, activePlacements, clearCollectedUpdates, collectionLines, gotAllUpdates, gotFewerUpdates,
+  EMPTY_ITEM, SHORT_REASONS, activePlacements, clearCollectedUpdates, collectPlacements, refillLines, collectionLines, gotAllUpdates, gotFewerUpdates,
   groupByStoreroom, isChecked, isRequired, lineGot, lineInfo, lineState, type CollectionLine, type ItemState, type ShortReason,
 } from '@/lib/restock-logic';
 import { formatQty, round2 } from '@/lib/restock-math';
@@ -15,7 +15,8 @@ import type { RestockCtx } from './RestockApp';
 export function CollectStep({ ctx }: { ctx: RestockCtx }) {
   const { view, session, items, recorded, who, placements } = ctx;
   const covered = activePlacements(session.kind, placements, recorded);
-  const lines = collectionLines(covered, items);
+  // Upstairs pickups were on Refill FOH; this is the downstairs run.
+  const lines = collectionLines(collectPlacements(session.kind, placements, recorded), items);
   const groups = groupByStoreroom(lines, view.locationOrder);
   const handled = lines.filter((l) => ['done', 'short'].includes(lineState(l, items))).length;
   const shorts = lines.filter((l) => lineState(l, items) === 'short' && lineInfo(l, items).reason === 'insufficient').length;
@@ -35,7 +36,7 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
         ) : null}
         {lines.length === 0 ? <p className="empty">{session.kind === 'area' ? 'Nothing to collect. Nothing was entered as needed.' : 'Nothing to collect. Everything checked is at target.'}</p> : (
           <div className="rooms">
-            {groups.map((g) => <Room key={g.name} name={g.name} lines={g.lines} items={items} write={write} oneArea={oneArea}
+            {groups.map((g) => <Room key={g.lines[0].locationId ?? g.name} name={g.name} lines={g.lines} items={items} write={write} oneArea={oneArea}
               note={g.lines[0].locationId ? view.locationNotes.get(g.lines[0].locationId) : undefined} />)}
           </div>
         )}
@@ -50,10 +51,12 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
 }
 
 /** One storeroom: header with progress, folds away once everything in it is collected. */
-function Room({ name, lines, items, write, note, oneArea }: {
+function Room({ name, lines, items, write, note, oneArea, tickOnly = false }: {
   name: string; lines: CollectionLine[]; items: Map<string, ItemState>; write: (u: { placementId: string; fields: Partial<ItemState> }[]) => void;
   /** The storeroom's reminder (e.g. "Use opened boxes first"), shown once under its heading. */
   note?: string; oneArea: string | null;
+  /** Refill FOH: just a tick for "grabbed" (anything missing upstairs is covered by the downstairs run). */
+  tickOnly?: boolean;
 }) {
   const doneN = lines.filter((l) => ['done', 'short'].includes(lineState(l, items))).length;
   const complete = doneN === lines.length;
@@ -68,12 +71,12 @@ function Room({ name, lines, items, write, note, oneArea }: {
         <Icon name={open ? 'up' : 'down'} />
       </button>
       {open && note ? <p className="room-note"><Icon name="info" /><span>{note}</span></p> : null}
-      {open ? <div className="room-lines">{lines.map((l) => <Line key={l.key} line={l} items={items} write={write} oneArea={oneArea} />)}</div> : null}
+      {open ? <div className="room-lines">{lines.map((l) => <Line key={l.key} line={l} items={items} write={write} oneArea={oneArea} tickOnly={tickOnly} />)}</div> : null}
     </section>
   );
 }
 
-function Line({ line, items, write, oneArea }: { line: CollectionLine; items: Map<string, ItemState>; write: (u: { placementId: string; fields: Partial<ItemState> }[]) => void; oneArea: string | null }) {
+function Line({ line, items, write, oneArea, tickOnly = false }: { line: CollectionLine; items: Map<string, ItemState>; write: (u: { placementId: string; fields: Partial<ItemState> }[]) => void; oneArea: string | null; tickOnly?: boolean }) {
   const st = lineState(line, items);
   const info = lineInfo(line, items);
   const got = lineGot(line, items);
@@ -115,7 +118,7 @@ function Line({ line, items, write, oneArea }: { line: CollectionLine; items: Ma
     act = <button type="button" className="l-tick on" onClick={undo} aria-label={`Undo ${line.productName}`}><Icon name="check" /></button>;
   } else if (!open && !(st === 'short')) {
     act = <button type="button" className="l-tick l-all" onClick={all}
-      aria-label={line.kind === 'task' ? `Done: ${line.productName}` : `Got all ${round2(line.total)} ${line.productName}`}><Icon name="check" /></button>;
+      aria-label={line.kind === 'task' ? `Done: ${line.productName}` : tickOnly ? `Grabbed ${round2(line.total)} ${line.productName}` : `Got all ${round2(line.total)} ${line.productName}`}><Icon name="check" /></button>;
   }
   const sub = line.kind === 'task' ? (line.instructions || forTxt)
     : oneArea && line.parts.length === 1 ? null : `For ${forTxt}`;
@@ -135,10 +138,10 @@ function Line({ line, items, write, oneArea }: { line: CollectionLine; items: Ma
             <small className="l-why">{info.reason === 'insufficient' ? (got === 0 ? 'Out of stock' : 'Running low') : shortReason(info.reason)} &middot; short {formatQty(short, line.unitSingular, line.unitPlural)}{info.flagged ? ' · flagged' : ''}
               <button type="button" className="linkbtn l-link" onClick={() => setEditing(true)}>Change</button></small>
           ) : st === 'done' ? (
-            <small className="l-ok">{line.kind === 'task' ? 'Done' : 'Collected'}<button type="button" className="linkbtn l-link" onClick={undo}>Undo</button></small>
+            <small className="l-ok">{line.kind === 'task' ? 'Done' : tickOnly ? 'Grabbed' : 'Collected'}<button type="button" className="linkbtn l-link" onClick={undo}>Undo</button></small>
           ) : (
             <small>{sub ? <span>{sub}</span> : null}
-              {line.kind === 'qty' && !open ? <button type="button" className="linkbtn l-link l-few" onClick={startFewer} aria-label={`Got fewer ${line.productName}`}>Got fewer</button> : null}</small>
+              {line.kind === 'qty' && !open && !tickOnly ? <button type="button" className="linkbtn l-link l-few" onClick={startFewer} aria-label={`Got fewer ${line.productName}`}>Got fewer</button> : null}</small>
           )}
         </div>
         {act}
@@ -172,5 +175,40 @@ function Line({ line, items, write, oneArea }: { line: CollectionLine; items: Ma
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Refill FOH (Gold Class Bar): what to grab from upstairs (BOH bar fridge, walk-in fridge,
+ * cupboards) for front of house, grouped by where it's kept. Not on the downstairs list:
+ * what needs replacing upstairs is suggested on the next step, Check BOH.
+ */
+export function RefillStep({ ctx }: { ctx: RestockCtx }) {
+  const { view, session, items, recorded, who, placements } = ctx;
+  const lines = refillLines(session.kind, placements, recorded, items);
+  const groups = groupByStoreroom(lines, view.pickupOrder);
+  const grabbed = lines.filter((l) => lineState(l, items) === 'done').length;
+  const write = (ups: { placementId: string; fields: Partial<ItemState> }[]) => void setItems(session.id, ups, who);
+  const nSug = ctx.suggested.size;
+  return (
+    <>
+      <main className="wrap restock-main">
+        {ctx.header}
+        <h2 className="sr-only">Refill FOH from upstairs</h2>
+        {lines.length === 0 ? <p className="empty">Nothing to grab from upstairs. Nothing entered for front of house comes from the BOH fridge, walk-in or cupboards.</p> : (
+          <>
+            <p className="aguide-line refill-intro"><Icon name="info" /><span>Grab these from upstairs and refill front of house.{nSug ? ` What needs replacing is suggested on the next step, Check BOH.` : ''}</span></p>
+            <div className="rooms">
+              {groups.map((g) => <Room key={g.lines[0].locationId ?? g.name} name={g.name} lines={g.lines} items={items} write={write} oneArea={null} tickOnly />)}
+            </div>
+          </>
+        )}
+      </main>
+      <Dock icon={grabbed === lines.length ? 'check' : 'list'} progress={lines.length ? grabbed / lines.length : 1}
+        title={lines.length ? `${grabbed} of ${lines.length} grabbed` : 'Nothing to grab'}>
+        <button className="btn save-exit" onClick={ctx.saveAndExit} aria-label="Save and exit"><Icon name="save" /><span className="lg">Save and exit</span><span className="sm">Save &amp; exit</span></button>
+        <button className="btn primary big" onClick={() => ctx.go('boh')}><span className="lg">Next: Check BOH</span><span className="sm">Check BOH</span><Icon name="next" /></button>
+      </Dock>
+    </>
   );
 }

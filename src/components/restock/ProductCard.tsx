@@ -19,9 +19,11 @@ function focusNext(from: HTMLInputElement) {
  * its restock method. Blank = not checked yet; 0 = checked, nothing needed.
  * Typing is kept as text until it's a valid number, so a half-typed "2." is never lost.
  */
-export function ProductRow({ p, item, onChange, showArea, onRemove, note }: {
+export function ProductRow({ p, item, onChange, showArea, onRemove, note, suggestedQty }: {
   p: PlacementView; item: ItemState; onChange: (fields: Partial<ItemState>, resolve?: boolean) => void;
   showArea?: boolean; onRemove?: () => void;
+  /** Refill FOH: the amount suggested from what was grabbed for front of house (staff can change or remove it). */
+  suggestedQty?: number;
   /** A note about this product only (general area notes are shown once at the top). */
   note?: string | null;
 }) {
@@ -50,6 +52,8 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note }: {
   // and − at 0 clears it back to untouched (blank = not entered, which is different from 0).
   const progressive = p.method === 'manual';
   const atZero = progressive && value === 0;
+  // A suggested amount taken down to 0 is "removed"; the button beside it brings the suggestion back.
+  const sug = suggestedQty !== undefined && suggestedQty > 0 ? suggestedQty : null;
   const c = item.conflict;
   // Exception-based products ("staff enter", routine tasks): a blank row is simply fine,
   // so it isn't shown as a job to do. Only target-level counts are required.
@@ -62,6 +66,7 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note }: {
   if (c) status = <><Icon name="warn" />Two different {p.method === 'routine' ? 'answers' : 'counts'}: choose below</>;
   else if (st === 'none') status = p.method === 'par' ? <>Not checked &middot; {target ?? 'no target set'}</> : <span className="sr-only">Not entered</span>;
   else if (progressive && (need ?? 0) > 0) status = <><b>{formatQty(need!, p.unitSingular, p.unitPlural)}</b><span>to collect</span></>;
+  else if (progressive && sug) status = <><Icon name="check" />Removed: none needed</>;
   else if (progressive) status = <><Icon name="check" />None needed</>;
   else if (p.method === 'routine') status = item.routineChoice === 'needed' ? <><Icon name="up" />On the list</> : <><Icon name="check" />Not needed</>;
   else if ((need ?? 0) > 0) status = <>{target ? `${target} · ` : ''}<Icon name="up" /><b>{formatQty(need!, p.unitSingular, p.unitPlural)}</b><span className="lg">&nbsp;to collect</span></>;
@@ -69,7 +74,9 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note }: {
 
   const stepper = (
     <div className="pstep">
-      {atZero
+      {atZero && sug
+        ? <button type="button" className="pclear" onClick={() => commit(null)} aria-label={`Back to the suggested ${round2(sug)} ${p.productName}`}><Icon name="reset" /></button>
+        : atZero
         ? <button type="button" className="pclear" onClick={() => commit(null)} aria-label={`Clear ${p.productName}`}><Icon name="x" /></button>
         : <button type="button" onClick={() => bump(-1)} aria-label={`One less ${p.productName}`}><Icon name="minus" /></button>}
       <input className="qty-input" id={`q-${p.placementId}`} type="text" inputMode={p.allowDecimal ? 'decimal' : 'numeric'} enterKeyHint="next"
@@ -127,7 +134,7 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note }: {
 
   const routineText = p.method === 'routine' ? (p.instructions || 'Routine task') : null;
   return (
-    <article className={`prow card s-${st} m-${p.method} ${quiet ? 'quiet' : ''}`} data-placement={p.placementId}>
+    <article className={`prow card s-${st} m-${p.method} ${quiet ? 'quiet' : ''} ${sug ? 'suggested' : ''}`} data-placement={p.placementId}>
       {/* A fixed photo slot, so adding a photo never moves anything. */}
       {p.photoPath ? <ProductThumb src={p.photoPath} name={p.productName} credit={p.photoCredit} className="pphoto" />
         : <span className="pphoto ph" aria-hidden="true"><Icon name="box" /></span>}

@@ -57,6 +57,11 @@ export interface PlacementView {
   optional: boolean;
   /** Subheading shown above this product (starts a group, e.g. "Mixers, Water & Milk"). */
   heading?: string | null;
+  /** Full restock: grabbed from this upstairs area for front of house ("Refill FOH"), not from downstairs. */
+  pickupAreaId?: string | null;
+  pickupAreaName?: string | null;
+  /** What's grabbed is suggested for the same product in the pickup area, to replace it from downstairs. */
+  pickupSuggest?: boolean;
   photoPath: string | null;
   photoCredit?: string | null;
 }
@@ -91,6 +96,13 @@ export interface DepartmentView {
   locationOrder: Map<string, number>;
   /** Storeroom reminders for the collection list, by storeroom id. */
   locationNotes: Map<string, string>;
+  /**
+   * Refill FOH: screens that are upstairs pickup spots (they hold an area something is grabbed from).
+   * Empty for departments without pickups, which keep the plain Check → Collect → Finish flow.
+   */
+  bohScreenIds: Set<string>;
+  /** Pickup spots in walking order (the department's area order), for grouping the Refill FOH list. */
+  pickupOrder: Map<string, number>;
 }
 
 /** Arrange a department's catalogue area by area, in staff checking order. */
@@ -104,6 +116,7 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
     .filter((a) => a.departmentId === departmentId)
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
   const ids = new Set(all.map((a) => a.id));
+  const byArea = new Map(all.map((a) => [a.id, a]));
   // A section belongs to another area's screen; one whose parent is gone or itself a section stands alone.
   const parentOf = (a: CatArea) => {
     const pid = a.parentAreaId;
@@ -117,9 +130,13 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
     .map((pl): PlacementView => {
       const p = products.get(pl.productId)!;
       const locId = pl.locationId ?? p.defaultLocationId;
+      const pick = pl.pickupAreaId && pl.pickupAreaId !== area.id ? byArea.get(pl.pickupAreaId) : undefined;
+      // A unit override needs both words (e.g. bottle / bottles), or it's ignored.
+      const ownUnit = pl.unitSingular?.trim() && pl.unitPlural?.trim();
       return {
         placementId: pl.id, productId: p.id, areaId: area.id, areaName: area.name, productName: p.name,
-        unitSingular: p.unitSingular, unitPlural: p.unitPlural, method: p.method,
+        unitSingular: ownUnit ? pl.unitSingular!.trim() : p.unitSingular, unitPlural: ownUnit ? pl.unitPlural!.trim() : p.unitPlural, method: p.method,
+        pickupAreaId: pick?.id ?? null, pickupAreaName: pick?.name ?? null, pickupSuggest: !!pick && !!pl.pickupSuggest,
         par: pl.parLevel, allowDecimal: p.allowDecimal, locationId: locId,
         locationName: locId ? locations.get(locId)?.name ?? null : null,
         instructions: pl.instructions ?? p.instructions,
@@ -140,8 +157,15 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
     return { area, own, sections, placements: [...own, ...sections.flatMap((x) => x.placements)] };
   });
   const placements = areas.flatMap((a) => a.placements);
+  // Upstairs pickup spots, and the screens they're on (an area, or the area a section belongs to).
+  const pickupOrder = new Map<string, number>();
+  areas.forEach((a, i) => { pickupOrder.set(a.area.id, i * 100); a.sections.forEach((x, j) => pickupOrder.set(x.area.id, i * 100 + j + 1)); });
+  const bohScreenIds = new Set(placements.filter((p) => p.pickupAreaId).map((p) => {
+    const a = byArea.get(p.pickupAreaId!)!;
+    return parentOf(a) ?? a.id;
+  }));
   return {
-    department, areas, placements,
+    department, areas, placements, bohScreenIds, pickupOrder,
     byId: new Map(placements.map((p) => [p.placementId, p])),
     locationOrder: new Map(cat.locations.map((l, i) => [l.id, l.sortOrder * 1000 + i])),
     locationNotes: new Map(cat.locations.filter((l) => l.collectNote?.trim()).map((l) => [l.id, l.collectNote!.trim()])),
@@ -266,7 +290,8 @@ export function collectionLines(placements: PlacementView[], items: Map<string, 
     }
     const need = needOf(p, i);
     if (!need) continue;
-    const key = `${p.productId}|${p.locationId ?? ''}`;
+    // Same product, same storeroom, same unit (packs for the fridge never merge with single bottles).
+    const key = `${p.productId}|${p.locationId ?? ''}|${p.unitPlural}`;
     const line = map.get(key) ?? {
       key, kind: 'qty' as const, productName: p.productName, unitSingular: p.unitSingular, unitPlural: p.unitPlural,
       locationId: p.locationId, locationName, total: 0, instructions: p.instructions, photoPath: p.photoPath ?? null, photoCredit: p.photoCredit ?? null, parts: [],
@@ -379,7 +404,7 @@ export function exceptions(args: {
   if (clashes.length) out.push({ kind: 'unchecked', status: 'not_started', text: `${clashes.length} product${clashes.length === 1 ? ' needs' : 's need'} a decision`, detail: `Two different counts: ${clashes.map((p) => p.productName).join(', ')}`, areaId: clashes[0].areaId });
   // Outstanding = nobody has recorded what happened yet. A confirmed result (all, fewer with
   // "not enough in storeroom", or a reason such as "couldn't access stock") is resolved.
-  const outstanding = collectionLines(covered, items).filter((l) => {
+  const outstanding = collectionLines(covered.filter((p) => !isPickup(kind, p)), items).filter((l) => {
     const st = lineState(l, items);
     return st === 'todo' || st === 'part';
   });
@@ -393,6 +418,74 @@ export function exceptions(args: {
 export function activePlacements(kind: SessionKind, placements: PlacementView[], recordedAreas: Map<string, AreaStatus>) {
   // Skipping an area also skips its sections (they're on the same screen).
   return asFull(kind) ? placements.filter((p) => recordedAreas.get(p.screenAreaId ?? p.areaId) !== 'skipped') : placements;
+}
+
+// ---------------------------------------------------------------------------
+// Refill FOH (Gold Class Bar): grab from upstairs first, then replace it from downstairs
+// ---------------------------------------------------------------------------
+/** This restock uses the Refill FOH flow: Check FOH → Refill FOH → Check BOH → Collect → Finish. */
+export const usesRefill = (kind: SessionKind, view: DepartmentView) => kind === 'full' && view.bohScreenIds.size > 0;
+
+/** Grabbed upstairs for front of house: on the Refill FOH list, not the downstairs list (full restocks only). */
+export const isPickup = (kind: SessionKind, p: PlacementView) => kind === 'full' && !!p.pickupAreaId;
+
+/** What the downstairs collection list covers: skipped areas and upstairs pickups left out. */
+export function collectPlacements(kind: SessionKind, placements: PlacementView[], recordedAreas: Map<string, AreaStatus>) {
+  return activePlacements(kind, placements, recordedAreas).filter((p) => !isPickup(kind, p));
+}
+
+/** The areas (screens) for one part of the flow: front of house first, then upstairs back of house. */
+export function phaseAreas(view: DepartmentView, phase: 'foh' | 'boh' | 'all') {
+  if (phase === 'all' || !view.bohScreenIds.size) return view.areas;
+  return view.areas.filter((a) => view.bohScreenIds.has(a.area.id) === (phase === 'boh'));
+}
+
+/** The Refill FOH list: what to grab from each upstairs spot, one line per product per spot. */
+export function refillLines(kind: SessionKind, placements: PlacementView[], recordedAreas: Map<string, AreaStatus>, items: Map<string, ItemState>) {
+  const picks = activePlacements(kind, placements, recordedAreas).filter((p) => isPickup(kind, p))
+    .map((p) => ({ ...p, locationId: p.pickupAreaId!, locationName: p.pickupAreaName ?? 'Upstairs' }));
+  return collectionLines(picks, items);
+}
+
+export interface Suggestion { qty: number; from: { areaName: string; need: number }[] }
+
+/**
+ * What staff took upstairs for FOH, suggested for the same product in the spot it came from
+ * (e.g. 1 Shiraz grabbed from the Wine cupboard → 1 Shiraz suggested for the Wine cupboard).
+ * Only for pickups marked "suggest" (wine, spirits, small sparkling water), never for beers
+ * taken as single bottles out of packs.
+ */
+export function suggestions(kind: SessionKind, view: DepartmentView, items: Map<string, ItemState>, recordedAreas: Map<string, AreaStatus>): Map<string, Suggestion> {
+  const out = new Map<string, Suggestion>();
+  if (kind !== 'full') return out;
+  const picks = activePlacements(kind, view.placements, recordedAreas).filter((p) => p.pickupSuggest && p.pickupAreaId);
+  for (const p of picks) {
+    const need = needOf(p, items.get(p.placementId) ?? EMPTY_ITEM) ?? 0;
+    if (need <= 0) continue;
+    // The same product in the pickup spot, counted in the same unit and entered by staff.
+    const t = view.placements.find((x) => x.areaId === p.pickupAreaId && x.productId === p.productId && x.method === 'manual' && x.unitPlural === p.unitPlural);
+    if (!t) continue;
+    const s = out.get(t.placementId) ?? { qty: 0, from: [] };
+    s.qty = round2(s.qty + need);
+    s.from.push({ areaName: p.areaName, need });
+    out.set(t.placementId, s);
+  }
+  return out;
+}
+
+/**
+ * The items as they count: a suggestion stands until staff change it. Whatever they leave is
+ * final (change 1 to 3 → 3 in total; remove it → 0). Nothing is saved until they touch it.
+ */
+export function withSuggestions(kind: SessionKind, view: DepartmentView, items: Map<string, ItemState>, recordedAreas: Map<string, AreaStatus>): Map<string, ItemState> {
+  const sug = suggestions(kind, view, items, recordedAreas);
+  if (!sug.size) return items;
+  const out = new Map(items);
+  for (const [id, s] of sug) {
+    const i = items.get(id) ?? EMPTY_ITEM;
+    if (i.requestedQty === null && !i.conflict) out.set(id, { ...i, requestedQty: s.qty });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -467,7 +560,7 @@ export function summaryText(args: {
   L.push(`${args.kind === 'full' ? 'Full' : args.kind === 'area' ? `${view.areas[0]?.area.name ?? 'Area'}` : 'Quick'} restock \u00b7 ${args.finishedLabel ? `finished ${args.finishedLabel}` : 'not finished'} \u00b7 ${args.dateLabel}${args.people.length ? ` \u00b7 ${args.people.join(', ')}` : ''}`);
   L.push(`Status: ${!args.finishedLabel ? 'In progress' : args.exceptionReason ? `Finished with exceptions (${args.exceptionReason})` : 'Complete'}`);
 
-  const lines = collectionLines(activePlacements(args.kind, args.placements, recordedAreas), items);
+  const lines = collectionLines(collectPlacements(args.kind, args.placements, recordedAreas), items);
   const outcomes = stockOutcomes(lines, items, view.byId);
   const group = (st: StockStatus, title: string) => {
     const g = outcomes.filter((o) => o.status === st);

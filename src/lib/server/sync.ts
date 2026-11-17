@@ -3,7 +3,7 @@ import { db } from './db';
 import { loadCatalogue } from './catalogue';
 import { queueRestockEmail } from './email';
 import {
-  CONFLICT_FIELDS, EMPTY_ITEM, activePlacements, areaStatus, isChecked, isRequired, stockOutcomes, type Conflict, collectionLines, departmentView, exceptions, lineGot, lineInfo, lineState,
+  CONFLICT_FIELDS, EMPTY_ITEM, areaStatus, isChecked, isRequired, stockOutcomes, type Conflict, collectionLines, collectPlacements, withSuggestions, departmentView, exceptions, lineGot, lineInfo, lineState,
   scopeView, type AreaStatus, type ItemState, type SessionKind,
 } from '@/lib/restock-logic';
 import { defrostWasReset, sessionWasReset, startedBeforeReset } from './reset';
@@ -247,13 +247,15 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
   const view = whole && s.kind === 'area' ? scopeView(whole, s.areaId) : whole;
   const rows = await tx`select * from session_items where session_id = ${s.id}`;
   const areaRows = await tx`select check_area_id, status from session_areas where session_id = ${s.id}`;
-  const items = new Map<string, ItemState>(rows.map((r) => [String(r.placementId), {
+  const raw = new Map<string, ItemState>(rows.map((r) => [String(r.placementId), {
     currentQty: r.currentQty as number | null, requestedQty: r.requestedQty as number | null,
     routineChoice: r.routineChoice as ItemState['routineChoice'], collectedMode: r.collectedMode as ItemState['collectedMode'],
     collectedQty: r.collectedQty as number | null, shortfallReason: r.shortfallReason as ItemState['shortfallReason'], flagged: Boolean(r.flagged),
     conflict: (r.conflict as Conflict | null) ?? null,
   }]));
   const recorded = new Map<string, AreaStatus>(areaRows.map((r) => [String(r.checkAreaId), r.status as AreaStatus]));
+  // Refill FOH: what was grabbed upstairs counts as suggested for that spot until staff changed it.
+  const items = view ? withSuggestions(s.kind, view, raw, recorded) : raw;
 
   let status: 'finished' | 'finished_exceptions' = reason ? 'finished_exceptions' : 'finished';
   let finalReason = reason;
@@ -264,7 +266,7 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
     if (ex.length && !reason) { status = 'finished_exceptions'; finalReason = 'Finished with outstanding work'; }
 
     await tx`delete from shortages where session_id = ${s.id} and status = 'open'`;
-    for (const line of collectionLines(activePlacements(s.kind, placements, recorded), items)) {
+    for (const line of collectionLines(collectPlacements(s.kind, placements, recorded), items)) {
       if (line.kind !== 'qty') continue;
       const st = lineState(line, items), info = lineInfo(line, items);
       const short = Math.round((line.total - lineGot(line, items)) * 100) / 100;
@@ -294,7 +296,7 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
         if (un.length) notChecked.push(`${area.name}: ${un.join(', ')}`);
       }
     }
-    const lines = collectionLines(activePlacements(s.kind, view.placements, recorded), items);
+    const lines = collectionLines(collectPlacements(s.kind, view.placements, recorded), items);
     const host = process.env.VERCEL_PROJECT_PRODUCTION_URL;
     await queueRestockEmail(tx, s.id, at, {
       departmentName: `${String(dept?.name ?? view.department.name)}${s.kind === 'area' && view.areas[0] ? ` · ${view.areas[0].area.name}` : ''}`,

@@ -3,8 +3,10 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Icon } from '@/components/Icon';
 import {
-  EMPTY_ITEM, SKIP_REASONS, type ItemState, activePlacements, areaNotes, areaStatus, collectionLines, isChecked, isRequired, needOf,
+  EMPTY_ITEM, SKIP_REASONS, type ItemState, activePlacements, areaNotes, areaStatus, collectPlacements, collectionLines, isChecked, isRequired, needOf,
+  phaseAreas, refillLines,
 } from '@/lib/restock-logic';
+import { round2 } from '@/lib/restock-math';
 import { setArea, setItems, updateLocalSession } from '@/lib/client/restock-store';
 import { localDb } from '@/lib/client/local-db';
 import { PhotoZoom, ProductRow } from './ProductCard';
@@ -19,9 +21,15 @@ function useGuideOpen(areaId: string): [boolean, (o: boolean) => void] {
   return [open, (o: boolean) => { setOpen(o); try { if (o) localStorage.setItem(key, '1'); else localStorage.removeItem(key); } catch { /* private mode */ } }];
 }
 
-/** Full Restock: area by area, in the order staff physically walk them. */
-export function CheckStep({ ctx }: { ctx: RestockCtx }) {
-  const { view, session, items, areaRecords, recorded, who } = ctx;
+/**
+ * Full Restock: area by area, in the order staff physically walk them.
+ * Refill FOH flow (Gold Class Bar): `foh` shows the front-of-house areas, `boh` the upstairs
+ * spots things were grabbed from (with what was taken already suggested); `all` is everything.
+ */
+export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'foh' | 'boh' | 'all' }) {
+  const { view: whole, session, items, areaRecords, recorded, who } = ctx;
+  // This step's screens only; products, notes and lists still see the whole department.
+  const view = { ...whole, areas: phaseAreas(whole, phase) };
   const [skipOpen, setSkipOpen] = useState(false);
   const [zoom, setZoom] = useState(false);
   const [review, setReview] = useState(false);
@@ -41,7 +49,7 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
   useEffect(() => { try { setReminderHidden(localStorage.getItem(remKey) === '1'); } catch { /* private mode */ } }, [remKey]);
   const hideReminder = () => { setReminderHidden(true); try { localStorage.setItem(remKey, '1'); } catch { /* private mode */ } };
   const chk = (p: { placementId: string } & Parameters<typeof isChecked>[0]) => isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM);
-  const statusOf = (areaId: string) => areaStatus(recorded.get(areaId), view.areas.find((a) => a.area.id === areaId)!.placements, items);
+  const statusOf = (areaId: string) => areaStatus(recorded.get(areaId), whole.areas.find((a) => a.area.id === areaId)!.placements, items);
   const firstOpen = view.areas.find(({ area }) => !['complete', 'skipped'].includes(statusOf(area.id)))?.area.id;
   const curId = view.areas.some((a) => a.area.id === session.curAreaId) ? session.curAreaId! : firstOpen ?? view.areas[0]?.area.id;
   const cur = view.areas.find((a) => a.area.id === curId);
@@ -62,7 +70,10 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
   const active = activePlacements(session.kind, view.placements, recorded);
   const byArea = session.kind === 'area';
   const single = view.areas.length === 1;
-  const lines = collectionLines(active, items);
+  // What's on the lists so far: the downstairs run, plus (before Refill FOH) what's grabbed upstairs.
+  const lines = [...(phase === 'foh' ? refillLines(session.kind, ctx.placements, recorded, items) : []),
+    ...collectionLines(collectPlacements(session.kind, ctx.placements, recorded), items)];
+  const nextStep = phase === 'foh' ? 'refill' as const : 'collect' as const;
   // What to show as progress. Target-level products need a count; everything else is exception-based,
   // so we count what was entered rather than "checked".
   const progressOf = (ps: typeof active) => {
@@ -101,8 +112,16 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
   // In a section (e.g. the upstairs Wine / Spirits cupboard): show what's already on the downstairs
   // list for the same product from anywhere in this restock (e.g. "Already 1 for Back bench").
   const alsoEntered = (p: (typeof cur.placements)[number]) => {
+    // Refill FOH: what was grabbed here for front of house is suggested (and says so).
+    const sug = ctx.suggested.get(p.placementId);
+    if (sug) {
+      const taken = `${round2(sug.qty)} taken for ${sug.from.map((f) => f.areaName).join(', ')}`;
+      const raw = ctx.rawItems.get(p.placementId)?.requestedQty ?? null;
+      return raw === null ? `Suggested: ${taken}. Change it if more is needed, or remove it.` : raw === sug.qty ? taken : `${taken} (suggested ${round2(sug.qty)})`;
+    }
     if (!p.optional && p.areaId === p.screenAreaId) return null;
-    const others = view.placements.filter((x) => x.productId === p.productId && x.placementId !== p.placementId)
+    // Pickups grabbed upstairs aren't on the downstairs list, so they don't count here.
+    const others = view.placements.filter((x) => x.productId === p.productId && x.placementId !== p.placementId && !(ctx.refill && x.pickupAreaId))
       .map((x) => ({ x, need: needOf(x, items.get(x.placementId) ?? EMPTY_ITEM) })).filter((o) => (o.need ?? 0) > 0);
     return others.length ? `Already ${others.map((o) => `${Math.round(o.need! * 100) / 100} for ${o.x.areaName}`).join(', ')}` : null;
   };
@@ -111,11 +130,14 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
   // overflow (e.g. syrups) get no note: they simply come from downstairs.
   const fromCupboard = (p: (typeof cur.placements)[number]) => {
     if (p.areaId !== p.screenAreaId || !((needOf(p, items.get(p.placementId) ?? EMPTY_ITEM) ?? 0) > 0)) return null;
+    if (ctx.refill && p.pickupAreaName) return `Grab it from the ${p.pickupAreaName}`;
+    if (ctx.refill) return null; // comes straight from downstairs
     const c = view.placements.find((x) => x.productId === p.productId && x.areaId !== x.screenAreaId && x.screenAreaId !== p.screenAreaId);
     return c ? `Grab it from the ${c.areaName}` : null;
   };
   const renderRow = (p: (typeof cur.placements)[number]) => (
     <ProductRow key={p.placementId} p={p} item={items.get(p.placementId) ?? EMPTY_ITEM} note={alsoEntered(p) ?? fromCupboard(p) ?? notes.own.get(p.placementId)}
+      suggestedQty={ctx.suggested.get(p.placementId)?.qty}
       onChange={(fields, resolve) => void onItem(p, fields, resolve)} />
   );
   /**
@@ -161,6 +183,7 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
 
   const nextBtn = next
     ? <button className="btn primary" onClick={() => goArea(next.area.id)}>Next: {next.area.name}<Icon name="next" /></button>
+    : phase === 'foh' ? <button className="btn primary" onClick={() => ctx.go('refill')}>Refill FOH<Icon name="next" /></button>
     : <button className="btn primary" onClick={() => ctx.go(byArea && !lines.length ? 'finish' : 'collect')}>{byArea && !lines.length ? 'Finish' : 'Collection list'}<Icon name="next" /></button>;
 
   return (
@@ -251,7 +274,7 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
                 </button>
                 {open ? (
                   <>
-                    {sec.mode === 'optional' ? <p className="psec-hint"><Icon name="info" /><span>Only add <b>extra</b> stock this needs from downstairs. Anything already entered above is already on the collection list.</span></p>
+                    {sec.mode === 'optional' ? <p className="psec-hint"><Icon name="info" /><span>{ctx.refill ? <>What was taken for front of house is already suggested. Add anything else that looks low.</> : <>Only add <b>extra</b> stock this needs from downstairs. Anything already entered above is already on the collection list.</>}</span></p>
                       : sec.area.guideText ? <p className="psec-hint"><Icon name="info" /><span>{sec.area.guideText}</span></p> : null}
                     <div className="prows">{renderList(sec.placements)}</div>
                   </>
@@ -288,6 +311,8 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
           <div className="entered" id="entered-list">
             <ul>{lines.map((l) => (
               <li key={l.key}><button onClick={() => { const pl = l.parts[0]; setReview(false); const vp = view.byId.get(pl.placementId); if (vp?.optional) setOpenSecs((o) => ({ ...o, [vp.areaId]: true })); goArea(vp?.screenAreaId ?? cur.area.id);
+                // On the other part of the Refill FOH flow (front of house vs upstairs): go there.
+                if (vp && phase !== 'all' && !view.areas.some((x) => x.area.id === vp.screenAreaId)) ctx.go(phase === 'foh' ? 'boh' : 'check');
                 window.setTimeout(() => document.querySelector(`[data-placement="${pl.placementId}"]`)?.scrollIntoView({ block: 'center' }), 120); }}>
                 <b>{l.kind === 'task' ? '✓' : Math.round(l.total * 100) / 100}</b><span>{l.photoPath ? <img className="en-photo" src={l.photoPath} alt="" loading="lazy" /> /* eslint-disable-line @next/next/no-img-element */ : null}{l.productName}</span><small>{l.parts.map((x) => x.areaName).join(', ')}</small>
               </button></li>
@@ -301,6 +326,7 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
         <button className="btn save-exit" onClick={ctx.saveAndExit} aria-label="Save and exit"><Icon name="save" /><span className="lg">Save and exit</span><span className="sm">Save &amp; exit</span></button>
         {byArea && !lines.length
           ? <button className="btn primary big" onClick={() => ctx.go('finish')}><span className="lg">Nothing needed: finish</span><span className="sm">Finish</span><Icon name="next" /></button>
+          : nextStep === 'refill' ? <button className="btn primary big" onClick={() => ctx.go('refill')}><span className="lg">Refill FOH</span><span className="sm">Refill</span><Icon name="next" /></button>
           : <button className="btn primary big" onClick={() => ctx.go('collect')}><span className="lg">Collection list</span><span className="sm">Collect</span><Icon name="next" /></button>}
       </Dock>
     </>

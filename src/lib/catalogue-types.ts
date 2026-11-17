@@ -43,6 +43,13 @@ export interface CatPlacement {
   locationId: string | null; instructions: string | null; sortOrder: number;
   /** A small subheading shown above this product in its area (e.g. "Beer, Cider & Hard Soda"). */
   heading?: string | null;
+  /** Grabbed from this upstairs area for front of house (listed on "Refill FOH", not the downstairs list). */
+  pickupAreaId?: string | null;
+  /** Also suggest the same amount for this product in the pickup area, to replace it from downstairs. */
+  pickupSuggest?: boolean;
+  /** Counted in a different unit in this area (e.g. single bottles here, packs in the BOH fridge). */
+  unitSingular?: string | null;
+  unitPlural?: string | null;
 }
 
 export interface Catalogue {
