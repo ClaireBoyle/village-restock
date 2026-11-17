@@ -98,9 +98,11 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
     if (!before && after && !closed) { pin(); await setArea(session.id, cur.area.id, 'complete', null, who); }
   };
   // Same product already entered elsewhere on this screen (e.g. Back bench) → say so in the cupboard, to avoid double-counting.
+  // In a section (e.g. the upstairs Wine / Spirits cupboard): show what's already on the downstairs
+  // list for the same product from anywhere in this restock (e.g. "Already 1 for Back bench").
   const alsoEntered = (p: (typeof cur.placements)[number]) => {
-    if (!p.optional) return null;
-    const others = cur.placements.filter((x) => x.productId === p.productId && x.placementId !== p.placementId)
+    if (!p.optional && p.areaId === p.screenAreaId) return null;
+    const others = view.placements.filter((x) => x.productId === p.productId && x.placementId !== p.placementId)
       .map((x) => ({ x, need: needOf(x, items.get(x.placementId) ?? EMPTY_ITEM) })).filter((o) => (o.need ?? 0) > 0);
     return others.length ? `Already ${others.map((o) => `${Math.round(o.need! * 100) / 100} for ${o.x.areaName}`).join(', ')}` : null;
   };
