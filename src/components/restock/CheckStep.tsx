@@ -106,8 +106,16 @@ export function CheckStep({ ctx }: { ctx: RestockCtx }) {
       .map((x) => ({ x, need: needOf(x, items.get(x.placementId) ?? EMPTY_ITEM) })).filter((o) => (o.need ?? 0) > 0);
     return others.length ? `Already ${others.map((o) => `${Math.round(o.need! * 100) / 100} for ${o.x.areaName}`).join(', ')}` : null;
   };
+  // On the back bar: once something is added, say where to grab it if it's also kept in a cupboard
+  // section on another screen (e.g. "Grab it from the Wine cupboard"). Items with no upstairs
+  // overflow (e.g. syrups) get no note: they simply come from downstairs.
+  const fromCupboard = (p: (typeof cur.placements)[number]) => {
+    if (p.areaId !== p.screenAreaId || !((needOf(p, items.get(p.placementId) ?? EMPTY_ITEM) ?? 0) > 0)) return null;
+    const c = view.placements.find((x) => x.productId === p.productId && x.areaId !== x.screenAreaId && x.screenAreaId !== p.screenAreaId);
+    return c ? `Grab it from the ${c.areaName}` : null;
+  };
   const renderRow = (p: (typeof cur.placements)[number]) => (
-    <ProductRow key={p.placementId} p={p} item={items.get(p.placementId) ?? EMPTY_ITEM} note={alsoEntered(p) ?? notes.own.get(p.placementId)}
+    <ProductRow key={p.placementId} p={p} item={items.get(p.placementId) ?? EMPTY_ITEM} note={alsoEntered(p) ?? fromCupboard(p) ?? notes.own.get(p.placementId)}
       onChange={(fields, resolve) => void onItem(p, fields, resolve)} />
   );
   /**

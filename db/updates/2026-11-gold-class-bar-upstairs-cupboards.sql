@@ -1,7 +1,9 @@
 -- Gold Class Bar closing flow: FOH first, then the upstairs cupboards. Safe to run more than once.
 --
---   Back bench, Back shelves:  enter what FOH needs and grab it from the upstairs cupboards.
---                              Those amounts go on the downstairs list automatically (to refill the cupboard).
+--   Back bench, Back shelves:  enter what FOH needs. Where it's also kept in an upstairs cupboard, grab it
+--                              from there (the row says which cupboard). Everything entered goes on the
+--                              downstairs list: to refill the cupboard, or straight to FOH for items that are
+--                              only kept on the bench or downstairs (e.g. syrups).
 --   Upstairs cupboards:        one screen with two sections, Wine cupboard and Spirits cupboard.
 --                              Add only EXTRA stock a cupboard needs (e.g. taken earlier in the shift);
 --                              each row shows what's already on the list for FOH ("Already 1 for Back bench").
@@ -40,7 +42,7 @@ begin
   update check_areas set parent_area_id = up, section_mode = 'open', sort_order = 2 where id = spirits;
 
   -- 3. The back bar says where FOH stock comes from (only if it has no instruction yet).
-  update check_areas set guide_text = 'Grab what''s needed from the upstairs cupboards. It goes on the downstairs list automatically.'
-    where id in (bench, shelves) and trim(guide_text) = '';
+  update check_areas set guide_text = 'Use the upstairs cupboards first where there''s stock. Everything you enter goes on the downstairs list.'
+    where id in (bench, shelves) and (trim(guide_text) = '' or guide_text = 'Grab what''s needed from the upstairs cupboards. It goes on the downstairs list automatically.');
   raise notice 'Upstairs cupboards set up';
 end $$;
