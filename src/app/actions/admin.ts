@@ -56,6 +56,7 @@ const departmentSchema = z.object({
   description: optText(160),
   active: checkbox,
   restockByArea: checkbox,
+  noneOnDisplay: checkbox,
 });
 
 export async function saveDepartment(_: ActionResult, form: FormData): Promise<ActionResult> {
@@ -69,12 +70,15 @@ export async function saveDepartment(_: ActionResult, form: FormData): Promise<A
         theme = ${d.theme}, icon = ${d.icon}, description = ${d.description}, active = ${d.active} where id = ${d.id}`;
       if (await hasColumn('departments', 'restock_by_area')) await db()`update departments set restock_by_area = ${d.restockByArea} where id = ${d.id}`;
       else if (d.restockByArea) return { error: 'Run db/migrations/009_area_restocks.sql in Supabase first, then try again.' };
+      if (await hasColumn('departments', 'none_on_display')) await db()`update departments set none_on_display = ${d.noneOnDisplay} where id = ${d.id}`;
+      else if (d.noneOnDisplay) return { error: 'Run db/migrations/013_none_on_display.sql in Supabase first, then try again.' };
       return done('Department saved.');
     }
     const sort = await nextSort('departments');
     const [row] = await db()`insert into departments (name, short_name, group_label, theme, icon, description, sort_order)
       values (${d.name}, ${d.shortName}, ${d.groupLabel}, ${d.theme}, ${d.icon}, ${d.description}, ${sort}) returning id`;
     if (d.restockByArea && await hasColumn('departments', 'restock_by_area')) await db()`update departments set restock_by_area = true where id = ${String(row.id)}`;
+    if (d.noneOnDisplay && await hasColumn('departments', 'none_on_display')) await db()`update departments set none_on_display = true where id = ${String(row.id)}`;
     return done(`${d.name} added.`);
   } catch (e) { return fail(e); }
 }

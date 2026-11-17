@@ -21,7 +21,17 @@ const RESET = 'An admin reset this restock. It has been cleared from this device
 const COLUMN: Record<keyof ItemFields, string> = {
   currentQty: 'current_qty', requestedQty: 'requested_qty', routineChoice: 'routine_choice',
   collectedMode: 'collected_mode', collectedQty: 'collected_qty', shortfallReason: 'shortfall_reason', flagged: 'flagged',
+  noneOnDisplay: 'none_on_display',
 };
+
+/** Migration 013 adds "None on display". Remembered once it's there (it's never taken away). */
+let hasNoneOnDisplay = false;
+async function noneOnDisplayReady(tx: Tx) {
+  if (!hasNoneOnDisplay) {
+    hasNoneOnDisplay = (await tx`select 1 from information_schema.columns where table_name = 'session_items' and column_name = 'none_on_display'`).length > 0;
+  }
+  return hasNoneOnDisplay;
+}
 
 /** Apply a batch of ops from one device, each on its own, in order. */
 export async function applyOps(deviceId: string, rawOps: unknown[]): Promise<OpResult[]> {
@@ -126,6 +136,11 @@ async function apply(tx: Tx, op: SyncOp, deviceId: string): Promise<{ mergedInto
           const v = f[k];
           if (v != null && !Number.isInteger(v)) throw new OpError(`Whole ${pl.unitPlural} only`);
         }
+      }
+      // Before migration 013: a cleared "None on display" is simply not stored; a set one waits for the update.
+      if ('noneOnDisplay' in f && !(await noneOnDisplayReady(tx))) {
+        if (f.noneOnDisplay) throw new OpError('The server needs a database update (013_none_on_display.sql)', false);
+        delete f.noneOnDisplay;
       }
       const round = (v: number | null | undefined) => (v == null ? v : Math.round(v * 100) / 100);
       const values: Record<string, unknown> = {};
@@ -250,7 +265,7 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
   const raw = new Map<string, ItemState>(rows.map((r) => [String(r.placementId), {
     currentQty: r.currentQty as number | null, requestedQty: r.requestedQty as number | null,
     routineChoice: r.routineChoice as ItemState['routineChoice'], collectedMode: r.collectedMode as ItemState['collectedMode'],
-    collectedQty: r.collectedQty as number | null, shortfallReason: r.shortfallReason as ItemState['shortfallReason'], flagged: Boolean(r.flagged),
+    collectedQty: r.collectedQty as number | null, shortfallReason: r.shortfallReason as ItemState['shortfallReason'], flagged: Boolean(r.flagged), noneOnDisplay: Boolean(r.noneOnDisplay),
     conflict: (r.conflict as Conflict | null) ?? null,
   }]));
   const recorded = new Map<string, AreaStatus>(areaRows.map((r) => [String(r.checkAreaId), r.status as AreaStatus]));
@@ -273,8 +288,9 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
       if (!(st === 'short' || info.flagged) || short <= 0) continue;
       if (info.reason !== 'insufficient' && !info.flagged) continue; // only confirmed shortages, or ones flagged for a manager
       const productId = view.byId.get(line.parts[0].placementId)?.productId ?? null;
-      await tx`insert into shortages (session_id, department_id, product_id, product_name, unit_plural, shortfall_qty, reason, flagged, reported_by)
-        values (${s.id}, ${s.departmentId}, ${productId}, ${line.productName}, ${line.unitPlural}, ${short}, ${info.reason ?? 'other'}, ${info.flagged}, ${by})`;
+      const [row] = await tx`insert into shortages (session_id, department_id, product_id, product_name, unit_plural, shortfall_qty, reason, flagged, reported_by)
+        values (${s.id}, ${s.departmentId}, ${productId}, ${line.productName}, ${line.unitPlural}, ${short}, ${info.reason ?? 'other'}, ${info.flagged}, ${by}) returning id`;
+      if (info.noneOnDisplay && lineGot(line, items) === 0 && await noneOnDisplayReady(tx)) await tx`update shortages set none_on_display = true where id = ${row.id}`;
     }
   }
   await tx`update restock_sessions set status = ${status}, exception_reason = ${finalReason}, finished_at = ${at} where id = ${s.id}`;
@@ -302,7 +318,7 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
       departmentName: `${String(dept?.name ?? view.department.name)}${s.kind === 'area' && view.areas[0] ? ` · ${view.areas[0].area.name}` : ''}`,
       finishedLabel: `${new Date(at).toLocaleDateString('en-AU', { timeZone: cat.settings.timeZone, weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '')}, ${new Date(at).toLocaleTimeString('en-AU', { timeZone: cat.settings.timeZone, hour: 'numeric', minute: '2-digit' }).toLowerCase()}`,
       people: (row?.people as string[]) ?? [], exceptionReason: finalReason,
-      outcomes: stockOutcomes(lines, items, view.byId), notChecked, note: comment,
+      outcomes: stockOutcomes(lines, items, view.byId, !!view.department.noneOnDisplay), notChecked, note: comment,
       link: host ? `https://${host}/admin/restocks/${s.id}` : null,
     });
   }
@@ -324,7 +340,7 @@ function toRemote(s: Record<string, unknown>, areas: Record<string, unknown>[], 
       currentQty: (r.currentQty as number) ?? null, requestedQty: (r.requestedQty as number) ?? null,
       routineChoice: (r.routineChoice as 'needed' | 'not_needed') ?? null, collectedMode: (r.collectedMode as 'all' | 'partial') ?? null,
       collectedQty: (r.collectedQty as number) ?? null, shortfallReason: (r.shortfallReason as RemoteSession['items'][number]['shortfallReason']) ?? null,
-      flagged: Boolean(r.flagged), conflict: (r.conflict as Conflict | null) ?? null,
+      flagged: Boolean(r.flagged), noneOnDisplay: Boolean(r.noneOnDisplay), conflict: (r.conflict as Conflict | null) ?? null,
     })),
   };
 }

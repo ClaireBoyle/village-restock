@@ -75,13 +75,15 @@ export interface ItemState {
   collectedQty: number | null;
   shortfallReason: ShortReason | null;
   flagged: boolean;
+  /** Candy Bar: nothing collected and none left on display (Out of stock). */
+  noneOnDisplay?: boolean;
   /** Set when two people entered different counts; cleared when someone chooses. */
   conflict?: Conflict | null;
 }
 
 export const EMPTY_ITEM: ItemState = {
   currentQty: null, requestedQty: null, routineChoice: null,
-  collectedMode: null, collectedQty: null, shortfallReason: null, flagged: false, conflict: null,
+  collectedMode: null, collectedQty: null, shortfallReason: null, flagged: false, noneOnDisplay: false, conflict: null,
 };
 
 /** A section shown inside an area's screen (e.g. "Spirits cupboard" inside Back bench). */
@@ -329,7 +331,7 @@ export function lineGot(line: CollectionLine, items: Map<string, ItemState>): nu
 export function lineInfo(line: CollectionLine, items: Map<string, ItemState>) {
   const first = items.get(line.parts[0].placementId) ?? EMPTY_ITEM;
   const modes = line.parts.map((p) => (items.get(p.placementId) ?? EMPTY_ITEM).collectedMode);
-  return { reason: first.shortfallReason, flagged: first.flagged, anyPartial: modes.includes('partial'), allAll: modes.every((m) => m === 'all') };
+  return { reason: first.shortfallReason, flagged: first.flagged, noneOnDisplay: !!first.noneOnDisplay, anyPartial: modes.includes('partial'), allAll: modes.every((m) => m === 'all') };
 }
 
 /** todo = not touched · done = all collected · part = fewer, no reason yet · short = fewer, reason given. */
@@ -345,7 +347,7 @@ export function lineState(line: CollectionLine, items: Map<string, ItemState>): 
 export function gotAllUpdates(line: CollectionLine): { placementId: string; fields: Partial<ItemState> }[] {
   return line.parts.map((p) => ({
     placementId: p.placementId,
-    fields: { collectedMode: 'all', collectedQty: line.kind === 'task' ? null : p.need, shortfallReason: null, flagged: false },
+    fields: { collectedMode: 'all', collectedQty: line.kind === 'task' ? null : p.need, shortfallReason: null, flagged: false, noneOnDisplay: false },
   }));
 }
 
@@ -353,19 +355,31 @@ export function gotAllUpdates(line: CollectionLine): { placementId: string; fiel
  * Changes to record "got fewer": the collected amount is shared out across the
  * line's areas in list order, so each area knows how much it actually received.
  */
-export function gotFewerUpdates(line: CollectionLine, got: number, reason: ShortReason | null, flagged: boolean) {
+export function gotFewerUpdates(line: CollectionLine, got: number, reason: ShortReason | null, flagged: boolean, noneOnDisplay = false) {
   let left = Math.max(0, Math.min(got, line.total));
+  // "None on display" only means something when nothing was collected.
+  const none = noneOnDisplay && left === 0;
   return line.parts.map((p) => {
     const share = round2(Math.min(left, p.need));
     left = round2(left - share);
-    return { placementId: p.placementId, fields: { collectedMode: 'partial' as const, collectedQty: share, shortfallReason: reason, flagged } };
+    return { placementId: p.placementId, fields: { collectedMode: 'partial' as const, collectedQty: share, shortfallReason: reason, flagged, noneOnDisplay: none } };
   });
+}
+
+/**
+ * How a confirmed storeroom shortage reads. Usually none collected = Out of stock. With the
+ * "None on display" rule (Candy Bar) anything short is Low stock, even at zero, until staff
+ * say there's none left on display.
+ */
+export function shortStatus(got: number, noneOnDisplay: boolean, displayRule: boolean): 'out' | 'low' {
+  if (displayRule) return got === 0 && noneOnDisplay ? 'out' : 'low';
+  return got === 0 ? 'out' : 'low';
 }
 
 export function clearCollectedUpdates(line: CollectionLine) {
   return line.parts.map((p) => ({
     placementId: p.placementId,
-    fields: { collectedMode: null, collectedQty: null, shortfallReason: null, flagged: false } as Partial<ItemState>,
+    fields: { collectedMode: null, collectedQty: null, shortfallReason: null, flagged: false, noneOnDisplay: false } as Partial<ItemState>,
   }));
 }
 
@@ -503,6 +517,8 @@ export interface StockOutcome {
   reason: ShortReason | null; flagged: boolean;
   /** Menu items to mark as sold out (from the product's settings). */
   affects: string[];
+  /** Candy Bar: staff said none is left on display. */
+  noneOnDisplay?: boolean;
 }
 
 /**
@@ -512,7 +528,7 @@ export interface StockOutcome {
  *   not_topped_up not collected for another reason (time, access, not done).
  * Worst first: out, then low, then not topped up.
  */
-export function stockOutcomes(lines: CollectionLine[], items: Map<string, ItemState>, byId: Map<string, PlacementView>): StockOutcome[] {
+export function stockOutcomes(lines: CollectionLine[], items: Map<string, ItemState>, byId: Map<string, PlacementView>, displayRule = false): StockOutcome[] {
   const out: StockOutcome[] = [];
   for (const l of lines) {
     if (l.kind !== 'qty') continue;
@@ -530,7 +546,8 @@ export function stockOutcomes(lines: CollectionLine[], items: Map<string, ItemSt
     const confirmed = info.reason === 'insufficient';
     out.push({
       productName: l.productName, unitSingular: l.unitSingular, unitPlural: l.unitPlural,
-      status: confirmed ? (got === 0 ? 'out' : 'low') : 'not_topped_up',
+      status: confirmed ? shortStatus(got, info.noneOnDisplay, displayRule) : 'not_topped_up',
+      noneOnDisplay: confirmed && got === 0 && info.noneOnDisplay,
       needed: l.total, got, short, onShelf, target, reason: info.reason, flagged: info.flagged,
       affects: byId.get(l.parts[0].placementId)?.affects ?? [],
     });
@@ -542,7 +559,9 @@ export function stockOutcomes(lines: CollectionLine[], items: Map<string, ItemSt
 export function outcomeLine(o: StockOutcome): string {
   const q = (n: number) => formatQty(n, o.unitSingular, o.unitPlural);
   const shelf = o.onShelf !== null && o.target !== null ? ` \u00b7 ${round2(o.onShelf)} of ${round2(o.target)} on the shelf` : '';
+  if (o.status === 'out' && o.noneOnDisplay) return `${o.productName}: none on display and none in the storeroom (needed ${q(o.needed)})${shelf}`;
   if (o.status === 'out') return `${o.productName}: none in the storeroom (needed ${q(o.needed)})${shelf}`;
+  if (o.status === 'low' && o.got === 0) return `${o.productName}: none collected, short ${q(o.short)}${shelf}`;
   if (o.status === 'low') return `${o.productName}: only ${q(o.got)} in the storeroom, short ${q(o.short)}${shelf}`;
   const why = o.reason === 'time' ? 'interrupted / ran out of time' : o.reason === 'access' ? 'couldn\u2019t access stock' : o.reason === 'other' ? 'other reason' : 'not collected';
   return `${o.productName}: ${q(o.short)} not collected (${why})${shelf}`;
@@ -561,7 +580,7 @@ export function summaryText(args: {
   L.push(`Status: ${!args.finishedLabel ? 'In progress' : args.exceptionReason ? `Finished with exceptions (${args.exceptionReason})` : 'Complete'}`);
 
   const lines = collectionLines(collectPlacements(args.kind, args.placements, recordedAreas), items);
-  const outcomes = stockOutcomes(lines, items, view.byId);
+  const outcomes = stockOutcomes(lines, items, view.byId, !!view.department.noneOnDisplay);
   const group = (st: StockStatus, title: string) => {
     const g = outcomes.filter((o) => o.status === st);
     if (g.length) {
@@ -574,7 +593,7 @@ export function summaryText(args: {
   };
   if (!outcomes.length) { L.push(''); L.push('Nothing low or out of stock. Everything collected is back to target.'); }
   group('out', 'OUT OF STOCK');
-  group('low', 'RUNNING LOW');
+  group('low', view.department.noneOnDisplay ? 'LOW STOCK' : 'RUNNING LOW');
   group('not_topped_up', 'COLLECTION INCOMPLETE (not a storeroom shortage)');
 
   const flaggedDone = lines.filter((l) => lineInfo(l, items).flagged && lineState(l, items) === 'done').map((l) => l.productName);

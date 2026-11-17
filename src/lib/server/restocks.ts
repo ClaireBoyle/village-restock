@@ -50,6 +50,8 @@ export interface ShortageRow {
   id: string; sessionId: string | null; departmentName: string; productName: string; unitPlural: string;
   shortfallQty: number; reason: string; flagged: boolean; reportedBy: string | null; status: 'open' | 'resolved';
   createdAt: string; resolvedAt: string | null; resolvedBy: string | null; resolutionNote: string | null; tradingDate: string | null;
+  /** Candy Bar: none left on display either (Out of stock). Needs migration 013. */
+  noneOnDisplay?: boolean;
 }
 
 export async function listShortages(): Promise<ShortageRow[]> {
@@ -83,7 +85,7 @@ export async function restockDetail(id: string) {
     currentQty: r.currentQty as number | null, requestedQty: r.requestedQty as number | null,
     routineChoice: r.routineChoice as ItemState['routineChoice'], collectedMode: r.collectedMode as ItemState['collectedMode'],
     collectedQty: r.collectedQty as number | null, shortfallReason: r.shortfallReason as ItemState['shortfallReason'],
-    flagged: Boolean(r.flagged), conflict: (r.conflict as Conflict | null) ?? null,
+    flagged: Boolean(r.flagged), noneOnDisplay: Boolean(r.noneOnDisplay), conflict: (r.conflict as Conflict | null) ?? null,
   }]));
   const recorded = new Map<string, AreaStatus>(areas.map((a) => [String(a.checkAreaId), a.status as AreaStatus]));
   const placements: PlacementView[] = view ? (s.kind !== 'quick' ? view.placements : view.placements.filter((p) => itemMap.has(p.placementId))) : [];

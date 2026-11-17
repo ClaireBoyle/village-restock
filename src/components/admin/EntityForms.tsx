@@ -11,6 +11,8 @@ export interface DepartmentRow {
   icon: 'bar' | 'kitchen' | 'candy' | 'box'; description: string; active: boolean;
   /** Each area restocked on its own (needs migration 009). */
   restockByArea?: boolean;
+  /** Short is Low stock, even at zero; "None on display" marks it Out of stock (needs migration 013). */
+  noneOnDisplay?: boolean;
 }
 
 export function DepartmentForm({ d }: { d?: DepartmentRow }) {
@@ -31,6 +33,8 @@ export function DepartmentForm({ d }: { d?: DepartmentRow }) {
       <label className="check"><input type="checkbox" name="active" defaultChecked={d ? d.active : true} />Show to staff</label>
       <label className="check"><input type="checkbox" name="restockByArea" defaultChecked={d?.restockByArea ?? false} />Restock each area separately
         <span className="meta" style={{ fontWeight: 400 }}>&nbsp;Staff pick one area, enter what it needs, collect and finish it, at any time and in any order (e.g. Candy Bar). Otherwise every area is checked in one full restock.</span></label>
+      <label className="check"><input type="checkbox" name="noneOnDisplay" defaultChecked={d?.noneOnDisplay ?? false} />Ask &ldquo;None on display?&rdquo; when nothing is collected
+        <span className="meta" style={{ fontWeight: 400 }}>&nbsp;Collecting less than needed shows as Low stock, even when none was collected. Staff tap &ldquo;None on display&rdquo; to mark it Out of stock (e.g. Candy Bar). Otherwise none collected is Out of stock.</span></label>
       <div><SubmitButton>{d ? 'Save department' : 'Add department'}</SubmitButton></div>
     </ActionForm>
   );

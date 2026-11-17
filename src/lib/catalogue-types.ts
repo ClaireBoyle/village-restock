@@ -12,6 +12,8 @@ export interface CatDepartment {
   theme: DepartmentTheme; icon: DepartmentIcon; description: string; sortOrder: number;
   /** Each area is restocked on its own (Candy Bar), instead of one full restock of every area. */
   restockByArea?: boolean;
+  /** Collecting less than needed is Low stock, even at zero; "None on display" makes it Out of stock (Candy Bar). */
+  noneOnDisplay?: boolean;
 }
 export interface CatArea {
   id: string; departmentId: string; name: string; guideText: string;

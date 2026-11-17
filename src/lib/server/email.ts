@@ -94,9 +94,9 @@ export function buildRestockEmail(i: RestockEmailInput): { subject: string; html
     ${i.note ? `<div style="background:#fff;border:2px solid #C9D6F5;border-radius:16px;padding:14px 18px;margin:0 0 14px">
       <div style="font-size:15px;font-weight:700;color:#2446B8;margin:0 0 6px">Comments from staff</div>
       <div style="font-size:15px;color:#17213B;white-space:pre-wrap;line-height:1.45">${esc(i.note)}</div>${uniq}</div>` : ''}
-    ${out.length ? box('#FDE6E4', '#E0716A', '#9F2620', `Out of stock (${out.length})`, out.map((o) => item(o.productName, `None left in the storeroom${shelf(o)}`,
+    ${out.length ? box('#FDE6E4', '#E0716A', '#9F2620', `Out of stock (${out.length})`, out.map((o) => item(o.productName, `${o.noneOnDisplay ? 'None on display and none in the storeroom' : 'None left in the storeroom'}${shelf(o)}`,
       o.affects.length ? `<div style="font-size:14px;color:#9F2620;margin-top:4px">Set as sold out: <b>${esc(o.affects.join(', '))}</b></div>` : '')).join('')) : ''}
-    ${low.length ? box('#FFF1D6', '#F0A930', '#7A4300', `Running low (${low.length})`, low.map((o) => item(o.productName, `Storeroom had ${n(o.got)}, short ${n(o.short)} ${unit(o, o.short)}${shelf(o)}`)).join('')) : ''}
+    ${low.length ? box('#FFF1D6', '#F0A930', '#7A4300', `Running low (${low.length})`, low.map((o) => item(o.productName, `${o.got === 0 ? 'None collected' : `Storeroom had ${n(o.got)}`}, short ${n(o.short)} ${unit(o, o.short)}${shelf(o)}`)).join('')) : ''}
     ${!out.length && !low.length ? `<div style="background:#E1F2E8;border-radius:16px;padding:16px 18px;margin-bottom:14px;color:#177245;font-size:17px;font-weight:700">Nothing low or out of stock${uniq}</div>` : ''}
     ${other.length ? `<p style="font-size:13px;color:#56607A;margin:0 0 8px"><b>Collection incomplete</b> (not a storeroom shortage): ${esc(other.map((o) => o.productName).join(', '))}</p>` : ''}
     ${i.notChecked.length ? `<p style="font-size:13px;color:#56607A;margin:0 0 8px"><b>Not checked:</b> ${esc(i.notChecked.join('; '))}</p>` : ''}

@@ -46,7 +46,8 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
     if (got > 0) collected.push([l.productName, formatQty(got, l.unitSingular, l.unitPlural)]);
     if (st !== 'done' && info.reason !== 'insufficient') notCollected.push([l.productName, `${formatQty(round2(l.total - got), l.unitSingular, l.unitPlural)} not collected${info.reason ? ` (${SHORT_REASONS.find((r) => r[0] === info.reason)![1].toLowerCase()})` : ''}`]);
   }
-  const outcomes = stockOutcomes(lines, items, view.byId);
+  const displayRule = !!view.department.noneOnDisplay;
+  const outcomes = stockOutcomes(lines, items, view.byId, displayRule);
   // Recorded "couldn't collect" results (access, time, other): not a shortage, but managers should know.
   const incomplete = outcomes.some((o) => o.status === 'not_topped_up' && o.reason);
   const finishReason = (r: string | null) => r ?? (incomplete ? 'Collection incomplete' : null);
@@ -65,7 +66,7 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
     ctx.go(e.kind === 'collect' ? 'collect' : 'check');
   };
 
-  const report = <StockReport outcomes={outcomes} />;
+  const report = <StockReport outcomes={outcomes} displayRule={displayRule} />;
 
   const details = (
     <div className="sum">
@@ -175,7 +176,7 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
  * running low), then collection that couldn't be finished (not a shortage). Nothing at all
  * when everything was collected.
  */
-function StockReport({ outcomes }: { outcomes: StockOutcome[] }) {
+function StockReport({ outcomes, displayRule = false }: { outcomes: StockOutcome[]; displayRule?: boolean }) {
   const short = outcomes.filter((o) => o.status === 'out' || o.status === 'low');
   const incomplete = outcomes.filter((o) => o.status === 'not_topped_up' && o.reason);
   if (!short.length && !incomplete.length) return null;
@@ -186,7 +187,9 @@ function StockReport({ outcomes }: { outcomes: StockOutcome[] }) {
       <span className="sr-dot" aria-hidden="true" />
       <span className="sr-t">
         <b>{o.productName}{o.flagged ? <span className="sr-flag"><Icon name="flag" />Flagged</span> : null}</b>
-        <small>{kind === 'out' ? <>Out of stock &middot; Short {q(o, o.short)}</>
+        <small>{kind === 'out' ? <>Out of stock{o.noneOnDisplay ? <> &middot; None on display</> : null} &middot; Short {q(o, o.short)}</>
+          // Candy Bar: Low stock with how many short (also when none was collected).
+          : kind === 'low' && displayRule ? <>Low stock &middot; Short {q(o, o.short)}{o.got > 0 ? <> &middot; Collected {fmt(o.got)}</> : null}</>
           : kind === 'low' ? <>Running low &middot; Collected {fmt(o.got)} of {q(o, o.needed)}</>
           : <>Collection incomplete &middot; {why(o)} &middot; {q(o, o.short)} not collected</>}</small>
         {kind === 'out' && o.affects.length ? <small className="sr-affects">Set as sold out: <b>{o.affects.join(', ')}</b></small> : null}

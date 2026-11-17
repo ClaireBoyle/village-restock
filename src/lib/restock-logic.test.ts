@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Catalogue } from './catalogue-types';
-import { activePlacements, areaNotes, isRequired, scopeView, collectPlacements, phaseAreas, refillLines, suggestions, usesRefill, withSuggestions,
+import { activePlacements, areaNotes, isRequired, scopeView, outcomeLine, shortStatus, collectPlacements, phaseAreas, refillLines, suggestions, usesRefill, withSuggestions,
   EMPTY_ITEM, areaStatus, cardState, isChecked, collectionLines, departmentView, exceptions, gotAllUpdates,
   gotFewerUpdates, groupByStoreroom, lineGot, lineState, needOf, stockOutcomes, summaryText, type AreaStatus, type ItemState,
 } from './restock-logic';
@@ -395,5 +395,35 @@ describe('Refill FOH: grab upstairs for front of house, then replace it from dow
   it('the summary only reports the downstairs run', () => {
     const m = withSuggestions('full', v, items({ 'shz-bench': { requestedQty: 1 }, 'hei-foh': { requestedQty: 2 } }), recorded({}));
     expect(exceptions({ kind: 'full', view: v, placements: v.placements, recordedAreas: recorded({}), items: m }).map((e) => e.detail)).toEqual(['Red Claw Shiraz']);
+  });
+});
+
+describe('None on display (Candy Bar): short is Low stock, even at zero', () => {
+  const line = collectionLines(kitchen.placements, items({ 'p-cloth': { requestedQty: 4 } }))[0];
+  const m = (fields: Partial<ItemState>) => items({ 'p-cloth': { requestedQty: 4, ...fields } });
+  const confirmZero = (none: boolean) => Object.fromEntries(gotFewerUpdates(line, 0, 'insufficient', false, none).map((u) => [u.placementId, { requestedQty: 4, ...u.fields }]));
+  it('collected zero: Low stock, short 4 (not Out of stock) until "None on display"', () => {
+    const low = stockOutcomes([line], items(confirmZero(false)), kitchen.byId, true)[0];
+    expect(low).toMatchObject({ status: 'low', got: 0, short: 4, noneOnDisplay: false });
+    expect(outcomeLine(low)).toBe('Cloths: none collected, short 4 packs');
+    const out = stockOutcomes([line], items(confirmZero(true)), kitchen.byId, true)[0];
+    expect(out).toMatchObject({ status: 'out', noneOnDisplay: true });
+    expect(outcomeLine(out)).toContain('none on display');
+  });
+  it('collected some: Low stock with how many short', () => {
+    const u = Object.fromEntries(gotFewerUpdates(line, 1, 'insufficient', false, true).map((x) => [x.placementId, { requestedQty: 4, ...x.fields }]));
+    // "None on display" only applies at zero: collecting 1 clears it.
+    expect(u['p-cloth'].noneOnDisplay).toBe(false);
+    expect(stockOutcomes([line], items(u), kitchen.byId, true)[0]).toMatchObject({ status: 'low', got: 1, short: 3 });
+  });
+  it('other departments keep "none collected = Out of stock"', () => {
+    expect(stockOutcomes([line], items(confirmZero(false)), kitchen.byId)[0].status).toBe('out');
+    expect(shortStatus(0, false, false)).toBe('out');
+    expect(shortStatus(0, false, true)).toBe('low');
+    expect(shortStatus(0, true, true)).toBe('out');
+  });
+  it('got all or undo clears it', () => {
+    expect(gotAllUpdates(line)[0].fields.noneOnDisplay).toBe(false);
+    expect(m({}).get('p-cloth')!.noneOnDisplay).toBe(false);
   });
 });

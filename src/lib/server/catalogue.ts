@@ -14,7 +14,8 @@ export async function loadCatalogue(): Promise<Catalogue> {
     const setting = (k: string) => settingRows.find((r) => r.key === k)?.value;
     const departments = await tx`
       select d.id, d.name, d.short_name, d.group_label, d.theme, d.icon, d.description, d.sort_order,
-             coalesce((to_jsonb(d)->>'restock_by_area')::boolean, false) as restock_by_area
+             coalesce((to_jsonb(d)->>'restock_by_area')::boolean, false) as restock_by_area,
+             coalesce((to_jsonb(d)->>'none_on_display')::boolean, false) as none_on_display
       from departments d where d.active order by d.sort_order, d.name`;
     const areas = await tx`
       select a.id, a.department_id, a.name, a.guide_text, a.guide_photo_path, a.sort_order,

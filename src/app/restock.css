@@ -1091,3 +1091,10 @@ button.pnote.open span{display:block}
 /* Check BOH: "Taken for FOH" group at the top of the screen */
 .prows>.phead.taken-h{margin-top:2px;color:var(--d-accent)}
 .prows>.phead.taken-h small{order:2;font-size:12px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--ink-2)}
+/* Candy Bar: "None on display" under a line where nothing was collected */
+.l-none-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:0 10px 10px calc(10px + 64px)}
+.l-none-row small{color:var(--ink-2);font-size:13px}
+.btn.small.l-none{min-height:36px;font-size:14px;font-weight:600}
+.btn.small.l-none.on{background:color-mix(in srgb,var(--bad) 22%,transparent);border-color:var(--bad);color:var(--ink)}
+.btn.small.l-none.on .ic{color:var(--bad)}
+@media (max-width:640px){.l-none-row{padding-left:10px}}

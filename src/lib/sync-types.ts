@@ -15,6 +15,8 @@ export const itemFieldsSchema = z.object({
   collectedQty: qty.optional(),
   shortfallReason: z.enum(['insufficient', 'access', 'time', 'other']).nullable().optional(),
   flagged: z.boolean().optional(),
+  /** Candy Bar: nothing collected and none left on display, so it's out of stock. */
+  noneOnDisplay: z.boolean().optional(),
 }).strict();
 
 const base = { opId: z.uuid(), at: z.iso.datetime(), by: name };
