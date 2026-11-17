@@ -3,7 +3,7 @@
 --
 --   Renamed: Skittles Jellies → Skittles Jellies Kittens (same product, photo and history)
 --   Added:   Skittles Jellies Pandas          (after Kittens)
---            Fairy Floss                      (end of the lollies)
+--            Fairy Floss, in tubs             (end of the lollies)
 --            Cookie Time Strawberries & Cream (end of the chocolate)
 --            Thins Light & Tangy              (after Smith's Salt & Vinegar)
 --            Mount Franklin Still Water       (end of the stand; the same product as in the drinks fridge)
@@ -30,7 +30,7 @@ begin
   -- 2. Add: name, unit (one), unit (more), category, placed after this product ('' = at the end)
   for r in select * from (values
       (1, 'Skittles Jellies Pandas', 'packet', 'packets', 'Lollies & Gummies', 'Skittles Jellies Kittens'),
-      (2, 'Fairy Floss', 'packet', 'packets', 'Lollies & Gummies', 'Berry Nerds Gummy Clusters'),
+      (2, 'Fairy Floss', 'tub', 'tubs', 'Lollies & Gummies', 'Berry Nerds Gummy Clusters'),
       (3, 'Cookie Time Strawberries & Cream', 'cookie', 'cookies', 'Cookies', 'Snickers Bar'),
       (4, 'Thins Light & Tangy', 'packet', 'packets', 'Chips & Savoury', 'Smith''s Salt & Vinegar'),
       (5, 'Mount Franklin Still Water', 'bottle', 'bottles', 'Water', '')) v(k, name, one, many, catname, after)
@@ -57,6 +57,10 @@ begin
     update product_placements set sort_order = sort_order + 1 where check_area_id = stand and sort_order > anchor;
     insert into product_placements (product_id, check_area_id, sort_order) values (p, stand, anchor + 1);
   end loop;
+
+  -- Fairy Floss comes in tubs (also fixes it if an earlier version of this script added it in packets).
+  update products set unit_singular = 'tub', unit_plural = 'tubs'
+    where department_id = dept and lower(name) = 'fairy floss' and unit_plural <> 'tubs';
 
   raise notice 'Confection stand: % products', (select count(*) from product_placements pl join products x on x.id = pl.product_id and x.status = 'active' where pl.check_area_id = stand);
 end $$;
