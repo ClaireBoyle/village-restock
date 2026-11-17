@@ -5,10 +5,9 @@
 --   Choc Tops:                       Vanilla, Mint, Boysenberry, Salted Caramel, Chocolate
 --   HP Choc Tops (limited edition):  Honeycomb, Blueberry, Cinnamon, Chilli Chocolate
 --   Other Ice Creams:                Maxibon, Dairy Milk, Connoisseur Salted Caramel, Connoisseur Cookies & Cream
---   Raspberries & Vanilla Ice Cream: Frozen Raspberries, Peters Vanilla Ice Cream (target: 4 tubs)
+--   Raspberries & Vanilla Ice Cream: Frozen Raspberries, Peters Vanilla Ice Cream
 --
--- * Everything is staff-entered (enter what's needed) except Peters Vanilla Ice Cream, which has a
---   target of 4: staff count the tubs on the shelf and the app works out how many to collect.
+-- * Everything is staff-entered (enter what's needed), with no target levels.
 -- * Collected from Walk in freezer(Downstairs). Existing products with the same name are reused.
 -- * The HP flavours are limited edition: archive them in Admin > Products when they finish.
 do $$
@@ -32,7 +31,7 @@ declare
     ['Connoisseur Salted Caramel', 'ice cream', 'ice creams', 'Ice Cream', '', ''],
     ['Connoisseur Cookies & Cream', 'ice cream', 'ice creams', 'Ice Cream', '', ''],
     ['Frozen Raspberries', 'bag', 'bags', 'Frozen', 'Raspberries & Vanilla Ice Cream', ''],
-    ['Peters Vanilla Ice Cream', 'tub', 'tubs', 'Ice Cream', '', '4']
+    ['Peters Vanilla Ice Cream', 'tub', 'tubs', 'Ice Cream', '', '']
   ];
 begin
   if dept is null then raise notice 'Gold Class Bar not found: nothing changed'; return; end if;
