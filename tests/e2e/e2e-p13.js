@@ -90,6 +90,10 @@ const rooms = (P) => P.$$eval('.room', (els) => els.map((r) => [r.querySelector(
   await add(P, 'Mount Franklin Still Water');
   ok(await sees(P, `${row('Mount Franklin Still Water')} .ps`, '1 slab'), 'Still Water counted in slabs upstairs');
   await goArea(P, 'Upstairs cupboards');
+  const top = await P.$$eval('.area > .prows > *', (els) => els.map((e) => (e.matches('.phead') ? `# ${e.querySelector('span')?.textContent ?? e.textContent}` : e.querySelector('h3')?.textContent)));
+  ok(JSON.stringify(top.slice(0, 3)) === JSON.stringify(['# Taken for FOH', 'Red Claw Shiraz', 'Grey Goose']), 'taken for FOH listed first: ' + top.slice(0, 3).join(', '));
+  ok(await P.locator(row('Red Claw Shiraz')).count() === 1 && await P.locator(row('Grey Goose')).count() === 1, '...and not repeated in the cupboard lists below');
+  ok(await sees(P, `${row('Grey Goose')} .parea`, 'Spirits cupboard'), '...each saying which cupboard it is in');
   ok(await valueIs(P, 'Red Claw Shiraz', '1'), 'Shiraz taken from the Wine cupboard: 1 suggested');
   await P.click(`${row('Red Claw Shiraz')} button[aria-label="One more Red Claw Shiraz"]`); await P.click(`${row('Red Claw Shiraz')} button[aria-label="One more Red Claw Shiraz"]`);
   ok(await sees(P, `${row('Red Claw Shiraz')} .pnote`, '(suggested 1)') && await sees(P, `${row('Red Claw Shiraz')} .ps`, '3 bottles'), 'changed to 3: 3 in total, and it says it was 1 suggested');
@@ -98,7 +102,10 @@ const rooms = (P) => P.$$eval('.room', (els) => els.map((r) => [r.querySelector(
   await P.click(`${row('Grey Goose')} button[aria-label="Back to the suggested 1 Grey Goose"]`);
   ok(await valueIs(P, 'Grey Goose', '1'), '...and can be brought back');
   await P.click(`${row('Grey Goose')} button[aria-label="One less Grey Goose"]`);
+  ok(await P.locator('.area > .prows > .phead.taken-h').count() === 1 && await P.locator(row('Grey Goose')).count() === 1, 'a removed suggestion stays at the top (nothing jumps)');
   await P.screenshot({ path: `${OUT}/p13-boh.png`, fullPage: true });
+  await P.setViewportSize({ width: 1366, height: 900 }); await P.waitForTimeout(250); await P.screenshot({ path: `${OUT}/p13-boh-desktop.png` });
+  await P.setViewportSize(devices['iPhone 13'].viewport);
 
   // Collect downstairs
   await P.click('.dock .dock-acts button:has-text("Collect")'); await P.waitForSelector('.room');

@@ -135,8 +135,23 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
     const c = view.placements.find((x) => x.productId === p.productId && x.areaId !== x.screenAreaId && x.screenAreaId !== p.screenAreaId);
     return c ? `Grab it from the ${c.areaName}` : null;
   };
-  const renderRow = (p: (typeof cur.placements)[number]) => (
-    <ProductRow key={p.placementId} p={p} item={items.get(p.placementId) ?? EMPTY_ITEM} note={alsoEntered(p) ?? fromCupboard(p) ?? notes.own.get(p.placementId)}
+  // Check BOH: products with a suggestion (taken for FOH) go to the top of the screen.
+  const taken = phase === 'boh' ? cur.placements.filter((p) => ctx.suggested.has(p.placementId)) : [];
+  const takenIds = new Set(taken.map((p) => p.placementId));
+  /** A list without the products shown at the top; a subheading moves to the next product still there. */
+  const rest = (list: typeof cur.placements) => {
+    if (!takenIds.size) return list;
+    const out: typeof cur.placements = [];
+    let carry: string | null = null;
+    for (const p of list) {
+      if (takenIds.has(p.placementId)) { carry = p.heading ?? carry; continue; }
+      out.push(carry && !p.heading ? { ...p, heading: carry } : p);
+      carry = null;
+    }
+    return out;
+  };
+  const renderRow = (p: (typeof cur.placements)[number], showArea = false) => (
+    <ProductRow key={p.placementId} p={p} showArea={showArea} item={items.get(p.placementId) ?? EMPTY_ITEM} note={alsoEntered(p) ?? fromCupboard(p) ?? notes.own.get(p.placementId)}
       suggestedQty={ctx.suggested.get(p.placementId)?.qty}
       onChange={(fields, resolve) => void onItem(p, fields, resolve)} />
   );
@@ -167,7 +182,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
           : <h3 key={`h-${id}`} className="phead">{head}</h3>);
         if (closed) { i = j; continue; }
       }
-      out.push(...group.map(renderRow));
+      out.push(...group.map((x) => renderRow(x)));
       i = j;
     }
     return out;
@@ -259,7 +274,17 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
           <div className="prows">
             {cur.placements.length === 0 ? <p className="meta">No products in this area yet.</p> : null}
             {/* Optional subheadings (e.g. "Mixers, Water & Milk") in the same list */}
-            {renderList(cur.own)}
+            {taken.length ? (
+              // Refill FOH: everything taken for front of house first, so none of it is lost in a long list.
+              // A row stays here even after it's changed or removed, so it never jumps away mid-tap.
+              <>
+                <h3 className="phead taken-h"><span>Taken for FOH</span><small>{taken.length} to check</small></h3>
+                {taken.map((p) => renderRow(p, p.areaId !== cur.area.id))}
+                {/* The rest starts with its own subheading if it has one; otherwise a plain divider. */}
+                {rest(cur.own).length && !rest(cur.own).some((x) => x.heading) ? <h3 className="phead">Everything else</h3> : null}
+              </>
+            ) : null}
+            {renderList(rest(cur.own))}
           </div>
 
           {cur.sections.map((sec) => {
@@ -276,7 +301,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
                   <>
                     {sec.mode === 'optional' ? <p className="psec-hint"><Icon name="info" /><span>{ctx.refill ? <>What was taken for front of house is already suggested. Add anything else that looks low.</> : <>Only add <b>extra</b> stock this needs from downstairs. Anything already entered above is already on the collection list.</>}</span></p>
                       : sec.area.guideText ? <p className="psec-hint"><Icon name="info" /><span>{sec.area.guideText}</span></p> : null}
-                    <div className="prows">{renderList(sec.placements)}</div>
+                    <div className="prows">{renderList(rest(sec.placements))}{taken.length && !rest(sec.placements).length ? <p className="meta">All taken for FOH: see the top of this page.</p> : null}</div>
                   </>
                 ) : null}
               </section>

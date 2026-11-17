@@ -1088,3 +1088,6 @@ button.pnote.open span{display:block}
 .refill-intro{margin:4px 0 10px}
 /* Five steps need the short labels a little sooner (tablets in portrait keep the full ones). */
 @media (max-width:720px){.rbar .stages.five .stage .lg{display:none!important}.rbar .stages.five .stage .sm{display:inline!important}}
+/* Check BOH: "Taken for FOH" group at the top of the screen */
+.prows>.phead.taken-h{margin-top:2px;color:var(--d-accent)}
+.prows>.phead.taken-h small{order:2;font-size:12px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--ink-2)}
