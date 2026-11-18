@@ -143,7 +143,7 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
 
   // ---------- Quick restock in Candy Bar (scenario 9) ----------
   await A.click('.dock button:has-text("Back to home")'); await A.waitForSelector('.dcard2');
-  ok(await hasText(A, '.lane:nth-child(2)', 'Finished with exceptions'), 'home shows Kitchen finished with exceptions');
+  ok(await hasText(A, '.lane:nth-child(2) .fin-label', '✓ Done ·'), 'home shows Kitchen finished, with what needs following up (✓ Done · …)');
   await A.click('.dcard2:has-text("Candy Bar")'); await A.click('text=Start quick restock');
   await A.fill('#qsearch', 'large'); await A.click('.qrow:has-text("Large cups") button:has-text("Add")');
   await A.waitForSelector(card('Large cups')); await fillQty(A, `${card('Large cups')}`, '1');

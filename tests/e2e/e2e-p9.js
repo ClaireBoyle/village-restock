@@ -115,7 +115,7 @@ const card = (n) => `.acard:has(h2:text-is("${n}"))`;
 
   // Home: both areas shown, the department counts as restocked
   await P.goto(B + '/'); await P.waitForSelector('.lane');
-  ok(await has(P, '.lane:has-text("Candy Bar")', 'Confection stand ✓') && await has(P, '.lane:has-text("Candy Bar")', 'Restocked'), 'home: Candy Bar lane shows each area and is restocked');
+  ok(await has(P, '.lane:has-text("Candy Bar")', 'Confection stand ✓') && await has(P, '.lane:has-text("Candy Bar") .fin-label', '✓ Stocked'), 'home: Candy Bar lane shows each area; the latest confection run collected everything: ✓ Stocked');
 
   // Gold Class departments keep the full restock
   await P.click('.dcard2:has-text("Bar") >> nth=0');
