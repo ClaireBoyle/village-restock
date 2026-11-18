@@ -7,9 +7,9 @@
 -- together, staff check a family on both sides and enter one total.
 --
 --   Water stand          Mount Franklin Still Water
---   Chocolate pouches    Snickers Pods, Mars Pods, Maltesers, Maltesers Duos ×2, M&Ms ×3, Reese's ×2, Cookie Time
+--   Chocolate hang bags    Snickers Pods, Mars Pods, Maltesers, Maltesers Duos ×2, M&Ms ×3, Reese's ×2, Cookie Time
 --   Lollies              Skittles ×5, Sour Patch Kids, Allen's ×2
---   Bars & Nerds boxes   Snickers Bar, Mars Bar, Kit Kat, Nerds ×2
+--   Bars & Nerds   Snickers Bar, Mars Bar, Kit Kat, Nerds ×2
 --   Chips & Pringles     Pringles ×2, Thins, Smith's ×2, Twisties
 --   Fairy floss & popcorn  Fairy Floss, Parlour Lane ×4
 --
@@ -22,7 +22,7 @@ declare
   -- product name, heading above it
   list text[][] := array[
     ['Mount Franklin Still Water', 'Water stand'],
-    ['Snickers Pods', 'Chocolate pouches'],
+    ['Snickers Pods', 'Chocolate hang bags'],
     ['Mars Pods', ''],
     ['Maltesers', ''],
     ['Maltesers Duos Strawberry', ''],
@@ -41,7 +41,7 @@ declare
     ['Sour Patch Kids', ''],
     ['Allen''s Snakes', ''],
     ['Allen''s Party Mix', ''],
-    ['Snickers Bar', 'Bars & Nerds boxes'],
+    ['Snickers Bar', 'Bars & Nerds'],
     ['Mars Bar', ''],
     ['Kit Kat', ''],
     ['Nerds Gummy Clusters', ''],
