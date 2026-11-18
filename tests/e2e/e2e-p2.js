@@ -52,7 +52,7 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
   // Refresh keeps everything (scenario 12)
   await A.reload(); await A.waitForSelector(card('Tomatoes'));
   ok(await A.inputValue(`${card('Tomatoes')} .qty-input`) === '2', 'scenario 12: refresh keeps the entered quantity');
-  ok(await A.isVisible('.area-btn:has-text("Fridge 1") >> text=Complete'), 'scenario 4: completed fridge still complete after refresh');
+  ok(await A.isVisible('.area-btn:has-text("Fridge 1") >> text=Checked'), 'scenario 4: completed fridge still complete after refresh');
 
   // Save and exit
   await A.click('button:has-text("Save and exit")'); await A.waitForSelector('text=Saved. Anyone can carry on');
@@ -67,7 +67,7 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
   await Bp.click('.dcard2:has-text("Kitchen")');
   await Bp.waitForSelector('button:has-text("Resume full restock")'); ok(true, 'second device offers Resume, not Start');
   await Bp.click('button:has-text("Resume full restock")');
-  await Bp.waitForSelector('.area-btn:has-text("Fridge 1") >> text=Complete');
+  await Bp.waitForSelector('.area-btn:has-text("Fridge 1") >> text=Checked');
   ok(await Bp.inputValue(`${card('Tomatoes')} .qty-input`).catch(() => '') === '' || true, 'joined');
   await Bp.click('.area-btn:has-text("Fridge 2")'); await Bp.waitForSelector(card('Milk'));
   await fillQty(Bp, `${card('Milk')}`, '3');
@@ -80,7 +80,7 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
 
   // Device A picks up Jess's work
   await A.click('.dcard2:has-text("Kitchen")'); await A.click('button:has-text("Resume full restock")');
-  await A.waitForSelector('.area-btn:has-text("Fridge 2") >> text=Complete', { timeout: 30000 });
+  await A.waitForSelector('.area-btn:has-text("Fridge 2") >> text=Checked', { timeout: 30000 });
   ok(true, 'first device sees Fridge 2 completed by the other device');
 
   // ---------- Offline on device A ----------
