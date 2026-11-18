@@ -464,17 +464,20 @@ export function refillLines(kind: SessionKind, placements: PlacementView[], reco
 export interface Suggestion { qty: number; from: { areaName: string; need: number }[] }
 
 /**
- * What staff took upstairs for FOH, suggested for the same product in the spot it came from
- * (e.g. 1 Shiraz grabbed from the Wine cupboard → 1 Shiraz suggested for the Wine cupboard).
- * Only for pickups marked "suggest" (wine, spirits, small sparkling water), never for beers
- * taken as single bottles out of packs.
+ * What staff actually grabbed upstairs for FOH, suggested for the same product in the spot it came
+ * from (e.g. 1 Shiraz grabbed from the Wine cupboard → 1 Shiraz suggested for the Wine cupboard).
+ * Based on what was collected on "Collect upstairs" (all of it, or the amount under Got fewer):
+ * nothing grabbed (or not ticked yet) suggests nothing. Only for pickups marked "suggest" (wine,
+ * spirits, small sparkling water), never for beers taken as single bottles out of packs.
  */
 export function suggestions(kind: SessionKind, view: DepartmentView, items: Map<string, ItemState>, recordedAreas: Map<string, AreaStatus>): Map<string, Suggestion> {
   const out = new Map<string, Suggestion>();
   if (kind !== 'full') return out;
   const picks = activePlacements(kind, view.placements, recordedAreas).filter((p) => p.pickupSuggest && p.pickupAreaId);
   for (const p of picks) {
-    const need = needOf(p, items.get(p.placementId) ?? EMPTY_ITEM) ?? 0;
+    const i = items.get(p.placementId) ?? EMPTY_ITEM;
+    const want = needOf(p, i) ?? 0;
+    const need = i.collectedMode === 'all' ? want : i.collectedMode === 'partial' ? Math.min(want, i.collectedQty ?? 0) : 0;
     if (need <= 0) continue;
     // The same product in the pickup spot, counted in the same unit and entered by staff.
     const t = view.placements.find((x) => x.areaId === p.pickupAreaId && x.productId === p.productId && x.method === 'manual' && x.unitPlural === p.unitPlural);

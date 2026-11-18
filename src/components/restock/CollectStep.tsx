@@ -65,7 +65,7 @@ function Room({ name, lines, items, write, note, oneArea, tickOnly = false, disp
   name: string; lines: CollectionLine[]; items: Map<string, ItemState>; write: (u: { placementId: string; fields: Partial<ItemState> }[]) => void;
   /** The storeroom's reminder (e.g. "Use opened boxes first"), shown once under its heading. */
   note?: string; oneArea: string | null;
-  /** Refill FOH: just a tick for "grabbed" (anything missing upstairs is covered by the downstairs run). */
+  /** Collect upstairs: "grabbed" wording; Got fewer records how many were actually there (no reasons). */
   tickOnly?: boolean;
   /** Candy Bar: short is Low stock (even at zero); "None on display" makes it Out of stock. */
   displayRule?: boolean;
@@ -135,7 +135,7 @@ function Line({ line, items, write, oneArea, tickOnly = false, displayRule = fal
   const confirm = () => {
     if (!valid) return;
     if (num! >= line.total) write(gotAllUpdates(line));
-    else write(gotFewerUpdates(line, num!, dReason ?? 'insufficient', dFlag, info.noneOnDisplay));
+    else write(gotFewerUpdates(line, num!, tickOnly ? 'insufficient' : dReason ?? 'insufficient', tickOnly ? false : dFlag, info.noneOnDisplay));
     close();
   };
   const bump = (dir: 1 | -1) => {
@@ -159,7 +159,7 @@ function Line({ line, items, write, oneArea, tickOnly = false, displayRule = fal
   } else if (!open && st !== 'short') {
     act = (
       <span className="l-btns">
-        {line.kind === 'qty' && !tickOnly ? <button ref={fewRef} type="button" className="btn l-few" onClick={openEditor} aria-label={`Got fewer ${line.productName}`}>Got fewer</button> : null}
+        {line.kind === 'qty' ? <button ref={fewRef} type="button" className="btn l-few" onClick={openEditor} aria-label={`Got fewer ${line.productName}`}>Got fewer</button> : null}
         <button type="button" className="l-tick l-all" onClick={all}
           aria-label={line.kind === 'task' ? `Done: ${line.productName}` : tickOnly ? `Grabbed ${round2(line.total)} ${line.productName}` : `Got all ${round2(line.total)} ${line.productName}`}><Icon name="check" /></button>
       </span>
@@ -180,7 +180,7 @@ function Line({ line, items, write, oneArea, tickOnly = false, displayRule = fal
         <div className="l-nm">
           <b>{line.productName}</b>
           {st === 'short' && !open ? (
-            <small className="l-why">{info.reason === 'insufficient' ? stockLabel : shortReason(info.reason)} &middot; short {formatQty(short, line.unitSingular, line.unitPlural)}{info.flagged ? ' · flagged' : ''}
+            <small className="l-why">{tickOnly ? `Grabbed ${round2(got)} of ${round2(line.total)}` : <>{info.reason === 'insufficient' ? stockLabel : shortReason(info.reason)} &middot; short {formatQty(short, line.unitSingular, line.unitPlural)}{info.flagged ? ' · flagged' : ''}</>}
               <button type="button" className="linkbtn l-link" onClick={openEditor}>Change</button></small>
           ) : st === 'done' ? (
             <small className="l-ok">{line.kind === 'task' ? 'Done' : tickOnly ? 'Grabbed' : 'Collected'}<button type="button" className="linkbtn l-link" onClick={undo}>Undo</button></small>
@@ -214,11 +214,11 @@ function Line({ line, items, write, oneArea, tickOnly = false, displayRule = fal
           </div>
           <div className="fw-foot">
             <button type="button" className="btn fw-x" onClick={cancel}>Cancel</button>
-            <button type="button" className="linkbtn fw-more" onClick={() => setMore(!more)} aria-expanded={more}>More options{dReason || dFlag ? ' (1+)' : ''}<Icon name={more ? 'up' : 'down'} /></button>
+            {tickOnly ? null : <button type="button" className="linkbtn fw-more" onClick={() => setMore(!more)} aria-expanded={more}>More options{dReason || dFlag ? ' (1+)' : ''}<Icon name={more ? 'up' : 'down'} /></button>}
             <span style={{ flex: 1 }} />
             <button type="button" className="btn primary fw-ok" disabled={!valid} onClick={confirm}><Icon name="check" />Confirm</button>
           </div>
-          {more ? (
+          {more && !tickOnly ? (
             <div className="fw-options">
               <div className="chips fw-reasons" role="group" aria-label="Other reason">
                 {SHORT_REASONS.filter(([v]) => v !== 'insufficient').map(([v, l]) => (
@@ -244,17 +244,18 @@ export function RefillStep({ ctx }: { ctx: RestockCtx }) {
   const { view, session, items, recorded, who, placements } = ctx;
   const lines = refillLines(session.kind, placements, recorded, items);
   const groups = groupByStoreroom(lines, view.pickupOrder);
-  const grabbed = lines.filter((l) => lineState(l, items) === 'done').length;
+  // Ticked, or Got fewer confirmed (including none there).
+  const grabbed = lines.filter((l) => ['done', 'short'].includes(lineState(l, items))).length;
   const write = (ups: { placementId: string; fields: Partial<ItemState> }[]) => void setItems(session.id, ups, who);
   const nSug = ctx.suggested.size;
   return (
     <>
       <main className="wrap restock-main">
         {ctx.header}
-        <h2 className="sr-only">Refill FOH from upstairs</h2>
+        <h2 className="sr-only">Collect upstairs</h2>
         {lines.length === 0 ? <p className="empty">Nothing to grab from upstairs. Nothing entered for front of house comes from the BOH fridge, walk-in or cupboards.</p> : (
           <>
-            <p className="aguide-line refill-intro"><Icon name="info" /><span>Grab these from upstairs and refill front of house.{nSug ? ` What needs replacing is suggested on the next step, Check BOH.` : ''}</span></p>
+            <p className="aguide-line refill-intro"><Icon name="info" /><span>Grab these for the bar. Tick each one, or use Got fewer if there wasn&rsquo;t enough.{nSug ? ' What you grab is suggested on the next step, Top up BOH.' : ''}</span></p>
             <div className="rooms">
               {groups.map((g) => <Room key={g.lines[0].locationId ?? g.name} name={g.name} lines={g.lines} items={items} write={write} oneArea={null} tickOnly />)}
             </div>
@@ -264,7 +265,7 @@ export function RefillStep({ ctx }: { ctx: RestockCtx }) {
       <Dock icon={grabbed === lines.length ? 'check' : 'list'} progress={lines.length ? grabbed / lines.length : 1}
         title={lines.length ? `${grabbed} of ${lines.length} grabbed` : 'Nothing to grab'}>
         <button className="btn save-exit" onClick={ctx.saveAndExit} aria-label="Save and exit"><Icon name="save" /><span className="lg">Save and exit</span><span className="sm">Save &amp; exit</span></button>
-        <button className="btn primary big" onClick={() => ctx.go('boh')}><span className="lg">Next: Check BOH</span><span className="sm">Check BOH</span><Icon name="next" /></button>
+        <button className="btn primary big" onClick={() => ctx.go('boh')}><span className="lg">Next: Top up BOH</span><span className="sm">Top up BOH</span><Icon name="next" /></button>
       </Dock>
     </>
   );

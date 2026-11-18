@@ -73,7 +73,8 @@ begin
     update check_areas set sort_order = sort_order + 1 where department_id = dept and sort_order >= s;
     insert into check_areas (department_id, name, sort_order) values (dept, 'FOH beer fridge', s) returning id into beerf;
   end if;
-  update check_areas set active = true, parent_area_id = null where id = beerf;
+  -- (kept inside the Back bench stop if 2026-11-gold-class-bar-bench-fridge-stop.sql has put it there)
+  update check_areas set active = true where id = beerf;
   update check_areas set guide_text = 'Enter the single bottles needed. They come from the BOH bar fridge and the walk-in; Curatif cocktails come from the Alcohol storeroom.'
     where id = beerf and trim(coalesce(guide_text, '')) = '';
 
@@ -131,6 +132,11 @@ begin
         update products set status = 'active', method = 'routine', instructions = r.how where id = p;
       end if;
       pl := (select id from product_placements where product_id = p and check_area_id = bench limit 1);
+      -- Already moved by a later script (Coffee machine, Milkshake station): leave it there.
+      if pl is null and exists (select 1 from product_placements where product_id = p and check_area_id <> bench) then
+        update product_placements set pickup_area_id = ups, pickup_suggest = false where product_id = p and pickup_area_id is null;
+        continue;
+      end if;
       if pl is null then
         n := n + 1;
         insert into product_placements (product_id, check_area_id, sort_order) values (p, bench, n) returning id into pl;

@@ -80,7 +80,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   const curIdx = view.areas.findIndex((a) => a.area.id === cur.area.id);
   const after = [...view.areas.slice(curIdx + 1), ...view.areas.slice(0, curIdx)];
   const nextOpen = after.find(({ area }) => !['complete', 'skipped'].includes(statusOf(area.id)));
-  const stepName = phase === 'foh' ? 'Refill FOH' : 'Collect';
+  const stepName = phase === 'foh' ? 'Collect upstairs' : 'Collect downstairs';
   // What to show as progress. Target-level products need a count; everything else is exception-based,
   // so we count what was entered rather than "checked".
   const progressOf = (ps: typeof active) => {
@@ -127,6 +127,8 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
       return raw === null ? `Suggested: ${taken}. Change it if more is needed, or remove it.` : raw === sug.qty ? taken : `${taken} (suggested ${round2(sug.qty)})`;
     }
     if (!p.optional && p.areaId === p.screenAreaId) return null;
+    // Grabbed upstairs (e.g. the FOH bar fridge inside the Back bench stop): it says where to grab it instead.
+    if (ctx.refill && p.pickupAreaId) return null;
     // Pickups grabbed upstairs aren't on the downstairs list, so they don't count here.
     const others = view.placements.filter((x) => x.productId === p.productId && x.placementId !== p.placementId && !(ctx.refill && x.pickupAreaId))
       .map((x) => ({ x, need: needOf(x, items.get(x.placementId) ?? EMPTY_ITEM) })).filter((o) => (o.need ?? 0) > 0);
@@ -136,8 +138,9 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   // section on another screen (e.g. "Grab it from the Wine cupboard"). Items with no upstairs
   // overflow (e.g. syrups) get no note: they simply come from downstairs.
   const fromCupboard = (p: (typeof cur.placements)[number]) => {
-    if (p.areaId !== p.screenAreaId || !((needOf(p, items.get(p.placementId) ?? EMPTY_ITEM) ?? 0) > 0)) return null;
+    if (!((needOf(p, items.get(p.placementId) ?? EMPTY_ITEM) ?? 0) > 0)) return null;
     if (ctx.refill && p.pickupAreaName) return `Grab it from the ${p.pickupAreaName}`;
+    if (p.areaId !== p.screenAreaId) return null;
     if (ctx.refill) return null; // comes straight from downstairs
     const c = view.placements.find((x) => x.productId === p.productId && x.areaId !== x.screenAreaId && x.screenAreaId !== p.screenAreaId);
     return c ? `Grab it from the ${c.areaName}` : null;

@@ -367,7 +367,7 @@ describe('Refill FOH: grab upstairs for front of house, then replace it from dow
     expect(v.byId.get('hei-boh')!.unitPlural).toBe('packs');
   });
   it('lists upstairs pickups on Refill FOH by spot, and keeps them off the downstairs list', () => {
-    const m = items({ 'hei-foh': { requestedQty: 3 }, 'shz-bench': { requestedQty: 1 }, 'cur-foh': { requestedQty: 2 }, 'syr-bench': { requestedQty: 1 } });
+    const m = items({ 'hei-foh': { requestedQty: 3 }, 'shz-bench': { requestedQty: 1, collectedMode: 'all', collectedQty: 1 }, 'cur-foh': { requestedQty: 2 }, 'syr-bench': { requestedQty: 1 } });
     const r = refillLines('full', v.placements, recorded({}), m);
     expect(groupByStoreroom(r, v.pickupOrder).map((g) => [g.name, g.lines.map((l) => `${l.total} ${l.unitPlural} ${l.productName}`)]))
       .toEqual([['BOH bar fridge', ['3 bottles Heineken']], ['Wine cupboard', ['1 bottles Red Claw Shiraz']]]);
@@ -376,7 +376,7 @@ describe('Refill FOH: grab upstairs for front of house, then replace it from dow
     expect(down.map((l) => [l.productName, l.total, l.parts[0].areaName])).toEqual([['Red Claw Shiraz', 1, 'Wine cupboard'], ['Curatif Negroni', 2, 'FOH beer fridge'], ['Vanilla Syrup', 1, 'Back bench']]);
   });
   it('the suggestion stands until staff change it; what they leave is final', () => {
-    const base = { 'shz-bench': { requestedQty: 1 }, 'spk-foh': { requestedQty: 4 } };
+    const base = { 'shz-bench': { requestedQty: 1, collectedMode: 'all' as const, collectedQty: 1 }, 'spk-foh': { requestedQty: 4, collectedMode: 'all' as const, collectedQty: 4 } };
     expect([...suggestions('full', v, items(base), recorded({}))]).toEqual([['spk-boh', { qty: 4, from: [{ areaName: 'FOH beer fridge', need: 4 }] }], ['shz-wine', { qty: 1, from: [{ areaName: 'Back bench', need: 1 }] }]]);
     const kept = withSuggestions('full', v, items(base), recorded({}));
     expect(kept.get('shz-wine')!.requestedQty).toBe(1);
@@ -386,6 +386,20 @@ describe('Refill FOH: grab upstairs for front of house, then replace it from dow
     // A skipped front-of-house area suggests nothing.
     expect(suggestions('full', v, items(base), recorded({ bench: 'skipped' })).has('shz-wine')).toBe(false);
   });
+  it('Shiraz: what was actually grabbed upstairs is what gets suggested', () => {
+    const sug = (shz: Partial<ItemState>) => suggestions('full', v, items({ 'shz-bench': { requestedQty: 2, ...shz } }), recorded({})).get('shz-wine')?.qty ?? null;
+    expect(sug({})).toBeNull(); // not ticked on Collect upstairs yet
+    expect(sug({ collectedMode: 'all', collectedQty: 2 })).toBe(2);
+    expect(sug({ collectedMode: 'partial', collectedQty: 1, shortfallReason: 'insufficient' })).toBe(1); // only 1 in the cupboard
+    expect(sug({ collectedMode: 'partial', collectedQty: 0, shortfallReason: 'insufficient' })).toBeNull(); // none grabbed: nothing to replace
+    // Took 1 → 1 suggested; changed to 3 → 3 on the downstairs list; removed → off the list.
+    const one = items({ 'shz-bench': { requestedQty: 1, collectedMode: 'all', collectedQty: 1 } });
+    const down = (m: Map<string, ItemState>) => collectionLines(collectPlacements('full', v.placements, recorded({})), withSuggestions('full', v, m, recorded({})))
+      .filter((l) => l.productName === 'Red Claw Shiraz').map((l) => l.total);
+    expect(down(one)).toEqual([1]);
+    expect(down(new Map([...one, ['shz-wine', { ...EMPTY_ITEM, requestedQty: 3 }]]))).toEqual([3]);
+    expect(down(new Map([...one, ['shz-wine', { ...EMPTY_ITEM, requestedQty: 0 }]]))).toEqual([]);
+  });
   it('beer singles and packs never merge, and quick restocks keep the plain list', () => {
     const m = items({ 'hei-foh': { requestedQty: 3 }, 'hei-boh': { requestedQty: 1 } });
     const q = collectionLines(collectPlacements('quick', v.placements, recorded({})), m);
@@ -393,7 +407,7 @@ describe('Refill FOH: grab upstairs for front of house, then replace it from dow
     expect(collectionLines(collectPlacements('full', v.placements, recorded({})), m).map((l) => `${l.total} ${l.unitPlural}`)).toEqual(['1 packs']);
   });
   it('the summary only reports the downstairs run', () => {
-    const m = withSuggestions('full', v, items({ 'shz-bench': { requestedQty: 1 }, 'hei-foh': { requestedQty: 2 } }), recorded({}));
+    const m = withSuggestions('full', v, items({ 'shz-bench': { requestedQty: 1, collectedMode: 'all', collectedQty: 1 }, 'hei-foh': { requestedQty: 2 } }), recorded({}));
     expect(exceptions({ kind: 'full', view: v, placements: v.placements, recordedAreas: recorded({}), items: m }).map((e) => e.detail)).toEqual(['Red Claw Shiraz']);
   });
 });

@@ -35,7 +35,7 @@ const rooms = (P) => P.$$eval('.room', (els) => els.map((r) => [r.querySelector(
 
   // Check FOH
   const steps = await P.$$eval('.rbar .stage .sm', (els) => els.map((e) => e.textContent));
-  ok(JSON.stringify(steps) === JSON.stringify(['FOH', 'Refill', 'BOH', 'Collect', 'Finish']), 'five steps: ' + steps.join(' › '));
+  ok(JSON.stringify(steps) === JSON.stringify(['Bar', 'Upstairs', 'BOH', 'Downstairs', 'Finish']), 'five steps: ' + steps.join(' › '));
   const foh = await rail(P);
   ok(foh[0] === 'FOH beer fridge' && !foh.includes('BOH bar fridge') && !foh.includes('Upstairs cupboards') && foh.includes('Back bench') && foh.includes('Confection'), 'Check FOH shows front-of-house areas only: ' + foh.join(', '));
   const heads = await P.$$eval('.area > .prows > .phead', (els) => els.map((e) => e.textContent));
@@ -50,22 +50,26 @@ const rooms = (P) => P.$$eval('.room', (els) => els.map((r) => [r.querySelector(
   ok(await sees(P, `${row('Red Claw Shiraz')} .pnote`, 'Grab it from the Wine cupboard'), 'red wine: grab it from the Wine cupboard');
   ok(await P.locator(`${row('Vanilla Syrup')} .pnote`).count() === 0, 'syrups: no upstairs note (straight from downstairs)');
   await P.click(`${row('Sugar container')} .pseg button`);
-  await goArea(P, 'Back shelves'); await add(P, 'Grey Goose');
+  await goArea(P, 'Back shelves'); await add(P, 'Grey Goose'); await add(P, 'Patron Silver');
 
-  // Refill FOH
-  await P.click('.rbar .stage:has-text("Refill")'); await P.waitForSelector('.room');
+  // Collect upstairs
+  await P.click('.rbar .stage:has-text("Upstairs")'); await P.waitForSelector('.room');
   const r1 = await rooms(P);
   ok(JSON.stringify(r1) === JSON.stringify([
     ['BOH bar fridge', ['3 bottles Heineken', '2 bottles Kirks Indian Tonic Water', '4 bottles Mount Franklin Sparkling Water 330ml']],
     ['Walk in fridge', ['6 bottles Mount Franklin Still Water']],
     ['Upstairs cupboards', ['✓ Sugar container']],
     ['Wine cupboard', ['1 bottle Red Claw Shiraz']],
-    ['Spirits cupboard', ['1 bottle Grey Goose']]]), 'Refill FOH grouped by pickup spot: ' + JSON.stringify(r1));
+    ['Spirits cupboard', ['1 bottle Grey Goose', '1 bottle Patron Silver']]]), 'Collect upstairs grouped by pickup spot: ' + JSON.stringify(r1));
   ok(!JSON.stringify(r1).includes('Curatif') && !JSON.stringify(r1).includes('Vanilla'), 'Curatif and syrups are not upstairs pickups');
-  ok(await P.locator('.l-few').count() === 0, 'just a tick per line (no "Got fewer")');
+  ok(await sees(P, line('Red Claw Shiraz'), 'For Back bench') && await sees(P, line('Heineken'), 'For FOH beer fridge'), 'each line says how much to grab and where it goes');
   ok(await sees(P, `${line('Sugar container')}`, 'fill it to the top'), 'sugar: refill the container to the top');
-  await P.click(`${line('Heineken')} button.l-all`); await P.click(`${line('Red Claw Shiraz')} button.l-all`);
-  ok(await sees(P, '.dock', '2 of 7 grabbed'), 'progress: 2 of 7 grabbed');
+  for (const n of ['Heineken', 'Kirks Indian Tonic Water', 'Mount Franklin Sparkling Water 330ml', 'Mount Franklin Still Water', 'Sugar container', 'Red Claw Shiraz', 'Patron Silver']) await P.click(`${line(n)} button.l-all`);
+  // None left upstairs: Got fewer → 0 (just the amount, no reasons to pick)
+  await P.click(`${line('Grey Goose')} .l-few`);
+  ok(await sees(P, `${line('Grey Goose')} .fewer`, 'How many did you get?') && await P.locator(`${line('Grey Goose')} .fw-more`).count() === 0, 'Got fewer upstairs: just "How many did you get?"');
+  await P.fill(`${line('Grey Goose')} .fewer .qty-input`, '0'); await P.click(`${line('Grey Goose')} .fw-ok`);
+  ok(await sees(P, `${line('Grey Goose')} .l-why`, 'Grabbed 0 of 1') && await sees(P, '.dock', '8 of 8 grabbed'), 'Grey Goose: "Grabbed 0 of 1"; 8 of 8 done');
   await P.screenshot({ path: `${OUT}/p13-refill.png`, fullPage: true });
   // Tablet and desktop: the same screen, wider
   for (const [name, vp] of [['tablet', { width: 834, height: 1194 }], ['desktop', { width: 1366, height: 900 }]]) {
@@ -78,7 +82,7 @@ const rooms = (P) => P.$$eval('.room', (els) => els.map((r) => [r.querySelector(
   ok(await P.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'phone: no sideways scrolling; five steps fit');
 
   // Check BOH
-  await P.click('.dock .dock-acts button:has-text("Check BOH")'); await P.waitForSelector('article.prow');
+  await P.click('.dock .dock-acts button:has-text("Top up BOH")'); await P.waitForSelector('article.prow');
   ok(JSON.stringify(await rail(P)) === JSON.stringify(['BOH bar fridge', 'Walk in fridge', 'Upstairs cupboards']), 'Check BOH: the three upstairs spots');
   await goArea(P, 'BOH bar fridge');
   ok(await valueIs(P, 'Mount Franklin Sparkling Water 330ml', '4') && await sees(P, `${row('Mount Franklin Sparkling Water 330ml')} .pnote`, 'Suggested: 4 taken for FOH beer fridge'), 'Sparkling 330ml: 4 suggested from what was taken');
@@ -91,29 +95,31 @@ const rooms = (P) => P.$$eval('.room', (els) => els.map((r) => [r.querySelector(
   ok(await sees(P, `${row('Mount Franklin Still Water')} .ps`, '1 slab'), 'Still Water counted in slabs upstairs');
   await goArea(P, 'Upstairs cupboards');
   const top = await P.$$eval('.area > .prows > *', (els) => els.map((e) => (e.matches('.phead') ? `# ${e.querySelector('span')?.textContent ?? e.textContent}` : e.querySelector('h3')?.textContent)));
-  ok(JSON.stringify(top.slice(0, 3)) === JSON.stringify(['# Taken for FOH', 'Red Claw Shiraz', 'Grey Goose']), 'taken for FOH listed first: ' + top.slice(0, 3).join(', '));
-  ok(await P.locator(row('Red Claw Shiraz')).count() === 1 && await P.locator(row('Grey Goose')).count() === 1, '...and not repeated in the cupboard lists below');
-  ok(await sees(P, `${row('Grey Goose')} .parea`, 'Spirits cupboard'), '...each saying which cupboard it is in');
+  ok(JSON.stringify(top.slice(0, 3)) === JSON.stringify(['# Taken for FOH', 'Red Claw Shiraz', 'Patron Silver']), 'grabbed for FOH listed first: ' + top.slice(0, 3).join(', '));
+  ok(await P.locator(row('Red Claw Shiraz')).count() === 1 && await P.locator(row('Patron Silver')).count() === 1, '...and not repeated in the cupboard lists below');
+  ok(await sees(P, `${row('Patron Silver')} .parea`, 'Spirits cupboard'), '...each saying which cupboard it is in');
+  ok(await P.locator(`${row('Grey Goose')} button.padd`).count() === 1, 'Grey Goose: none grabbed upstairs, so nothing suggested');
   ok(await valueIs(P, 'Red Claw Shiraz', '1'), 'Shiraz taken from the Wine cupboard: 1 suggested');
   await P.click(`${row('Red Claw Shiraz')} button[aria-label="One more Red Claw Shiraz"]`); await P.click(`${row('Red Claw Shiraz')} button[aria-label="One more Red Claw Shiraz"]`);
   ok(await sees(P, `${row('Red Claw Shiraz')} .pnote`, '(suggested 1)') && await sees(P, `${row('Red Claw Shiraz')} .ps`, '3 bottles'), 'changed to 3: 3 in total, and it says it was 1 suggested');
-  await P.click(`${row('Grey Goose')} button[aria-label="One less Grey Goose"]`);
-  ok(await sees(P, `${row('Grey Goose')} .ps`, 'Removed'), 'suggestion removed (there was enough)');
-  await P.click(`${row('Grey Goose')} button[aria-label="Back to the suggested 1 Grey Goose"]`);
-  ok(await valueIs(P, 'Grey Goose', '1'), '...and can be brought back');
-  await P.click(`${row('Grey Goose')} button[aria-label="One less Grey Goose"]`);
-  ok(await P.locator('.area > .prows > .phead.taken-h').count() === 1 && await P.locator(row('Grey Goose')).count() === 1, 'a removed suggestion stays at the top (nothing jumps)');
+  await P.click(`${row('Patron Silver')} button[aria-label="One less Patron Silver"]`);
+  ok(await sees(P, `${row('Patron Silver')} .ps`, 'Removed'), 'Patron: suggestion removed (there was enough)');
+  await P.click(`${row('Patron Silver')} button[aria-label="Back to the suggested 1 Patron Silver"]`);
+  ok(await valueIs(P, 'Patron Silver', '1'), '...and can be brought back');
+  await P.click(`${row('Patron Silver')} button[aria-label="One less Patron Silver"]`);
+  ok(await P.locator('.area > .prows > .phead.taken-h').count() === 1 && await P.locator(row('Patron Silver')).count() === 1, 'a removed suggestion stays at the top (nothing jumps)');
   await P.screenshot({ path: `${OUT}/p13-boh.png`, fullPage: true });
   await P.setViewportSize({ width: 1366, height: 900 }); await P.waitForTimeout(250); await P.screenshot({ path: `${OUT}/p13-boh-desktop.png` });
   await P.setViewportSize(devices['iPhone 13'].viewport);
 
   // Collect downstairs
-  await P.click('.rbar .stage:has-text("Collect")'); await P.waitForSelector('.room');
+  await P.click('.rbar .stage:has-text("Downstairs")'); await P.waitForSelector('.room');
   const r2 = await rooms(P);
   ok(JSON.stringify(r2.map(([a, l]) => [a.toLowerCase(), [...l].sort()])) === JSON.stringify([
     ['alcohol storeroom', ['1 bottle Vanilla Syrup', '2 cans Curatif Negroni', '3 bottles Red Claw Shiraz']],
     ['walk in fridge(downstairs)', ['1 pack Kirks Indian Tonic Water', '1 slab Mount Franklin Still Water', '4 bottles Mount Franklin Sparkling Water 330ml']]]), 'downstairs list: ' + JSON.stringify(r2));
-  ok(!JSON.stringify(r2).includes('Heineken') && !JSON.stringify(r2).includes('Grey Goose'), 'no beer singles; the removed Grey Goose is gone');
+  ok(!JSON.stringify(r2).includes('Heineken') && !JSON.stringify(r2).includes('Patron') && !JSON.stringify(r2).includes('Grey Goose'),
+    'no beer singles; the removed Patron is off the list; nothing for the Grey Goose that wasn\'t there');
   for (const l of ['Red Claw Shiraz', 'Curatif Negroni', 'Vanilla Syrup', 'Kirks Indian Tonic Water', 'Mount Franklin Sparkling Water 330ml', 'Mount Franklin Still Water']) await P.click(`${line(l)} button.l-all`);
   ok(await sees(P, '.dock', '6 of 6 resolved'), 'all 6 collected');
   await P.screenshot({ path: `${OUT}/p13-collect.png`, fullPage: true });
