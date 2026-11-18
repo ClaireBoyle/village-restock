@@ -5,15 +5,15 @@
 --
 -- Coffee cupboard (new area, just before the Back bench): the cupboard next to the coffee machine.
 --   Sugar container (moved from the Back bench; still a "Needs refill" task from the upstairs cupboard),
---   then the overflow Coffee Beans, Hot Chocolate Powder and Lemon Lime Cordial (staff enter what's
+--   then the overflow Coffee Beans and Hot Chocolate Powder (both in bags) and Lemon Lime Cordial (staff enter what's
 --   needed; collected from Dry storage).
 --
 -- Back bench, from the sink to the milkshake machine:
 --   Liqueurs & Vermouth       the bench's liqueurs and Martini Rosso, then Noilly Prat, Campari, Aperol,
 --                             Disaronno, Vok White Crème de Cacao, De Kuyper Crème de Café,
 --                             De Kuyper Blue Curaçao, De Kuyper Wild Strawberry, De Kuyper Triple Sec
---   Cocktail Syrups & Mixers  Raspberry, Elderflower, Rose, Pure Cane Sugar, then Cawsey’s Grenadine,
---                             Master of Mixes Margarita Mixer
+--   Cocktail Syrups & Mixers  Monin Passion Fruit Purée, Cawsey’s Grenadine, Raspberry, Elderflower, Rose,
+--                             Pure Cane Sugar, Master of Mixes Margarita Mixer
 --   Spirits                   the bench's spirits
 --   Red Wines                 the bench's red wines
 --   Milkshake Syrups & Flake  the 8 milkshake syrups, then the Cadbury Flake container
@@ -22,6 +22,8 @@
 --   sink): e.g. Noilly Prat, Campari, Aperol, Martini Rosso, Disaronno … Frangelico, Vok, then the
 --   De Kuyper bottles. Anything else on the bench keeps its order, at the end of its group.
 --   Running this again puts the bench back in this order (fine-tune afterwards in Admin → Arrange).
+-- Back shelves (the glass shelf): St-Germain added between Kraken and Grey Goose, where it stands.
+--   Nothing else on the Back shelves moves.
 -- * Existing products keep their record, storeroom and pickup (e.g. "grab it from the Spirits cupboard").
 --   New bottles are staff-entered and collected from the Alcohol storeroom.
 do $$
@@ -29,11 +31,11 @@ declare
   dept uuid := (select id from departments where lower(name) = 'gold class bar');
   alc uuid := (select id from storage_locations where lower(name) = 'alcohol storeroom');
   dry uuid := coalesce((select id from storage_locations where lower(name) = 'dry storage'), (select id from storage_locations where lower(name) = 'alcohol storeroom'));
-  bench uuid; ups uuid; coffee uuid; p uuid; pl uuid; cat uuid; r record; g text; k int := 0; i int; s int;
+  bench uuid; ups uuid; coffee uuid; shelves uuid; anchor int; p uuid; pl uuid; cat uuid; r record; g text; k int := 0; i int; s int;
   -- Coffee cupboard overflow: name, unit (one), unit (more)
   cupboard text[][] := array[
     ['Coffee Beans', 'bag', 'bags'],
-    ['Hot Chocolate Powder', 'tub', 'tubs'],
+    ['Hot Chocolate Powder', 'bag', 'bags'],
     ['Lemon Lime Cordial', 'bottle', 'bottles']
   ];
   -- name, group, category
@@ -48,7 +50,8 @@ declare
     ['De Kuyper Wild Strawberry', 'L', 'Liqueurs'],
     ['De Kuyper Triple Sec', 'L', 'Liqueurs'],
     ['Cawsey’s Grenadine', 'C', 'Syrups'],
-    ['Master of Mixes Margarita Mixer', 'C', 'Syrups']
+    ['Master of Mixes Margarita Mixer', 'C', 'Syrups'],
+    ['Monin Passion Fruit Purée', 'C', 'Syrups']
   ];
   groups text[] := array['L', 'C', 'S', 'R', 'M', 'Z'];
   -- The bench left to right, from the sink to the milkshake machine (group, name).
@@ -57,7 +60,7 @@ declare
     ['L', 'Malibu'], ['L', 'Kahlua'], ['L', 'Baileys'], ['L', 'Hellyers Road Whisky Cream Liqueur'], ['L', 'Frangelico'],
     ['L', 'Vok White Crème de Cacao'], ['L', 'De Kuyper Blue Curaçao'], ['L', 'De Kuyper Wild Strawberry'],
     ['L', 'De Kuyper Crème de Café'], ['L', 'De Kuyper Triple Sec'],
-    ['C', 'Cawsey’s Grenadine'], ['C', 'Raspberry Syrup'], ['C', 'Elderflower Syrup'], ['C', 'Rose Syrup'],
+    ['C', 'Monin Passion Fruit Purée'], ['C', 'Cawsey’s Grenadine'], ['C', 'Raspberry Syrup'], ['C', 'Elderflower Syrup'], ['C', 'Rose Syrup'],
     ['C', 'Pure Cane Sugar Syrup'], ['C', 'Master of Mixes Margarita Mixer'],
     ['S', '42 Below'], ['S', 'Bacardi Carta Blanca'], ['S', 'Jack Daniels'], ['S', 'Jim Beam White Label'], ['S', 'Bombay Sapphire'],
     ['R', 'Alexander Hill Shiraz'], ['R', 'Red Claw Shiraz'], ['R', 'Red Claw Pinot Noir'], ['R', 'Heathcote Estate Shiraz'],
@@ -178,6 +181,37 @@ begin
       heading = case when r.n = 1 then heads[array_position(groups, coalesce(r.grp, 'Z'))] else null end
       where id = r.id;
   end loop;
+
+  -- Hot chocolate comes in bags (fixes an earlier version of this script that used tubs).
+  update products set unit_singular = 'bag', unit_plural = 'bags'
+    where department_id = dept and lower(name) = 'hot chocolate powder' and unit_plural = 'tubs';
+
+  -- 5. St-Germain on the Back shelves (glass shelf), between Kraken and Grey Goose.
+  shelves := (select id from check_areas where department_id = dept and active and lower(name) = 'back shelves' limit 1);
+  if shelves is not null then
+    p := (select id from products where department_id = dept
+            and regexp_replace(translate(lower(name), 'èéêëçàâ', 'eeeecaa'), '[^a-z]', '', 'g') in ('stgermain', 'stgermainelderflowerliqueur')
+          order by (status = 'active') desc, created_at limit 1);
+    if p is null then
+      insert into categories (department_id, name, sort_order) select dept, 'Liqueurs', 100
+        where not exists (select 1 from categories where department_id = dept and lower(name) = 'liqueurs');
+      insert into products (department_id, category_id, name, unit_singular, unit_plural, method, default_location_id, sort_order)
+        values (dept, (select id from categories where department_id = dept and lower(name) = 'liqueurs'), 'St-Germain', 'bottle', 'bottles', 'manual', alc, 995)
+        returning id into p;
+    else
+      update products set status = 'active' where id = p;
+    end if;
+    if not exists (select 1 from product_placements where product_id = p and check_area_id = shelves) then
+      anchor := coalesce((select x.sort_order from product_placements x join products pr on pr.id = x.product_id
+                          where x.check_area_id = shelves and lower(pr.name) like 'kraken%' limit 1),
+                         (select max(sort_order) from product_placements where check_area_id = shelves), 0);
+      update product_placements set sort_order = sort_order + 1 where check_area_id = shelves and sort_order > anchor;
+      insert into product_placements (product_id, check_area_id, sort_order, pickup_area_id, pickup_suggest)
+        select p, shelves, anchor + 1, c.id, c.id is not null
+        from (select (select x.check_area_id from product_placements x join check_areas a on a.id = x.check_area_id and a.active
+                      where x.product_id = p and a.parent_area_id = ups limit 1) as id) c;
+    end if;
+  end if;
 
   -- 4. A one-line route (only replaces the earlier wording).
   update check_areas set guide_text = 'From the sink to the milkshake machine, left to right. Add only what needs topping up.'

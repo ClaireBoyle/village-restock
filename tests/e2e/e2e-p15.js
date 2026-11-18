@@ -54,19 +54,24 @@ const waitCur = async (P, name) => { await P.waitForSelector(`.area-btn.cur:has-
   const heads = bench.filter((x) => x.startsWith('# ')).map((x) => x.slice(2));
   ok(JSON.stringify(heads) === JSON.stringify(['Liqueurs & Vermouth', 'Cocktail Syrups & Mixers', 'Spirits', 'Red Wines', 'Milkshake Syrups & Flake']), 'Back bench stops: ' + heads.join(' → '));
   const items = bench.filter((x) => !x.startsWith('# '));
-  const added = ['Noilly Prat', 'Campari', 'Aperol', 'Disaronno', 'Vok White Crème de Cacao', 'De Kuyper Crème de Café', 'De Kuyper Blue Curaçao', 'De Kuyper Wild Strawberry', 'De Kuyper Triple Sec', 'Cawsey’s Grenadine', 'Master of Mixes Margarita Mixer'];
-  ok(added.every((n) => items.includes(n)), 'the 11 bench bottles are on the Back bench');
+  const added = ['Monin Passion Fruit Purée', 'Noilly Prat', 'Campari', 'Aperol', 'Disaronno', 'Vok White Crème de Cacao', 'De Kuyper Crème de Café', 'De Kuyper Blue Curaçao', 'De Kuyper Wild Strawberry', 'De Kuyper Triple Sec', 'Cawsey’s Grenadine', 'Master of Mixes Margarita Mixer'];
+  ok(added.every((n) => items.includes(n)), 'the 12 bench bottles are on the Back bench');
   const groupOf = (n) => { let g = ''; for (const x of bench) { if (x.startsWith('# ')) g = x.slice(2); else if (x === n) return g; } return null; };
   ok(groupOf('De Kuyper Crème de Café') === 'Liqueurs & Vermouth' && groupOf('Noilly Prat') === 'Liqueurs & Vermouth' && groupOf('Cawsey’s Grenadine') === 'Cocktail Syrups & Mixers' && groupOf('Master of Mixes Margarita Mixer') === 'Cocktail Syrups & Mixers',
     'Crème de Café and vermouth under Liqueurs; Grenadine and Margarita Mixer under Cocktail Syrups & Mixers');
   ok(JSON.stringify(items.slice(0, 5)) === JSON.stringify(['Noilly Prat', 'Campari', 'Aperol', 'Martini Rosso', 'Disaronno'])
-    && JSON.stringify(items.slice(11, 17)) === JSON.stringify(['Vok White Crème de Cacao', 'De Kuyper Blue Curaçao', 'De Kuyper Wild Strawberry', 'De Kuyper Crème de Café', 'De Kuyper Triple Sec', 'Cawsey’s Grenadine']),
+    && JSON.stringify(items.slice(11, 17)) === JSON.stringify(['Vok White Crème de Cacao', 'De Kuyper Blue Curaçao', 'De Kuyper Wild Strawberry', 'De Kuyper Crème de Café', 'De Kuyper Triple Sec', 'Monin Passion Fruit Purée']) && items[17] === 'Cawsey’s Grenadine',
     'left to right from the sink, as on the bench: ' + items.slice(0, 6).join(', ') + ' …');
   ok(items.indexOf('Alexander Hill Shiraz') + 5 === items.indexOf('Mt Yengo Chilled Shiraz') && items.indexOf('42 Below') < items.indexOf('Bombay Sapphire'), 'red wines and spirits left to right too');
   ok(items[items.length - 1] === 'Cadbury Flake container' && !items.includes('Sugar container'), 'Flake container last (by the milkshake machine); sugar is in the Coffee cupboard');
   ok(!items.includes('Grey Goose') && !items.includes('Patron Silver'), 'glass-shelf bottles stay on Back shelves');
   const [{ n: dup }] = await sql`select count(*)::int as n from (select lower(p.name) from products p join departments d on d.id = p.department_id where d.name = 'Gold Class Bar' and p.status = 'active' group by 1 having count(*) > 1) x`;
   ok(dup === 0, 'no duplicate products after two runs');
+  const shelf = (await sql`select p.name, coalesce(pl.unit_plural, p.unit_plural) as unit from product_placements pl join products p on p.id = pl.product_id join check_areas a on a.id = pl.check_area_id
+    join departments d on d.id = a.department_id where d.name = 'Gold Class Bar' and a.name = 'Back shelves' order by pl.sort_order`).map((r) => r.name);
+  ok(shelf.indexOf('St-Germain') === shelf.indexOf('Kraken Black Spiced') + 1 && shelf.indexOf('St-Germain') + 1 === shelf.indexOf('Grey Goose'), 'St-Germain on the Back shelves between Kraken and Grey Goose');
+  const [hc] = await sql`select unit_plural from products p join departments d on d.id = p.department_id where d.name = 'Gold Class Bar' and p.name = 'Hot Chocolate Powder'`;
+  ok(hc?.unitPlural === 'bags', 'hot chocolate counted in bags');
   ok(await P.locator('.flow-end .area-skip-flow').isVisible(), 'Skip is still there (end of the list) for an area not checked');
   await P.click(`${row('De Kuyper Crème de Café')} button.padd`);
   await P.click(`${row('Red Claw Shiraz')} button.padd`);
