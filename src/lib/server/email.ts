@@ -47,6 +47,10 @@ export interface RestockEmailInput {
   /** Comments staff typed when finishing. */
   note?: string | null;
   link: string | null;
+  /** An area restock (e.g. Candy Bar's confection stand) rather than a full restock. */
+  areaRestock?: boolean;
+  /** Candy Bar wording: "Low stock" instead of "Running low". */
+  lowStockWording?: boolean;
 }
 
 /** The email managers receive. Leads with what's out of stock (red) and running low (orange). */
@@ -56,18 +60,23 @@ export function buildRestockEmail(i: RestockEmailInput): { subject: string; html
   const other = i.outcomes.filter((o) => o.status === 'not_topped_up');
   // The finish time in the subject gives every restock its own email in Gmail/Outlook.
   // With the same subject they get grouped, and repeated sections are hidden behind "...".
-  const subject = `${i.departmentName} restock ${i.finishedLabel}: ${out.length ? `${out.length} out of stock` : low.length ? `${low.length} running low` : 'all stocked'}${out.length && low.length ? `, ${low.length} running low` : ''}`;
+  const lowWord = i.lowStockWording ? 'low stock' : 'running low';
+  const subject = `${i.departmentName} restock ${i.finishedLabel}: ${out.length ? `${out.length} out of stock` : low.length ? `${low.length} ${lowWord}` : 'all stocked'}${out.length && low.length ? `, ${low.length} ${lowWord}` : ''}`;
 
   const shelf = (o: StockOutcome) => (o.onShelf !== null && o.target ? ` (${n(o.onShelf)} of ${n(o.target)} on the shelf)` : '');
-  const outLine = (o: StockOutcome) => `${o.productName}: none left in the storeroom${shelf(o)}`;
-  const lowLine = (o: StockOutcome) => `${o.productName}: storeroom had ${n(o.got)}, short ${n(o.short)} ${unit(o, o.short)}${shelf(o)}`;
+  const outDetail = (o: StockOutcome) => `${o.noneOnDisplay ? 'None on display and none in the storeroom' : 'None left in the storeroom'}${shelf(o)}`;
+  const lowDetail = (o: StockOutcome) => `${o.got === 0 ? 'None collected' : `Storeroom had ${n(o.got)}`}, short ${n(o.short)} ${unit(o, o.short)}${shelf(o)}`;
+  const outLine = (o: StockOutcome) => `${o.productName}: ${outDetail(o).replace(/^N/, 'n')}`;
+  const lowLine = (o: StockOutcome) => `${o.productName}: ${lowDetail(o).replace(/^N/, 'n').replace(/^S/, 's')}`;
+  const lowTitle = i.lowStockWording ? 'Low stock' : 'Running low';
+  const finishedWhat = i.areaRestock ? 'Restock finished' : 'Full restock finished';
 
-  const T: string[] = [`${i.departmentName}: full restock finished ${i.finishedLabel}`];
+  const T: string[] = [`${i.departmentName}: ${finishedWhat.toLowerCase()} ${i.finishedLabel}`];
   if (i.people.length) T.push(`Staff: ${i.people.join(', ')}`);
   if (i.exceptionReason) T.push(`Finished with exceptions: ${i.exceptionReason}`);
   if (i.note) T.push('', 'COMMENTS FROM STAFF', i.note);
   if (out.length) { T.push('', `OUT OF STOCK (${out.length})`); for (const o of out) { T.push(`- ${outLine(o)}`); if (o.affects.length) T.push(`  Set as sold out: ${o.affects.join(', ')}`); } }
-  if (low.length) { T.push('', `RUNNING LOW (${low.length})`); for (const o of low) T.push(`- ${lowLine(o)}`); }
+  if (low.length) { T.push('', `${lowTitle.toUpperCase()} (${low.length})`); for (const o of low) T.push(`- ${lowLine(o)}`); }
   if (!out.length && !low.length) T.push('', 'Nothing low or out of stock.');
   if (other.length) T.push('', `Collection incomplete (not a storeroom shortage): ${other.map((o) => o.productName).join(', ')}`);
   if (i.notChecked.length) T.push('', `Not checked: ${i.notChecked.join('; ')}`);
@@ -88,15 +97,15 @@ export function buildRestockEmail(i: RestockEmailInput): { subject: string; html
     <div style="background:linear-gradient(115deg,#101C55 0%,#2446B8 48%,#4588F4 100%);border-radius:18px;padding:18px 20px;color:#fff;margin-bottom:14px">
       <div style="font-size:13px;opacity:.85">Village Restock</div>
       <div style="font-size:22px;font-weight:700;margin-top:2px">${esc(i.departmentName)}</div>
-      <div style="font-size:14px;opacity:.9;margin-top:4px">Full restock finished ${esc(i.finishedLabel)}${i.people.length ? ` &middot; ${esc(i.people.join(', '))}` : ''}</div>
+      <div style="font-size:14px;opacity:.9;margin-top:4px">${finishedWhat} ${esc(i.finishedLabel)}${i.people.length ? ` &middot; ${esc(i.people.join(', '))}` : ''}</div>
     </div>
     ${i.exceptionReason ? `<div style="background:#FDF0DA;border-radius:12px;padding:10px 14px;margin-bottom:14px;color:#8A5300;font-size:14px"><b>Finished with exceptions:</b> ${esc(i.exceptionReason)}</div>` : ''}
     ${i.note ? `<div style="background:#fff;border:2px solid #C9D6F5;border-radius:16px;padding:14px 18px;margin:0 0 14px">
       <div style="font-size:15px;font-weight:700;color:#2446B8;margin:0 0 6px">Comments from staff</div>
       <div style="font-size:15px;color:#17213B;white-space:pre-wrap;line-height:1.45">${esc(i.note)}</div>${uniq}</div>` : ''}
-    ${out.length ? box('#FDE6E4', '#E0716A', '#9F2620', `Out of stock (${out.length})`, out.map((o) => item(o.productName, `${o.noneOnDisplay ? 'None on display and none in the storeroom' : 'None left in the storeroom'}${shelf(o)}`,
+    ${out.length ? box('#FDE6E4', '#E0716A', '#9F2620', `Out of stock (${out.length})`, out.map((o) => item(o.productName, outDetail(o),
       o.affects.length ? `<div style="font-size:14px;color:#9F2620;margin-top:4px">Set as sold out: <b>${esc(o.affects.join(', '))}</b></div>` : '')).join('')) : ''}
-    ${low.length ? box('#FFF1D6', '#F0A930', '#7A4300', `Running low (${low.length})`, low.map((o) => item(o.productName, `${o.got === 0 ? 'None collected' : `Storeroom had ${n(o.got)}`}, short ${n(o.short)} ${unit(o, o.short)}${shelf(o)}`)).join('')) : ''}
+    ${low.length ? box('#FFF1D6', '#F0A930', '#7A4300', `${lowTitle} (${low.length})`, low.map((o) => item(o.productName, lowDetail(o))).join('')) : ''}
     ${!out.length && !low.length ? `<div style="background:#E1F2E8;border-radius:16px;padding:16px 18px;margin-bottom:14px;color:#177245;font-size:17px;font-weight:700">Nothing low or out of stock${uniq}</div>` : ''}
     ${other.length ? `<p style="font-size:13px;color:#56607A;margin:0 0 8px"><b>Collection incomplete</b> (not a storeroom shortage): ${esc(other.map((o) => o.productName).join(', '))}</p>` : ''}
     ${i.notChecked.length ? `<p style="font-size:13px;color:#56607A;margin:0 0 8px"><b>Not checked:</b> ${esc(i.notChecked.join('; '))}</p>` : ''}
@@ -114,9 +123,12 @@ export function needsManagerEmail(i: RestockEmailInput): boolean {
   return i.outcomes.length > 0 || !!i.note?.trim() || !!i.exceptionReason || i.notChecked.length > 0;
 }
 
-/** Add the email to the outbox inside the finishing transaction. Only if switched on with an address. */
-export async function queueRestockEmail(tx: Tx, sessionId: string, finishedAt: string, input: RestockEmailInput) {
-  if (!needsManagerEmail(input)) return;
+/**
+ * Add the email to the outbox inside the finishing transaction. Only if switched on with an address.
+ * `always`: the department wants an email after every finished restock, even a clean one.
+ */
+export async function queueRestockEmail(tx: Tx, sessionId: string, finishedAt: string, input: RestockEmailInput, always = false) {
+  if (!always && !needsManagerEmail(input)) return;
   const rows = await tx`select key, value from app_settings where key in ('manager_email', 'manager_email_enabled')`;
   const to = String(rows.find((r) => r.key === 'manager_email')?.value ?? '').trim();
   const enabled = rows.find((r) => r.key === 'manager_email_enabled')?.value === true;

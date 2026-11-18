@@ -299,7 +299,8 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
   // Full and area restocks: queue the manager email in this same transaction.
   if (s.kind !== 'quick' && view) {
     const [row] = await tx`select people from restock_sessions where id = ${s.id}`;
-    const [dept] = await tx`select name from departments where id = ${s.departmentId}`;
+    const [dept] = await tx`select name, coalesce((to_jsonb(departments)->>'email_every_restock')::boolean, false) as email_every_restock
+      from departments where id = ${s.departmentId}`;
     const notChecked: string[] = [];
     for (const { area, placements: ps } of view.areas) {
       const st = areaStatus(recorded.get(area.id), ps, items);
@@ -318,9 +319,10 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
       departmentName: `${String(dept?.name ?? view.department.name)}${s.kind === 'area' && view.areas[0] ? ` · ${view.areas[0].area.name}` : ''}`,
       finishedLabel: `${new Date(at).toLocaleDateString('en-AU', { timeZone: cat.settings.timeZone, weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '')}, ${new Date(at).toLocaleTimeString('en-AU', { timeZone: cat.settings.timeZone, hour: 'numeric', minute: '2-digit' }).toLowerCase()}`,
       people: (row?.people as string[]) ?? [], exceptionReason: finalReason,
+      areaRestock: s.kind === 'area', lowStockWording: !!view.department.noneOnDisplay,
       outcomes: stockOutcomes(lines, items, view.byId, !!view.department.noneOnDisplay), notChecked, note: comment,
       link: host ? `https://${host}/admin/restocks/${s.id}` : null,
-    });
+    }, Boolean(dept?.emailEveryRestock));
   }
 }
 

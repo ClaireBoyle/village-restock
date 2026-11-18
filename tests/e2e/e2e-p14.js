@@ -23,7 +23,10 @@ const fewer = async (P, n, total, got) => {
 
 (async () => {
   require('fs').mkdirSync(OUT, { recursive: true });
-  await sql`update departments set none_on_display = true where name = 'Candy Bar'`;
+  await sql`update departments set none_on_display = true, email_every_restock = true where name = 'Candy Bar'`;
+  // Manager emails switched on, to a placeholder address (nothing is actually sent in tests).
+  await sql`insert into app_settings (key, value) values ('manager_email', '"manager@example.com"'::jsonb), ('manager_email_enabled', 'true'::jsonb)
+    on conflict (key) do update set value = excluded.value`;
   const b = await chromium.launch(); const errs = [];
   const c = await b.newContext({ ...devices['iPhone 13'] }); const P = await c.newPage(); P.on('pageerror', (e) => errs.push(e.message));
   await P.goto(B + '/'); await P.waitForSelector('.dcard2');
@@ -75,7 +78,20 @@ const fewer = async (P, n, total, got) => {
   const sh = await waitDb(() => sql`select product_name, none_on_display, shortfall_qty from shortages order by product_name`, (r) => r.length === 2);
   ok(sh.length === 2 && sh.find((x) => x.productName === 'Maltesers')?.noneOnDisplay === true && sh.find((x) => x.productName === 'Kit Kat')?.noneOnDisplay === false, 'Shortages: Maltesers out of stock (none on display), Kit Kat low');
   const [mail] = await waitDb(() => sql`select subject, body_text as text from email_outbox order by created_at desc limit 1`, (r) => r.length === 1, 4000);
-  ok(!mail || (mail.text.includes('none on display') && mail.text.includes('Kit Kat')), 'manager email says "none on display"');
+  ok(mail && mail.text.includes('none on display') && mail.text.includes('Kit Kat'), 'manager email says "none on display"');
+
+  // A clean area restock (everything collected) still emails managers: Candy Bar emails after every restock.
+  await P.click('.dock button:has-text("Back to Candy Bar"), .dock button:has-text("Done"), a:has-text("Back to Candy Bar")').catch(() => {});
+  await P.goto(B + '/'); await P.click('.dcard2:has-text("Candy Bar")'); await P.waitForSelector('.acard');
+  await P.click(`${card('FOH drinks fridge')} button:has-text("Start")`); await P.waitForSelector('article.prow');
+  const first = await P.locator('article.prow h3').first().textContent();
+  await add(P, first, 2);
+  await P.click('.dock .dock-acts button:has-text("Collect")'); await P.waitForSelector('.line');
+  await P.click(`${line(first)} button.l-all`);
+  await P.click('.dock .dock-acts button:has-text("Review")'); await P.waitForSelector('.finish-title');
+  await P.click('.dock button.good'); await P.waitForSelector('.finish-hero');
+  const clean = await waitDb(() => sql`select o.subject from email_outbox o join restock_sessions s on s.id = o.session_id where s.area_name = 'FOH drinks fridge'`, (r) => r.length === 1, 8000);
+  ok(clean.length === 1 && /all stocked/.test(clean[0].subject), 'clean restock (nothing short) is emailed too: ' + (clean[0]?.subject ?? 'no email'));
   ok(!errs.length, 'no page errors ' + errs.join(' | '));
   await b.close(); await sql.end();
 })().catch(async (e) => { console.error(e); await sql.end(); process.exit(1); });
