@@ -37,7 +37,7 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
         {lines.length === 0 ? <p className="empty">{session.kind === 'area' ? 'Nothing to collect. Nothing was entered as needed.' : 'Nothing to collect. Everything checked is at target.'}</p> : (
           <div className="rooms">
             {groups.map((g) => <Room key={g.lines[0].locationId ?? g.name} name={g.name} lines={g.lines} items={items} write={write} oneArea={oneArea} displayRule={!!view.department.noneOnDisplay}
-              note={g.lines[0].locationId ? view.locationNotes.get(g.lines[0].locationId) : undefined} />)}
+              note={roomNote(g.lines, view.locationNotes)} />)}
           </div>
         )}
       </main>
@@ -48,6 +48,16 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
       </Dock>
     </>
   );
+}
+
+/**
+ * A storeroom's reminder (e.g. Dry storage: "Use stock from the open-box shelf first…"). Straws aren't
+ * picked from open boxes, so a room with only straws on the list doesn't show it.
+ */
+function roomNote(lines: CollectionLine[], notes: Map<string, string>) {
+  const id = lines[0]?.locationId;
+  if (!id || !notes.has(id)) return undefined;
+  return lines.every((l) => /\bstraws?\b/i.test(l.productName)) ? undefined : notes.get(id);
 }
 
 /** One storeroom: header with progress, folds away once everything in it is collected. */
