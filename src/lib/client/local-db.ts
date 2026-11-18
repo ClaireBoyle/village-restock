@@ -29,6 +29,8 @@ export interface LocalSession {
   note?: string | null;
   /** "Completed by" on the Finish screen: a draft while open, then the name saved with the finished restock. */
   completedBy?: string | null;
+  /** Defrost rows: tomorrow's forecast admits, entered once per restock (blank = not entered). */
+  forecastAdmits?: number | null;
   /** The area this device last had open. */
   curAreaId: string | null;
   updatedAt: string;

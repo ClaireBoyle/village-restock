@@ -7,7 +7,38 @@ export interface ProductFormData {
   id?: string; name: string; categoryId: string | null; unitSingular: string; unitPlural: string;
   method: 'par' | 'manual' | 'routine'; allowDecimal: boolean; instructions: string; defaultLocationId: string | null;
   affects: string[];
-  placements: { areaId: string; par: number | null; locationId: string | null }[];
+  placements: { areaId: string; par: number | null; locationId: string | null; defrost?: DefrostFormData }[];
+}
+
+/** Defrost details for one area (all text as typed; blank = not set). */
+export interface DefrostFormData { grab: string; fallback: string; put: string; readySingular: string; readyPlural: string; readyPer: string; targets: string }
+
+/** Grab / If empty / Put, and the admits targets, for a "staff enter" product in an area (e.g. Gold Class Kitchen → Defrost). */
+function DefrostFields({ areaId, d, unitPlural }: { areaId: string; d?: DefrostFormData; unitPlural: string }) {
+  const any = !!d && Object.values(d).some((v) => v.trim());
+  const f = (k: string) => `${k}_${areaId}`;
+  return (
+    <details className="defrost-fields" open={any} style={{ gridColumn: '1 / -1' }}>
+      <summary><b>Defrost details</b> <span className="meta">(optional: where to grab it, where it goes, admits targets)</span></summary>
+      <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', marginTop: 10 }}>
+        <div className="field"><label htmlFor={f('grab')}>Grab from</label>
+          <input id={f('grab')} name={f('grab')} defaultValue={d?.grab} maxLength={300} placeholder="e.g. Freezer 1, lower-left door" /></div>
+        <div className="field"><label htmlFor={f('fallback')}>If that&rsquo;s empty</label>
+          <input id={f('fallback')} name={f('fallback')} defaultValue={d?.fallback} maxLength={300} placeholder="e.g. Downstairs walk-in freezer" /></div>
+        <div className="field" style={{ gridColumn: '1 / -1' }}><label htmlFor={f('put')}>Put it (where it defrosts)</label>
+          <input id={f('put')} name={f('put')} defaultValue={d?.put} maxLength={300} placeholder="e.g. Upstairs walk-in fridge" /></div>
+        <div className="field"><label htmlFor={f('rus')}>What&rsquo;s ready is counted in (one)</label>
+          <input id={f('rus')} name={f('rus')} defaultValue={d?.readySingular} maxLength={30} placeholder="Same as the unit" /></div>
+        <div className="field"><label htmlFor={f('rup')}>(more than one)</label>
+          <input id={f('rup')} name={f('rup')} defaultValue={d?.readyPlural} maxLength={30} placeholder="e.g. portions" /></div>
+        <div className="field"><label htmlFor={f('rper')}>How many of those in one {unitPlural ? unitPlural.replace(/s$/, '') : 'unit'}</label>
+          <input id={f('rper')} name={f('rper')} defaultValue={d?.readyPer} inputMode="decimal" className="tabular" placeholder="e.g. 8 portions a bag" /></div>
+        <div className="field" style={{ gridColumn: '1 / -1' }}><label htmlFor={f('tgt')}>Ready-stock targets by tomorrow&rsquo;s admits</label>
+          <textarea id={f('tgt')} name={f('tgt')} defaultValue={d?.targets} maxLength={400} style={{ minHeight: 70 }} placeholder={'One range per line, e.g.\n0-150: 24\n151+: 36'} />
+          <small>Staff enter tomorrow&rsquo;s admits once and count what&rsquo;s ready; the amount to pull is suggested (target minus ready, rounded up). Leave blank for staff to enter it themselves.</small></div>
+      </div>
+    </details>
+  );
 }
 
 const METHODS = [
@@ -103,6 +134,7 @@ export function ProductForm({ departmentId, product, areas, categories, location
                       {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
                     </select></div>
                 ) : <span />}
+                {on && method === 'manual' ? <DefrostFields areaId={a.id} d={pl?.defrost} unitPlural={unitPlural} /> : null}
               </div>
             );
           })}

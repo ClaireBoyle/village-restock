@@ -43,7 +43,8 @@ function shortagesOf(cat: Catalogue, d: CatDepartment, s: LocalSession | RemoteS
   const items = new Map<string, ItemState>((remote ? remote.items : localItems.filter((i) => i.sessionId === s.id)).map((r) => [r.placementId, { ...EMPTY_ITEM, ...r }]));
   const recorded = new Map<string, AreaStatus>((remote ? remote.areas : localAreas.filter((a) => a.sessionId === s.id))
     .filter((a) => a.status === 'complete' || a.status === 'skipped').map((a) => [a.areaId, a.status as AreaStatus]));
-  return shortageCount(s.kind, view, items, recorded);
+  const admits = 'forecastAdmits' in s ? s.forecastAdmits ?? null : null;
+  return shortageCount(s.kind, view, items, recorded, admits);
 }
 
 const t = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }).toLowerCase() : '');

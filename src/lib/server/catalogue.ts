@@ -1,5 +1,6 @@
 import { db, getSetting } from './db';
 import type { Catalogue } from '@/lib/catalogue-types';
+import { cleanTargets } from '@/lib/defrost-rows';
 
 export async function catalogueVersion(): Promise<number> {
   return Number(await getSetting<number>('catalogue_version', 1));
@@ -41,7 +42,11 @@ export async function loadCatalogue(): Promise<Catalogue> {
              (to_jsonb(pl)->>'heading') as heading,
              -- Refill FOH (migration 012): read via jsonb so the app still works before it runs
              (to_jsonb(pl)->>'pickup_area_id') as pickup_area_id, coalesce((to_jsonb(pl)->>'pickup_suggest')::boolean, false) as pickup_suggest,
-             (to_jsonb(pl)->>'unit_singular') as unit_singular, (to_jsonb(pl)->>'unit_plural') as unit_plural
+             (to_jsonb(pl)->>'unit_singular') as unit_singular, (to_jsonb(pl)->>'unit_plural') as unit_plural,
+             -- Defrost rows (migration 016)
+             (to_jsonb(pl)->>'grab_note') as grab_note, (to_jsonb(pl)->>'fallback_note') as fallback_note, (to_jsonb(pl)->>'put_note') as put_note,
+             (to_jsonb(pl)->>'ready_unit_singular') as ready_unit_singular, (to_jsonb(pl)->>'ready_unit_plural') as ready_unit_plural,
+             (to_jsonb(pl)->>'ready_per')::numeric as ready_per, coalesce(to_jsonb(pl)->'ready_targets', '[]'::jsonb) as ready_targets
       from product_placements pl
       join products p on p.id = pl.product_id and p.status = 'active'
       join check_areas a on a.id = pl.check_area_id and a.active
@@ -58,7 +63,9 @@ export async function loadCatalogue(): Promise<Catalogue> {
       defrostItems: defrostItems.map((r) => ({ ...r, weekdayDemand: r.weekdayDemand ?? {} })),
       generatedAt: new Date().toISOString(),
       settings: { timeZone: String(setting('timezone') ?? 'Australia/Melbourne'), cutoffHour: Number(setting('trading_day_cutoff_hour') ?? 5), defrostServiceTime: String(setting('defrost_service_time') ?? '11:00') },
-      departments, areas, locations, categories, products, placements,
+      departments, areas, locations, categories, products,
+      placements: placements.map((r) => ({ ...r, readyPer: r.readyPer === null ? null : Number(r.readyPer), readyTargets: cleanTargets(r.readyTargets) })),
     } as unknown as Catalogue;
   });
 }
+

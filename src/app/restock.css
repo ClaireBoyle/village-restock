@@ -1169,3 +1169,45 @@ button.pnote.open span{display:block}
 .grab .phead{margin:4px 2px 0}
 .bring-h{margin-top:14px}
 @media (max-width:640px){.sec-title{flex-wrap:wrap;row-gap:0}.sec-title small{flex-basis:100%;margin-left:26px}}
+
+/* Defrost rows (Gold Class Kitchen): Pull or Not needed, with Grab / If empty / Put on every row */
+.dr-pick{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.dr-pick:has(> .padd){flex-direction:row;align-items:center}
+.pnn{min-width:92px;height:44px;padding:0 12px;border-radius:12px;border:1px solid var(--hair);background:transparent;color:var(--ink-2);font-weight:600;font-size:14.5px;white-space:nowrap}
+.pnn.small{min-width:0;height:34px;font-size:13px;padding:0 10px}
+.pnn:active{transform:scale(.95)}
+.theme-navy .pnn{border-color:rgba(255,255,255,.16);color:rgba(255,255,255,.8)}
+.pstep button:disabled{opacity:.35}
+.card.prow.drow{row-gap:4px;padding-bottom:8px}
+.dr-body{display:flex;flex-direction:column;gap:6px;padding-left:56px}
+.dnotes{margin:0;display:grid;gap:2px;font-size:13px;line-height:1.35}
+.dnotes>div{display:grid;grid-template-columns:84px minmax(0,1fr);gap:6px;align-items:baseline}
+.dnotes dt{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;font-weight:700;color:var(--ink-2);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}
+.dnotes dt .ic{width:13px;height:13px;flex:none;color:var(--d-accent)}
+.dnotes dd{margin:0;color:var(--ink)}
+.dn-put dd{font-weight:600}
+.dr-ready{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:6px 8px;border-radius:10px;background:var(--surface-2)}
+.theme-navy .dr-ready{background:rgba(255,255,255,.06)}
+.dr-ready label{font-size:13px;font-weight:600}
+.dr-rbox{display:inline-flex;align-items:center;gap:6px}
+.dr-rbox small{font-size:12.5px;color:var(--ink-2)}
+.nbox{width:64px;height:40px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);text-align:center;font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink);padding:0 4px}
+.nbox:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+.pstep .nbox{width:52px;height:44px;border-radius:12px;font-size:20px}
+.nbox-err{display:block;font-size:12.5px;margin-top:2px}
+.dr-work{margin:0;font-size:12.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.dr-back{font-size:13px}
+.admits{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 10px;padding:10px 12px;border-radius:14px;border:1px solid var(--hair);background:var(--surface)}
+.admits.empty{border-color:color-mix(in srgb,var(--warn-fill) 45%,transparent);background:color-mix(in srgb,var(--warn-bg) 40%,var(--surface))}
+.theme-navy .admits{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1)}
+.admits label{display:flex;flex-direction:column;gap:2px}
+.admits label b{font-size:15.5px}
+.admits label small{font-size:12.5px;color:var(--ink-2)}
+.admits .nbox{width:84px;height:46px;font-size:20px}
+.l-dnotes{padding:0 10px 8px 10px;font-size:12.5px}
+@media (max-width:640px){
+  .dr-body{padding-left:0}
+  .dnotes>div{grid-template-columns:82px minmax(0,1fr)}
+  .dr-pick:has(> .padd){flex-direction:column;align-items:stretch}
+  .dr-pick:has(> .padd) .padd,.dr-pick:has(> .padd) .pnn{min-width:96px;height:40px}
+}

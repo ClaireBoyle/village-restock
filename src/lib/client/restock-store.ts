@@ -189,6 +189,18 @@ export async function finishSession(sessionId: string, exceptionReason: string |
   requestSync();
 }
 
+/** Tomorrow's forecast admits for this restock's defrost rows (blank = not entered). */
+export async function setAdmits(sessionId: string, admits: number | null, who: string) {
+  const db = localDb();
+  await db.transaction('rw', db.sessions, db.outbox, async () => {
+    const s = await db.sessions.get(sessionId);
+    if (!s) return;
+    await db.sessions.update(sessionId, { forecastAdmits: admits, people: addPerson(s, who), updatedAt: now() });
+    await queue({ type: 'session.admits', sessionId, admits }, who);
+  });
+  requestSync();
+}
+
 export async function reopenSession(sessionId: string, who: string) {
   const db = localDb();
   await db.transaction('rw', db.sessions, db.outbox, async () => {
@@ -213,6 +225,7 @@ export async function importRemote(remote: RemoteSession) {
     const pendingItems = new Set(pending.flatMap((r) => (r.op.type === 'item.set' ? [r.op.placementId] : [])));
     const pendingAreas = new Set(pending.flatMap((r) => (r.op.type === 'area.set' ? [r.op.areaId] : [])));
     const pendingSession = pending.some((r) => r.op.type === 'session.finish' || r.op.type === 'session.reopen');
+    const pendingAdmits = pending.some((r) => r.op.type === 'session.admits');
 
     const existing = await db.sessions.get(remote.id);
     const status = remote.status === 'unfinished' ? 'unfinished' : remote.status;
@@ -226,6 +239,8 @@ export async function importRemote(remote: RemoteSession) {
       note: pendingSession && existing ? existing.note ?? null : remote.note ?? existing?.note ?? null,
       // The same for "Completed by": a draft here wins until it's uploaded.
       completedBy: pendingSession && existing ? existing.completedBy ?? null : remote.completedBy ?? existing?.completedBy ?? null,
+      // Admits typed here win until they're uploaded.
+      forecastAdmits: pendingAdmits && existing ? existing.forecastAdmits ?? null : remote.forecastAdmits ?? null,
       selected: existing?.selected ?? [], curAreaId: existing?.curAreaId ?? null, updatedAt: remote.updatedAt,
     });
     for (const it of remote.items) {
@@ -256,7 +271,7 @@ export async function mergeSessionInto(fromId: string, intoId: string) {
     if (!from) return;
     const into = await db.sessions.get(intoId);
     if (!into) await db.sessions.put({ ...from, id: intoId });
-    else await db.sessions.update(intoId, { people: [...new Set([...into.people, ...from.people])], curAreaId: into.curAreaId ?? from.curAreaId });
+    else await db.sessions.update(intoId, { people: [...new Set([...into.people, ...from.people])], curAreaId: into.curAreaId ?? from.curAreaId, forecastAdmits: into.forecastAdmits ?? from.forecastAdmits ?? null });
     for (const it of await db.items.where('sessionId').equals(fromId).toArray()) {
       await db.items.put({ ...it, sessionId: intoId });
     }

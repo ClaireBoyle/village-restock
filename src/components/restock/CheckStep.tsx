@@ -4,13 +4,15 @@ import Link from 'next/link';
 import { Icon } from '@/components/Icon';
 import {
   EMPTY_ITEM, SKIP_REASONS, type ItemState, activePlacements, areaNotes, areaStatus, collectPlacements, collectionLines, isChecked, isRequired, needOf,
-  phaseAreas, refillLines, groupByStoreroom, lineState, type CollectionLine,
+  phaseAreas, refillLines, groupByStoreroom, lineState, usesAdmits, type CollectionLine,
 } from '@/lib/restock-logic';
+import { defrostRowInfo } from '@/lib/defrost-rows';
+import { AdmitsBox, DefrostRow } from './DefrostParts';
 import { Line } from './CollectStep';
 import { round2 } from '@/lib/restock-math';
-import { setArea, setItems, updateLocalSession } from '@/lib/client/restock-store';
+import { setAdmits, setArea, setItems, updateLocalSession } from '@/lib/client/restock-store';
 import { localDb } from '@/lib/client/local-db';
-import { PhotoZoom, ProductRow } from './ProductCard';
+import { PhotoZoom, ProductRow, ProductThumb } from './ProductCard';
 import { AREA_BADGE, Badge, Dock, Ring, timeOf } from './shared';
 import type { RestockCtx } from './RestockApp';
 
@@ -132,7 +134,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   const alsoEntered = (p: (typeof cur.placements)[number]) => {
     // Refill FOH: what was grabbed here for front of house is suggested (and says so).
     const sug = ctx.suggested.get(p.placementId);
-    if (sug) {
+    if (sug && !sug.defrost) {
       const taken = `${round2(sug.qty)} taken for ${sug.from.map((f) => f.areaName).join(', ')}`;
       const raw = ctx.rawItems.get(p.placementId)?.requestedQty ?? null;
       return raw === null ? `Suggested: ${taken}. Change it if more is needed, or remove it.` : raw === sug.qty ? taken : `${taken} (suggested ${round2(sug.qty)})`;
@@ -171,7 +173,13 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
     }
     return out;
   };
-  const renderRow = (p: (typeof cur.placements)[number], showArea = false) => (
+  const renderRow = (p: (typeof cur.placements)[number], showArea = false) => p.defrost && !items.get(p.placementId)?.conflict ? (
+    // Defrost rows: pull an amount or Not needed, with where it's from and where it goes.
+    <DefrostRow key={p.placementId} p={p} item={items.get(p.placementId) ?? EMPTY_ITEM} rawQty={ctx.rawItems.get(p.placementId)?.requestedQty ?? null}
+      suggestion={ctx.suggested.get(p.placementId)?.defrost} admits={session.forecastAdmits ?? null}
+      photo={p.photoPath ? <ProductThumb src={p.photoPath} name={p.productName} credit={p.photoCredit} className="pphoto" /> : <span className="pphoto ph" aria-hidden="true"><Icon name="box" /></span>}
+      onChange={(fields, resolve) => void onItem(p, fields, resolve)} />
+  ) : (
     <ProductRow key={p.placementId} p={p} showArea={showArea} item={items.get(p.placementId) ?? EMPTY_ITEM} note={alsoEntered(p) ?? fromCupboard(p) ?? notes.own.get(p.placementId)}
       suggestedQty={ctx.suggested.get(p.placementId)?.qty}
       onChange={(fields, resolve) => void onItem(p, fields, resolve)} />
@@ -231,7 +239,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
     <>
       <main className="wrap restock-main">
       {ctx.header}
-      {ctx.hasDefrost && !reminderHidden ? (
+      {ctx.hasDefrost && !reminderHidden && !ctx.placements.some((p) => p.defrost) ? (
         <aside className="kreminder" aria-label="Kitchen reminder">
           <Icon name="clock" />
           <p><b>Kitchen reminder:</b> Remember to check what needs defrosting for the next service and refill the freezer containers. You can use the Defrost Planner at any time.</p>
@@ -299,6 +307,11 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
               </button>
               <button className="ag-more linkbtn" onClick={() => setGuideOpen(!guideOpen)} tabIndex={-1} aria-hidden="true">{guideOpen ? 'Less' : 'More'}</button>
             </section>
+          ) : null}
+          {usesAdmits(cur.placements) ? (
+            // Tomorrow's forecast admits: once per restock, for every suggested amount.
+            <AdmitsBox admits={session.forecastAdmits ?? null} onSave={(n) => void setAdmits(session.id, n, who)}
+              missing={cur.placements.filter((p) => p.defrost && defrostRowInfo(p).canSuggest && (items.get(p.placementId) ?? EMPTY_ITEM).currentQty === null).length} />
           ) : null}
           {zoom && cur.area.guidePhotoPath ? <PhotoZoom src={cur.area.guidePhotoPath} title={`${cur.area.name} fully stocked`} onClose={() => setZoom(false)} /> : null}
 

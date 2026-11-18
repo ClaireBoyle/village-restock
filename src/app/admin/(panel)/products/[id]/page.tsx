@@ -7,6 +7,7 @@ import { ProductDelete } from '@/components/admin/ProductDelete';
 import { setProductStatus } from '@/app/actions/admin';
 import { db } from '@/lib/server/db';
 import { loadFormOptions } from '../load-form-options';
+import { cleanTargets, formatTargets } from '@/lib/defrost-rows';
 
 export default async function EditProduct({ params, searchParams }: {
   params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }>;
@@ -18,14 +19,24 @@ export default async function EditProduct({ params, searchParams }: {
   const [p] = await sql`
     select p.*, d.name as department_name from products p join departments d on d.id = p.department_id where p.id = ${id}`;
   if (!p) notFound();
-  const placements = await sql`select pl.check_area_id, pl.par_level, pl.location_id, a.name as area_name from product_placements pl join check_areas a on a.id = pl.check_area_id where pl.product_id = ${id}`;
+  // Defrost details (migration 016) are read via jsonb, so this page works before it runs.
+  const placements = await sql`select pl.check_area_id, pl.par_level, pl.location_id, a.name as area_name,
+      to_jsonb(pl)->>'grab_note' as grab_note, to_jsonb(pl)->>'fallback_note' as fallback_note, to_jsonb(pl)->>'put_note' as put_note,
+      to_jsonb(pl)->>'ready_unit_singular' as ready_unit_singular, to_jsonb(pl)->>'ready_unit_plural' as ready_unit_plural,
+      to_jsonb(pl)->>'ready_per' as ready_per, to_jsonb(pl)->'ready_targets' as ready_targets
+    from product_placements pl join check_areas a on a.id = pl.check_area_id where pl.product_id = ${id}`;
   const opts = await loadFormOptions(String(p.departmentId));
   const product: ProductFormData = {
     id, name: String(p.name), categoryId: (p.categoryId as string) ?? null, unitSingular: String(p.unitSingular),
     unitPlural: String(p.unitPlural), method: p.method as ProductFormData['method'], allowDecimal: Boolean(p.allowDecimal),
     instructions: String(p.instructions), defaultLocationId: (p.defaultLocationId as string) ?? null,
     affects: (p.affects as string[]) ?? [],
-    placements: placements.map((r) => ({ areaId: String(r.checkAreaId), par: r.parLevel as number | null, locationId: (r.locationId as string) ?? null })),
+    placements: placements.map((r) => ({ areaId: String(r.checkAreaId), par: r.parLevel as number | null, locationId: (r.locationId as string) ?? null,
+      defrost: {
+        grab: (r.grabNote as string) ?? '', fallback: (r.fallbackNote as string) ?? '', put: (r.putNote as string) ?? '',
+        readySingular: (r.readyUnitSingular as string) ?? '', readyPlural: (r.readyUnitPlural as string) ?? '',
+        readyPer: r.readyPer === null || r.readyPer === undefined ? '' : String(Number(r.readyPer)), targets: formatTargets(cleanTargets(r.readyTargets)),
+      } })),
   };
   const archived = p.status === 'archived';
 

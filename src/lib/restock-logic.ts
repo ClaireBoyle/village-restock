@@ -1,6 +1,7 @@
 // The rules of a restock, as pure functions shared by the device and the server.
 // No storage, no React: easy to test and to reason about.
-import type { Catalogue, CatArea, CatDepartment, RestockMethod } from './catalogue-types';
+import type { Catalogue, CatArea, CatDepartment, ReadyTarget, RestockMethod } from './catalogue-types';
+import { defrostSuggestion, type DefrostSuggestion } from './defrost-rows';
 import { formatQty, requiredForPar, round2 } from './restock-math';
 
 export type ShortReason = 'insufficient' | 'access' | 'time' | 'other';
@@ -64,6 +65,15 @@ export interface PlacementView {
   pickupSuggest?: boolean;
   photoPath: string | null;
   photoCredit?: string | null;
+  /** Defrost rows (Gold Class Kitchen): pull an amount or "Not needed", with where it's from and where it goes. */
+  defrost?: boolean;
+  grabNote?: string | null;
+  fallbackNote?: string | null;
+  putNote?: string | null;
+  readyUnitSingular?: string | null;
+  readyUnitPlural?: string | null;
+  readyPer?: number | null;
+  readyTargets?: ReadyTarget[];
 }
 
 /** What staff have recorded for one placement during a restock. Blank = not yet. */
@@ -126,7 +136,12 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
     const parent = all.find((x) => x.id === pid)!;
     return parent.parentAreaId && ids.has(parent.parentAreaId) ? null : pid;
   };
-  const placementsOf = (area: CatArea, screenAreaId: string, optional: boolean) => cat.placements
+  // An area with defrost rows (e.g. Defrost): every "staff enter" product in it is one, even one just added without notes.
+  const placementsOf = (area: CatArea, screenAreaId: string, optional: boolean) => {
+    const list = placementRows(area, screenAreaId, optional);
+    return list.some((p) => p.defrost) ? list.map((p) => (p.method === 'manual' && !p.defrost ? { ...p, defrost: true, readyTargets: [] } : p)) : list;
+  };
+  const placementRows = (area: CatArea, screenAreaId: string, optional: boolean) => cat.placements
     .filter((pl) => pl.checkAreaId === area.id && products.get(pl.productId)?.departmentId === departmentId)
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map((pl): PlacementView => {
@@ -148,6 +163,7 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
         photoCredit: p.photoCredit ?? null,
         heading: pl.heading?.trim() || null,
         screenAreaId, optional,
+        ...defrostFields(pl, p.method),
       };
     });
   const areas = all.filter((a) => !parentOf(a)).map((area) => {
@@ -173,6 +189,21 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
     locationNotes: new Map(cat.locations.filter((l) => l.collectNote?.trim()).map((l) => [l.id, l.collectNote!.trim()])),
   };
 }
+
+/** Defrost notes and targets, only on "staff enter" products that have any. */
+function defrostFields(pl: Catalogue['placements'][number], method: RestockMethod): Partial<PlacementView> {
+  const t = (v: string | null | undefined) => v?.trim() || null;
+  const grabNote = t(pl.grabNote), fallbackNote = t(pl.fallbackNote), putNote = t(pl.putNote);
+  const readyTargets = pl.readyTargets ?? [];
+  if (method !== 'manual' || !(grabNote || putNote || fallbackNote || readyTargets.length)) return {};
+  return {
+    defrost: true, grabNote, fallbackNote, putNote, readyTargets,
+    readyUnitSingular: t(pl.readyUnitSingular), readyUnitPlural: t(pl.readyUnitPlural), readyPer: pl.readyPer ?? null,
+  };
+}
+
+/** The view has defrost rows with admits targets: ask for tomorrow's forecast admits. */
+export const usesAdmits = (placements: PlacementView[]) => placements.some((p) => p.defrost && p.readyTargets?.length);
 
 /** The same view, narrowed to one area (and its sections): what an area restock covers. */
 export function scopeView(view: DepartmentView, areaId: string | null | undefined): DepartmentView {
@@ -267,6 +298,10 @@ export interface CollectionLine {
   /** Reference photo of the product, if one has been added. */
   photoPath?: string | null;
   photoCredit?: string | null;
+  /** Defrost rows: where to grab it, where to look if that's empty, and where it goes. */
+  grabNote?: string | null;
+  fallbackNote?: string | null;
+  putNote?: string | null;
   /** Each placement this line restocks, with how much it needs. */
   parts: { placementId: string; areaName: string; need: number }[];
 }
@@ -297,6 +332,7 @@ export function collectionLines(placements: PlacementView[], items: Map<string, 
     const line = map.get(key) ?? {
       key, kind: 'qty' as const, productName: p.productName, unitSingular: p.unitSingular, unitPlural: p.unitPlural,
       locationId: p.locationId, locationName, total: 0, instructions: p.instructions, photoPath: p.photoPath ?? null, photoCredit: p.photoCredit ?? null, parts: [],
+      ...(p.defrost ? { grabNote: p.grabNote ?? null, fallbackNote: p.fallbackNote ?? null, putNote: p.putNote ?? null } : {}),
     };
     line.total = round2(line.total + need);
     line.parts.push({ placementId: p.placementId, areaName: p.areaName, need });
@@ -461,7 +497,11 @@ export function refillLines(kind: SessionKind, placements: PlacementView[], reco
   return collectionLines(picks, items);
 }
 
-export interface Suggestion { qty: number; from: { areaName: string; need: number }[] }
+export interface Suggestion {
+  qty: number; from: { areaName: string; need: number }[];
+  /** Defrost rows: worked out from tomorrow's admits and what's already ready. */
+  defrost?: DefrostSuggestion;
+}
 
 /**
  * What staff actually grabbed upstairs for FOH, suggested for the same product in the spot it came
@@ -470,8 +510,16 @@ export interface Suggestion { qty: number; from: { areaName: string; need: numbe
  * nothing grabbed (or not ticked yet) suggests nothing. Only for pickups marked "suggest" (wine,
  * spirits, small sparkling water), never for beers taken as single bottles out of packs.
  */
-export function suggestions(kind: SessionKind, view: DepartmentView, items: Map<string, ItemState>, recordedAreas: Map<string, AreaStatus>): Map<string, Suggestion> {
+export function suggestions(kind: SessionKind, view: DepartmentView, items: Map<string, ItemState>, recordedAreas: Map<string, AreaStatus>, admits: number | null = null): Map<string, Suggestion> {
   const out = new Map<string, Suggestion>();
+  // Defrost rows: from tomorrow's admits and what staff counted as already ready (0 = nothing to pull).
+  if (admits !== null) {
+    for (const p of activePlacements(kind, view.placements, recordedAreas)) {
+      if (!p.defrost) continue;
+      const d = defrostSuggestion(p, admits, (items.get(p.placementId) ?? EMPTY_ITEM).currentQty);
+      if (d) out.set(p.placementId, { qty: d.qty, from: [], defrost: d });
+    }
+  }
   if (kind !== 'full') return out;
   const picks = activePlacements(kind, view.placements, recordedAreas).filter((p) => p.pickupSuggest && p.pickupAreaId);
   for (const p of picks) {
@@ -494,8 +542,8 @@ export function suggestions(kind: SessionKind, view: DepartmentView, items: Map<
  * The items as they count: a suggestion stands until staff change it. Whatever they leave is
  * final (change 1 to 3 → 3 in total; remove it → 0). Nothing is saved until they touch it.
  */
-export function withSuggestions(kind: SessionKind, view: DepartmentView, items: Map<string, ItemState>, recordedAreas: Map<string, AreaStatus>): Map<string, ItemState> {
-  const sug = suggestions(kind, view, items, recordedAreas);
+export function withSuggestions(kind: SessionKind, view: DepartmentView, items: Map<string, ItemState>, recordedAreas: Map<string, AreaStatus>, admits: number | null = null): Map<string, ItemState> {
+  const sug = suggestions(kind, view, items, recordedAreas, admits);
   if (!sug.size) return items;
   const out = new Map(items);
   for (const [id, s] of sug) {
@@ -563,8 +611,8 @@ export function stockOutcomes(lines: CollectionLine[], items: Map<string, ItemSt
  * How many stock shortages (out of stock or low) a restock recorded: the same count as
  * "Stock shortages" on its Review screen. Upstairs suggestions count as entered.
  */
-export function shortageCount(kind: SessionKind, view: DepartmentView, items: Map<string, ItemState>, recordedAreas: Map<string, AreaStatus>): number {
-  const it = withSuggestions(kind, view, items, recordedAreas);
+export function shortageCount(kind: SessionKind, view: DepartmentView, items: Map<string, ItemState>, recordedAreas: Map<string, AreaStatus>, admits: number | null = null): number {
+  const it = withSuggestions(kind, view, items, recordedAreas, admits);
   const lines = collectionLines(collectPlacements(kind, view.placements, recordedAreas), it);
   return stockOutcomes(lines, it, view.byId, !!view.department.noneOnDisplay).filter((o) => o.status === 'out' || o.status === 'low').length;
 }

@@ -8,6 +8,9 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { db, setSetting } from '@/lib/server/db';
+import { parseTargets } from '@/lib/defrost-rows';
+import type { ReadyTarget } from '@/lib/catalogue-types';
+import type postgres from 'postgres';
 import { hashSecret, requireAdmin } from '@/lib/server/auth';
 
 export type ActionResult = { ok?: boolean; error?: string; message?: string } | undefined;
@@ -238,6 +241,15 @@ const parValue = (raw: FormDataEntryValue | null, allowDecimal: boolean): number
   return Math.round(n * 100) / 100;
 };
 
+/** Migration 016 adds the defrost details; until it runs, products still save (without them). */
+let hasDefrostColumns = false;
+async function defrostColumns(sql: postgres.Sql<Record<string, unknown>> | postgres.TransactionSql<Record<string, unknown>>): Promise<boolean> {
+  if (!hasDefrostColumns) {
+    hasDefrostColumns = (await sql`select 1 from information_schema.columns where table_name = 'product_placements' and column_name = 'ready_targets'`).length > 0;
+  }
+  return hasDefrostColumns;
+}
+
 export async function saveProduct(_: ActionResult, form: FormData): Promise<ActionResult> {
   await requireAdmin();
   const p = productSchema.safeParse(Object.fromEntries(form));
@@ -255,6 +267,22 @@ export async function saveProduct(_: ActionResult, form: FormData): Promise<Acti
     if (d.method === 'par' && par === null) return { error: 'Enter a target level for every ticked area (or choose a different restock method).' };
     const loc = String(form.get(`loc_${areaId}`) ?? '');
     placements.push({ areaId, par: d.method === 'par' ? par : null, locationId: loc && uuid.safeParse(loc).success ? loc : null });
+  }
+  // Defrost details ("staff enter" products only): notes, the unit what's ready is counted in, and admits targets.
+  const defrost = new Map<string, { grab: string | null; fallback: string | null; put: string | null; rus: string | null; rup: string | null; per: number | null; targets: ReadyTarget[] }>();
+  if (d.method === 'manual') {
+    for (const areaId of areaIds) {
+      const t = (k: string, max: number) => { const v = String(form.get(`${k}_${areaId}`) ?? '').trim(); return v ? v.slice(0, max) : null; };
+      if (!form.has(`grab_${areaId}`)) continue; // an older form without them: leave them as they are
+      const rus = t('rus', 30), rup = t('rup', 30);
+      if (!!rus !== !!rup) return { error: 'Give both words for the unit what\u2019s ready is counted in (e.g. portion and portions), or leave both blank.' };
+      const perText = t('rper', 12);
+      const per = perText === null ? null : Number(perText.replace(',', '.'));
+      if (per !== null && (!Number.isFinite(per) || per <= 0 || per > 9999)) return { error: 'How many in one: enter a number above 0, e.g. 8.' };
+      const tg = parseTargets(String(form.get(`tgt_${areaId}`) ?? ''));
+      if (!tg.ok) return { error: `Ready-stock targets: ${tg.message}` };
+      defrost.set(areaId, { grab: t('grab', 300), fallback: t('fallback', 300), put: t('put', 300), rus, rup, per, targets: tg.targets });
+    }
   }
   const affects = [...new Set(String(form.get('affects') ?? '').split(/[\n,]/).map((x) => x.trim()).filter(Boolean))];
   if (affects.length > 10) return { error: 'List at most 10 menu items.' };
@@ -295,6 +323,12 @@ export async function saveProduct(_: ActionResult, form: FormData): Promise<Acti
         await tx`insert into product_placements (product_id, check_area_id, par_level, location_id, sort_order)
           values (${id}, ${pl.areaId}, ${pl.par}, ${pl.locationId}, ${Number(n)})
           on conflict (product_id, check_area_id) do update set par_level = excluded.par_level, location_id = excluded.location_id`;
+        const df = defrost.get(pl.areaId);
+        if (df && await defrostColumns(tx)) {
+          await tx`update product_placements set grab_note = ${df.grab}, fallback_note = ${df.fallback}, put_note = ${df.put},
+            ready_unit_singular = ${df.rus}, ready_unit_plural = ${df.rup}, ready_per = ${df.per}, ready_targets = ${tx.json(df.targets as unknown as Parameters<typeof tx.json>[0])}
+            where product_id = ${id} and check_area_id = ${pl.areaId}`;
+        }
       }
       return id;
     });

@@ -52,7 +52,21 @@ export interface CatPlacement {
   /** Counted in a different unit in this area (e.g. single bottles here, packs in the BOH fridge). */
   unitSingular?: string | null;
   unitPlural?: string | null;
+  /** Defrost rows: where to grab it, where to look if that's empty, and where it goes. */
+  grabNote?: string | null;
+  fallbackNote?: string | null;
+  putNote?: string | null;
+  /** Defrost rows: the unit staff count what's already ready in (e.g. portions), if not the pulled unit. */
+  readyUnitSingular?: string | null;
+  readyUnitPlural?: string | null;
+  /** How many ready units one pulled unit makes (e.g. 8 portions per bag). */
+  readyPer?: number | null;
+  /** Ready-stock targets by tomorrow's forecast admits, in the ready unit. */
+  readyTargets?: ReadyTarget[];
 }
+
+/** A ready-stock target for a range of forecast admits (max null = and above). */
+export interface ReadyTarget { min: number; max: number | null; qty: number }
 
 export interface Catalogue {
   version: number;

@@ -95,7 +95,7 @@ export async function restockDetail(id: string) {
     exceptionReason: (s.exceptionReason as string) ?? null, people: (s.people as string[]) ?? [], view, placements, recordedAreas: recorded,
     completedBy: (s.completedBy as string) ?? null,
     skipReasons: new Map(areas.map((a) => [String(a.checkAreaId), String(a.skipReason ?? '')])),
-    items: withSuggestions(s.kind as 'full' | 'quick' | 'area', view, itemMap, recorded),
+    items: withSuggestions(s.kind as 'full' | 'quick' | 'area', view, itemMap, recorded, s.forecastAdmits == null ? null : Number(s.forecastAdmits)),
     dateLabel: new Date(`${dateStr(s.tradingDate)}T12:00:00Z`).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }),
   }) : '';
   const session = { ...s, tradingDate: dateStr(s.tradingDate) } as Record<string, unknown> & { tradingDate: string; people: string[] };

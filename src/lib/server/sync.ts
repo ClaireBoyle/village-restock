@@ -203,6 +203,15 @@ async function apply(tx: Tx, op: SyncOp, deviceId: string): Promise<{ mergedInto
       return {};
     }
 
+    case 'session.admits': {
+      await sessionRow(tx, op.sessionId);
+      // Needs migration 016. Until then, keep it on the device and retry later rather than lose it.
+      if (!(await admitsColumn(tx))) throw new OpError('The server needs a database update (016_defrost_rows.sql)', false);
+      await tx`update restock_sessions set forecast_admits = ${op.admits}, updated_at = now() where id = ${op.sessionId}`;
+      await addPerson(tx, op.sessionId, op.by);
+      return {};
+    }
+
     case 'session.reopen': {
       await sessionRow(tx, op.sessionId);
       await tx`update restock_sessions set status = 'open', finished_at = null, exception_reason = null where id = ${op.sessionId}`;
@@ -255,6 +264,14 @@ async function completedByColumn(tx: Tx): Promise<boolean> {
   return hasCompletedBy;
 }
 
+let hasAdmits = false;
+async function admitsColumn(tx: Tx): Promise<boolean> {
+  if (!hasAdmits) {
+    hasAdmits = (await tx`select 1 from information_schema.columns where table_name = 'restock_sessions' and column_name = 'forecast_admits'`).length > 0;
+  }
+  return hasAdmits;
+}
+
 async function noteColumn(tx: Tx): Promise<boolean> {
   if (hasNoteColumn === null) {
     const r = await tx`select 1 from information_schema.columns where table_name = 'restock_sessions' and column_name = 'finish_note'`;
@@ -279,7 +296,9 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
   }]));
   const recorded = new Map<string, AreaStatus>(areaRows.map((r) => [String(r.checkAreaId), r.status as AreaStatus]));
   // Refill FOH: what was grabbed upstairs counts as suggested for that spot until staff changed it.
-  const items = view ? withSuggestions(s.kind, view, raw, recorded) : raw;
+  // Defrost rows: what's suggested from tomorrow's admits counts too, until staff changed it.
+  const [adm] = await tx`select (to_jsonb(rs)->>'forecast_admits')::int as admits from restock_sessions rs where id = ${s.id}`;
+  const items = view ? withSuggestions(s.kind, view, raw, recorded, (adm?.admits as number | null) ?? null) : raw;
 
   let status: 'finished' | 'finished_exceptions' = reason ? 'finished_exceptions' : 'finished';
   let finalReason = reason;
@@ -347,6 +366,7 @@ function toRemote(s: Record<string, unknown>, areas: Record<string, unknown>[], 
     tradingDate: s.tradingDate instanceof Date ? s.tradingDate.toISOString().slice(0, 10) : String(s.tradingDate).slice(0, 10),
     status: s.status as RemoteSession['status'], exceptionReason: (s.exceptionReason as string) ?? null, note: (s.finishNote as string) ?? null,
     completedBy: (s.completedBy as string) ?? null,
+    forecastAdmits: s.forecastAdmits === null || s.forecastAdmits === undefined ? null : Number(s.forecastAdmits),
     people: (s.people as string[]) ?? [], startedAt: iso(s.startedAt)!, finishedAt: iso(s.finishedAt), updatedAt: iso(s.updatedAt)!,
     areas: areas.map((a) => ({ areaId: String(a.checkAreaId), status: a.status as RemoteSession['areas'][number]['status'], skipReason: (a.skipReason as string) ?? null, updatedBy: (a.updatedBy as string) ?? null, updatedAt: iso(a.updatedAt)! })),
     items: items.map((r) => ({

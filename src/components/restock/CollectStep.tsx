@@ -8,6 +8,7 @@ import {
 import { formatQty, round2 } from '@/lib/restock-math';
 import { setItems } from '@/lib/client/restock-store';
 import { ProductThumb } from './ProductCard';
+import { DefrostNotes } from './DefrostParts';
 import { Dock, plural } from './shared';
 import type { RestockCtx } from './RestockApp';
 
@@ -191,6 +192,8 @@ export function Line({ line, items, write, oneArea, tickOnly = false, displayRul
         </div>
         {act}
       </div>
+      {st !== 'done' && (line.grabNote || line.putNote || line.fallbackNote)
+        ? <DefrostNotes grab={line.grabNote} fallback={line.fallbackNote} put={line.putNote} className="l-dnotes" /> : null}
       {askNone ? (
         // Nothing collected: is there really none left out front? Then it's out of stock.
         <div className="l-none-row">

@@ -7,7 +7,7 @@ import { useCatalogue } from '@/lib/client/use-catalogue';
 import { useLive, useResetIds, useStaffName } from '@/lib/client/hooks';
 import { localDb, type LocalArea, type LocalSession } from '@/lib/client/local-db';
 import { findOpenQuickSession, openAreaSession, openFullSession, startSession } from '@/lib/client/restock-store';
-import { EMPTY_ITEM, departmentView, scopeView, suggestions, usesRefill, withSuggestions, type AreaStatus, type Suggestion, type DepartmentView, type ItemState, type PlacementView } from '@/lib/restock-logic';
+import { EMPTY_ITEM, departmentView, scopeView, suggestions, usesRefill, withSuggestions, type AreaStatus, type DepartmentView, type ItemState, type PlacementView, type Suggestion } from '@/lib/restock-logic';
 import { tradingDate } from '@/lib/restock-math';
 import { CheckStep } from './CheckStep';
 import { CollectStep } from './CollectStep';
@@ -29,7 +29,7 @@ export interface RestockCtx {
   items: Map<string, ItemState>;
   /** What staff actually entered (no suggestions), for knowing whether a suggestion was changed. */
   rawItems: Map<string, ItemState>;
-  /** Refill FOH: what's suggested for each upstairs spot from what was grabbed for FOH. */
+  /** What's suggested: Refill FOH (from what was grabbed for FOH) and defrost rows (from tomorrow's admits). */
   suggested: Map<string, Suggestion>;
   /** This restock uses the Refill FOH flow (Check FOH → Refill FOH → Check BOH → Collect → Finish). */
   refill: boolean;
@@ -248,8 +248,10 @@ export function RestockApp({ departmentId, isAdmin = false }: { departmentId: st
   const recorded = new Map<string, AreaStatus>(areaRows.filter((a) => a.status !== 'not_started').map((a) => [a.areaId, a.status as AreaStatus]));
   // Refill FOH: what's grabbed upstairs is suggested for that spot's downstairs list.
   const refill = usesRefill(session.kind, view);
-  const suggested = refill ? suggestions(session.kind, view, rawItems, recorded) : new Map<string, Suggestion>();
-  const items = refill ? withSuggestions(session.kind, view, rawItems, recorded) : rawItems;
+  // Defrost rows (Gold Class Kitchen): what to pull is suggested from tomorrow's admits and what's ready.
+  const admits = session.forecastAdmits ?? null;
+  const suggested = suggestions(session.kind, view, rawItems, recorded, admits);
+  const items = suggested.size ? withSuggestions(session.kind, view, rawItems, recorded, admits) : rawItems;
   // Steps only the Refill FOH flow has fall back to the plain ones elsewhere.
   // ("refill" was its own step; it's now part of Upstairs.)
   const shownStep: Step = refill ? (step === 'refill' ? 'boh' : step) : step === 'refill' || step === 'boh' ? 'check' : step;

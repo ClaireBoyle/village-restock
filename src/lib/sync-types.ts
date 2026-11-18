@@ -56,6 +56,8 @@ export const opSchema = z.discriminatedUnion('type', [
     /** The name confirmed on the Finish screen ("Completed by"). */
     completedBy: z.string().trim().max(40).nullable().optional() }),
   z.object({ ...base, type: z.literal('session.reopen'), sessionId: z.uuid() }),
+  // Defrost rows: tomorrow's forecast admits, entered once per restock (blank = not entered).
+  z.object({ ...base, type: z.literal('session.admits'), sessionId: z.uuid(), admits: z.number().int().min(0).max(9999).nullable() }),
   // Defrost Planner: one item's entry for a department's next service (blank = not entered).
   z.object({
     ...base, type: z.literal('defrost.set'), planId: z.uuid(), departmentId: z.uuid(), serviceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -87,7 +89,9 @@ export interface RemoteSession {
   status: 'open' | 'finished' | 'finished_exceptions' | 'unfinished';
   exceptionReason: string | null; note: string | null; people: string[];
   /** The name confirmed on the Finish screen, once finished. */
-  completedBy: string | null; startedAt: string; finishedAt: string | null; updatedAt: string;
+  completedBy: string | null;
+  /** Defrost rows: tomorrow's forecast admits, if entered. */
+  forecastAdmits: number | null; startedAt: string; finishedAt: string | null; updatedAt: string;
   areas: { areaId: string; status: 'not_started' | 'in_progress' | 'complete' | 'skipped'; skipReason: string | null; updatedBy: string | null; updatedAt: string }[];
   items: ({ placementId: string; updatedBy: string | null; updatedAt: string; conflict: Conflict | null } & Required<ItemFields>)[];
 }
