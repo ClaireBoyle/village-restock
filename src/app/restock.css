@@ -1121,8 +1121,15 @@ button.pnote.open span{display:block}
 .dock .btn.flow-next{min-width:0;max-width:100%;gap:6px}
 .dock .btn.flow-next .fn-n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dock .btn.flow-next .fn-to{opacity:.7}
-@media (max-width:640px){.dock .btn.flow-next{flex:1 1 auto}}
+
 /* Routine toggles ("Needs refill", "Needed"): a full 44px tap target like the other controls */
 .pseg button{min-height:44px}
 .flow-end{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .flow-end .btn{min-height:44px}
+/* Phones, Refill FOH flow: "6 to collect" on its own row so the long "Done → Back shelves" button fits */
+@media (max-width:640px){
+  .dock-in:has(.flow-next){flex-wrap:wrap}
+  .dock-in:has(.flow-next) .dock-txt{flex:1 1 100%}
+  .dock-in:has(.flow-next) .dock-acts{flex:1 1 100%;width:100%}
+  .dock-in:has(.flow-next) .dock-acts .btn.flow-next{flex:1 1 auto}
+}
