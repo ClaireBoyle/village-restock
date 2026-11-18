@@ -76,7 +76,12 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   // What's on the lists so far: the downstairs run, plus (on Check the bar) what's to grab upstairs.
   const grabAll = phase !== 'all' ? refillLines(session.kind, ctx.placements, recorded, items) : [];
   const downstairs = collectionLines(collectPlacements(session.kind, ctx.placements, recorded), items);
-  const lines = [...(phase === 'foh' ? grabAll : []), ...downstairs];
+  // Defrost (Kitchen): what's pulled from each freezer, ticked off on the Defrost screen itself.
+  const pullAll = !ctx.refill ? refillLines(session.kind, ctx.placements, recorded, items) : [];
+  const lines = [...(phase === 'foh' ? grabAll : []), ...pullAll, ...downstairs];
+  const onScreen = (l: CollectionLine) => l.parts.every((x) => view.byId.get(x.placementId)?.screenAreaId === cur.area.id);
+  const pulls = pullAll.filter(onScreen);
+  const pullGroups = groupByStoreroom(pulls, view.pickupOrder);
   // Upstairs, at this location: what to grab for the bar (from this spot or its cupboards).
   const spotIds = new Set([cur.area.id, ...cur.sections.map((x) => x.area.id)]);
   const grab = phase === 'boh' ? grabAll.filter((l) => l.locationId && spotIds.has(l.locationId)) : [];
@@ -135,7 +140,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
     // Refill FOH: what was grabbed here for front of house is suggested (and says so).
     const sug = ctx.suggested.get(p.placementId);
     if (sug && !sug.defrost) {
-      const taken = `${round2(sug.qty)} taken for ${sug.from.map((f) => f.areaName).join(', ')}`;
+      const taken = `${round2(sug.qty)} ${ctx.refill ? 'taken' : 'pulled'} for ${sug.from.map((f) => f.areaName).join(', ')}`;
       const raw = ctx.rawItems.get(p.placementId)?.requestedQty ?? null;
       return raw === null ? `Suggested: ${taken}. Change it if more is needed, or remove it.` : raw === sug.qty ? taken : `${taken} (suggested ${round2(sug.qty)})`;
     }
@@ -159,7 +164,8 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
     return c ? `Grab it from the ${c.areaName}` : null;
   };
   // Check BOH: products with a suggestion (taken for FOH) go to the top of the screen.
-  const taken = phase === 'boh' ? cur.placements.filter((p) => ctx.suggested.has(p.placementId)) : [];
+  // Kitchen: what was pulled for defrost is suggested for its freezer, at the top of that freezer's screen.
+  const taken = phase === 'boh' || !ctx.refill ? cur.placements.filter((p) => { const s = ctx.suggested.get(p.placementId); return !!s && !s.defrost; }) : [];
   const takenIds = new Set(taken.map((p) => p.placementId));
   /** A list without the products shown at the top; a subheading moves to the next product still there. */
   const rest = (list: typeof cur.placements) => {
@@ -338,7 +344,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
               // Refill FOH: everything taken for front of house first, so none of it is lost in a long list.
               // A row stays here even after it's changed or removed, so it never jumps away mid-tap.
               <>
-                <h3 className="phead taken-h"><span>Replace what you grabbed</span><small>{taken.length} suggested</small></h3>
+                <h3 className="phead taken-h"><span>{ctx.refill ? 'Replace what you grabbed' : 'Replace what you pulled'}</span><small>{taken.length} suggested</small></h3>
                 {taken.map((p) => renderRow(p, p.areaId !== cur.area.id))}
                 {/* The rest starts with its own subheading if it has one; otherwise a plain divider. */}
                 {rest(cur.own).length && !rest(cur.own).some((x) => x.heading) ? <h3 className="phead">Everything else</h3> : null}
@@ -346,6 +352,20 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
             ) : null}
             {renderList(rest(cur.own))}
           </div>
+
+          {pulls.length ? (
+            // Defrost: pull it now, freezer by freezer. What's pulled is suggested on that freezer's screen.
+            <section className="grab pull" aria-labelledby="pull-h">
+              <h3 className="sec-title" id="pull-h"><Icon name="up" />Pull now<small>{pulls.filter((l) => ['done', 'short'].includes(lineStateOf(l))).length} of {pulls.length}</small></h3>
+              <p className="grab-hint">Tick each one as you take it out, or use Got fewer if there wasn&rsquo;t enough. What you pull is suggested for that freezer&rsquo;s top-up from downstairs.</p>
+              {pullGroups.map((g) => (
+                <div key={g.lines[0].locationId ?? g.name} className="grab-group">
+                  <h4 className="phead">{g.name}</h4>
+                  <div className="room-lines">{g.lines.map((l) => <Line key={l.key} line={l} items={items} write={writeItems} oneArea={cur.area.name} tickOnly verb="Pulled" />)}</div>
+                </div>
+              ))}
+            </section>
+          ) : null}
 
           {cur.sections.map((sec) => {
             const enteredHere = sec.placements.filter(chk).length;

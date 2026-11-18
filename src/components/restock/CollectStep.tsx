@@ -92,7 +92,9 @@ function Room({ name, lines, items, write, note, oneArea, tickOnly = false, disp
   );
 }
 
-export function Line({ line, items, write, oneArea, tickOnly = false, displayRule = false }: { line: CollectionLine; items: Map<string, ItemState>; write: (u: { placementId: string; fields: Partial<ItemState> }[]) => void; oneArea: string | null; tickOnly?: boolean; displayRule?: boolean }) {
+export function Line({ line, items, write, oneArea, tickOnly = false, displayRule = false, verb = 'Grabbed' }: { line: CollectionLine; items: Map<string, ItemState>; write: (u: { placementId: string; fields: Partial<ItemState> }[]) => void; oneArea: string | null; tickOnly?: boolean; displayRule?: boolean;
+  /** Tick-only lines: what taking it is called ("Grabbed" for the bar, "Pulled" from a freezer for defrost). */
+  verb?: 'Grabbed' | 'Pulled' }) {
   const st = lineState(line, items);
   const info = lineInfo(line, items);
   const got = lineGot(line, items);
@@ -165,7 +167,7 @@ export function Line({ line, items, write, oneArea, tickOnly = false, displayRul
       <span className="l-btns">
         {line.kind === 'qty' ? <button ref={fewRef} type="button" className="btn l-few" onClick={openEditor} aria-label={`Got fewer ${line.productName}`}>Got fewer</button> : null}
         <button type="button" className="l-tick l-all" onClick={all}
-          aria-label={line.kind === 'task' ? `Done: ${line.productName}` : tickOnly ? `Grabbed ${round2(line.total)} ${line.productName}` : `Got all ${round2(line.total)} ${line.productName}`}><Icon name="check" /></button>
+          aria-label={line.kind === 'task' ? `Done: ${line.productName}` : tickOnly ? `${verb} ${round2(line.total)} ${line.productName}` : `Got all ${round2(line.total)} ${line.productName}`}><Icon name="check" /></button>
       </span>
     );
   }
@@ -184,10 +186,10 @@ export function Line({ line, items, write, oneArea, tickOnly = false, displayRul
         <div className="l-nm">
           <b>{line.productName}</b>
           {st === 'short' && !open ? (
-            <small className="l-why">{tickOnly ? `Grabbed ${round2(got)} of ${round2(line.total)}` : <>{info.reason === 'insufficient' ? stockLabel : shortReason(info.reason)} &middot; short {formatQty(short, line.unitSingular, line.unitPlural)}{info.flagged ? ' · flagged' : ''}</>}
+            <small className="l-why">{tickOnly ? `${verb} ${round2(got)} of ${round2(line.total)}` : <>{info.reason === 'insufficient' ? stockLabel : shortReason(info.reason)} &middot; short {formatQty(short, line.unitSingular, line.unitPlural)}{info.flagged ? ' · flagged' : ''}</>}
               <button type="button" className="linkbtn l-link" onClick={openEditor}>Change</button></small>
           ) : st === 'done' ? (
-            <small className="l-ok">{line.kind === 'task' ? 'Done' : tickOnly ? 'Grabbed' : 'Collected'}<button type="button" className="linkbtn l-link" onClick={undo}>Undo</button></small>
+            <small className="l-ok">{line.kind === 'task' ? 'Done' : tickOnly ? verb : 'Collected'}<button type="button" className="linkbtn l-link" onClick={undo}>Undo</button></small>
           ) : sub ? <small><span>{sub}</span></small> : null}
         </div>
         {act}

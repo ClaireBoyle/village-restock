@@ -178,7 +178,8 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
   // Upstairs pickup spots, and the screens they're on (an area, or the area a section belongs to).
   const pickupOrder = new Map<string, number>();
   areas.forEach((a, i) => { pickupOrder.set(a.area.id, i * 100); a.sections.forEach((x, j) => pickupOrder.set(x.area.id, i * 100 + j + 1)); });
-  const bohScreenIds = new Set(placements.filter((p) => p.pickupAreaId).map((p) => {
+  // (Defrost pulls from a freezer area are pulled on the Defrost screen itself: no Upstairs step.)
+  const bohScreenIds = new Set(placements.filter((p) => p.pickupAreaId && !p.defrost).map((p) => {
     const a = byArea.get(p.pickupAreaId!)!;
     return parentOf(a) ?? a.id;
   }));
@@ -476,7 +477,10 @@ export function activePlacements(kind: SessionKind, placements: PlacementView[],
 /** This restock uses the Refill FOH flow: Check FOH → Refill FOH → Check BOH → Collect → Finish. */
 export const usesRefill = (kind: SessionKind, view: DepartmentView) => kind === 'full' && view.bohScreenIds.size > 0;
 
-/** Grabbed upstairs for front of house: on the Refill FOH list, not the downstairs list (full restocks only). */
+/**
+ * Grabbed upstairs for front of house (Refill FOH), or pulled from a freezer on the Defrost screen:
+ * on that list, not the downstairs list (full restocks only).
+ */
 export const isPickup = (kind: SessionKind, p: PlacementView) => kind === 'full' && !!p.pickupAreaId;
 
 /** What the downstairs collection list covers: skipped areas and upstairs pickups left out. */
@@ -523,7 +527,10 @@ export function suggestions(kind: SessionKind, view: DepartmentView, items: Map<
   if (kind !== 'full') return out;
   const picks = activePlacements(kind, view.placements, recordedAreas).filter((p) => p.pickupSuggest && p.pickupAreaId);
   for (const p of picks) {
-    const i = items.get(p.placementId) ?? EMPTY_ITEM;
+    const raw = items.get(p.placementId) ?? EMPTY_ITEM;
+    // A defrost amount suggested from admits counts as entered (until staff change it).
+    const ds = out.get(p.placementId);
+    const i = raw.requestedQty === null && ds?.defrost ? { ...raw, requestedQty: ds.qty } : raw;
     const want = needOf(p, i) ?? 0;
     const need = i.collectedMode === 'all' ? want : i.collectedMode === 'partial' ? Math.min(want, i.collectedQty ?? 0) : 0;
     if (need <= 0) continue;
