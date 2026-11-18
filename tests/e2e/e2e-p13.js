@@ -35,7 +35,7 @@ const rooms = (P) => P.$$eval('.room', (els) => els.map((r) => [r.querySelector(
 
   // Check FOH
   const steps = await P.$$eval('.rbar .stage .sm', (els) => els.map((e) => e.textContent));
-  ok(JSON.stringify(steps) === JSON.stringify(['Bar', 'Upstairs', 'BOH', 'Downstairs', 'Finish']), 'five steps: ' + steps.join(' › '));
+  ok(JSON.stringify(steps) === JSON.stringify(['Bar', 'Up', 'BOH', 'Down', 'Finish']), 'five steps: ' + steps.join(' › '));
   const foh = await rail(P);
   ok(foh[0] === 'FOH beer fridge' && !foh.includes('BOH bar fridge') && !foh.includes('Upstairs cupboards') && foh.includes('Back bench') && foh.includes('Confection'), 'Check FOH shows front-of-house areas only: ' + foh.join(', '));
   const heads = await P.$$eval('.area > .prows > .phead', (els) => els.map((e) => e.textContent));
