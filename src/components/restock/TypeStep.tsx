@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Icon } from '@/components/Icon';
 import { useLive } from '@/lib/client/hooks';
 import { localDb, type LocalSession } from '@/lib/client/local-db';
-import { areaStatus, EMPTY_ITEM, type AreaStatus, type DepartmentView, type ItemState } from '@/lib/restock-logic';
+import { areaStatus, EMPTY_ITEM, phaseAreas, usesRefill, type AreaStatus, type DepartmentView, type ItemState } from '@/lib/restock-logic';
 import { AREA_BADGE, AREA_LABEL, Badge, timeOf } from './shared';
 import type { RemoteSession } from '@/lib/sync-types';
 import { AdminMenu } from './ResetControls';
@@ -22,7 +22,8 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
   onReset?: (r: ResetFor) => void;
 }) {
   const [hideTips, setHideTips] = useState(true);
-  useEffect(() => { try { setHideTips(localStorage.getItem(TIPS_KEY) === '1'); } catch { setHideTips(false); } }, []);
+  // Closed unless someone opened it on this device: the Start button comes first.
+  useEffect(() => { try { setHideTips(localStorage.getItem(TIPS_KEY) !== '0'); } catch { setHideTips(true); } }, []);
   const toggleTips = () => { const v = !hideTips; setHideTips(v); try { localStorage.setItem(TIPS_KEY, v ? '1' : '0'); } catch { /* ignore */ } };
 
   const areaRows = useLive(async () => (fullSession ? localDb().areas.where('sessionId').equals(fullSession.id).toArray() : []), [fullSession?.id], []);
@@ -37,6 +38,16 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
     : new Map<string, AreaStatus>((remoteFull?.areas ?? []).filter((a) => a.status === 'complete' || a.status === 'skipped').map((a) => [a.areaId, a.status]));
   const finished = src && (src.status === 'finished' || src.status === 'finished_exceptions');
   const doneAreas = view.areas.filter(({ area }) => recorded.get(area.id) === 'complete' || recorded.get(area.id) === 'skipped').length;
+  // Gold Class Bar: front of house, then the upstairs spots (Refill FOH flow).
+  const refill = usesRefill('full', view);
+  const steps: [string, string][] = refill
+    ? [['Check FOH', 'Enter what front of house needs.'], ['Refill FOH', 'Grab it from upstairs.'], ['Check BOH', 'Top up upstairs: what you took is suggested.'], ['Collect', 'One downstairs list, by storeroom.'], ['Finish', 'Note anything the storeroom was out of.']]
+    : [['Check stock', 'Enter what’s needed. The app works out the rest.'], ['Collect', 'One list, grouped by storeroom.'], ['Finish', 'Note anything the storeroom was out of.']];
+  // Small name-only pills (the colour and icon give the status), shown once a restock is under way.
+  const pills = (areas: typeof view.areas) => areas.map(({ area, placements }) => {
+    const st = areaStatus(recorded.get(area.id), placements, items);
+    return <span key={area.id} className={`apill s-${AREA_BADGE[st]}`} title={AREA_LABEL[st]} aria-label={`${area.name}: ${AREA_LABEL[st]}`}><Icon name={AREA_BADGE[st] === 'ok' ? 'check' : AREA_BADGE[st] === 'skip' ? 'skip' : AREA_BADGE[st] === 'info' ? 'half' : 'circle'} />{area.name}</span>;
+  });
 
   return (
     <main className="wrap restock-main">
@@ -55,10 +66,8 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
       {hideTips ? (
         <button className="linkbtn" style={{ alignSelf: 'flex-start' }} onClick={toggleTips}><Icon name="info" />How restocking works</button>
       ) : (
-        <section className="how" aria-label="How restocking works">
-          <div className="how-step"><span className="n">1</span><div><b>Check stock</b><p>Enter what&rsquo;s there now. The app works out what you need.</p></div></div>
-          <div className="how-step"><span className="n">2</span><div><b>Collect</b><p>One list, grouped by storeroom.</p></div></div>
-          <div className="how-step"><span className="n">3</span><div><b>Finish</b><p>Note anything the storeroom was out of.</p></div></div>
+        <section className={`how ${steps.length > 3 ? 'compact' : ''}`} aria-label="How restocking works">
+          {steps.map(([t, d], i) => <div key={t} className="how-step"><span className="n">{i + 1}</span><div><b>{t}</b><p>{d}</p></div></div>)}
           <button className="linkbtn" onClick={toggleTips}>Hide tips</button>
         </section>
       )}
@@ -83,16 +92,21 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
               : src ? <Badge st="info">In progress since {timeOf(src.startedAt)}</Badge> : <Badge st="none">Not started tonight</Badge>}
             {onReset && src ? <AdminMenu label={`${hasDefrost ? 'Kitchen' : 'Full'} restock`} onChoose={() => onReset({ kind: 'full' })} /> : null}
           </div>
-          <p className="lead">Every area, checked properly. For <b>closing shifts</b>.</p>
-          <div className="areas-mini">{view.areas.map(({ area, placements }) => {
-            const st = areaStatus(recorded.get(area.id), placements, items);
-            return <Badge key={area.id} st={AREA_BADGE[st]}>{area.name}: {AREA_LABEL[st]}</Badge>;
-          })}</div>
-          <p className="meta">{view.areas.length} areas &middot; {view.placements.length} products &middot; shared, so anyone can continue it{src?.people.length ? ` · ${src.people.join(', ')}` : ''}</p>
+          <p className="lead">Every area, for <b>closing shifts</b>. Shared, so anyone can continue it.</p>
+          {/* The button first, so it's on screen without scrolling. */}
           <div className="actions">
             {finished && fullSession ? <button className="btn primary big" onClick={onSummary}>View summary</button>
-              : <button className="btn primary big" disabled={opening} onClick={() => onStart('full')}>{src ? <>{finished ? 'Open restock' : `Resume ${hasDefrost ? 'kitchen' : 'full'} restock`}<Icon name="next" /></> : `Start ${hasDefrost ? 'kitchen' : 'full'} restock`}</button>}
+              : <button className="btn primary big" disabled={opening} onClick={() => onStart('full')}>{src ? <>{finished ? 'Open restock' : `Resume ${hasDefrost ? 'kitchen' : 'full'} restock`}<Icon name="next" /></> : <>Start {hasDefrost ? 'kitchen' : 'full'} restock<Icon name="next" /></>}</button>}
           </div>
+          {src ? (
+            // Where it's up to (for whoever picks it up next), compact.
+            refill ? (
+              <div className="apills-groups">
+                <div><small>Front of house</small><div className="apills">{pills(phaseAreas(view, 'foh'))}</div></div>
+                <div><small>Back of house</small><div className="apills">{pills(phaseAreas(view, 'boh'))}</div></div>
+              </div>
+            ) : <div className="apills">{pills(view.areas)}</div>
+          ) : refill ? <p className="meta steps-line">{steps.map(([t]) => t).join(' → ')}</p> : null}
         </section>
         <section className="type type-quick">
           <div className="type-h">
@@ -100,8 +114,7 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
             <h2>Quick Restock</h2>{quickSession?.selected.length ? <Badge st="info">{quickSession.selected.length} on your list</Badge> : null}
             {onReset && quickSession ? <AdminMenu label="Quick restock" onChoose={() => onReset({ kind: 'quick' })} /> : null}
           </div>
-          <p className="lead">Only what&rsquo;s running low. For <b>short breaks between sessions</b>.</p>
-          <p className="meta">Search or browse, then collect straight away. Kept separate from the full restock.</p>
+          <p className="lead">Only what&rsquo;s running low, <b>between sessions</b>. Separate from the full restock.</p>
           <div className="actions"><button className={`btn big ${src && !finished ? '' : 'primary'}`} disabled={opening} onClick={() => onStart('quick')}>{quickSession ? 'Continue quick restock' : 'Start quick restock'}</button></div>
         </section>
       </div>
