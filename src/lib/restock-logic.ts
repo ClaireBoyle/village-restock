@@ -556,6 +556,16 @@ export function stockOutcomes(lines: CollectionLine[], items: Map<string, ItemSt
   return out.sort((a, b) => rank[a.status] - rank[b.status] || a.productName.localeCompare(b.productName));
 }
 
+/**
+ * How many stock shortages (out of stock or low) a restock recorded: the same count as
+ * "Stock shortages" on its Review screen. Upstairs suggestions count as entered.
+ */
+export function shortageCount(kind: SessionKind, view: DepartmentView, items: Map<string, ItemState>, recordedAreas: Map<string, AreaStatus>): number {
+  const it = withSuggestions(kind, view, items, recordedAreas);
+  const lines = collectionLines(collectPlacements(kind, view.placements, recordedAreas), it);
+  return stockOutcomes(lines, it, view.byId, !!view.department.noneOnDisplay).filter((o) => o.status === 'out' || o.status === 'low').length;
+}
+
 export function outcomeLine(o: StockOutcome): string {
   const q = (n: number) => formatQty(n, o.unitSingular, o.unitPlural);
   const shelf = o.onShelf !== null && o.target !== null ? ` \u00b7 ${round2(o.onShelf)} of ${round2(o.target)} on the shelf` : '';
@@ -571,6 +581,8 @@ export function outcomeLine(o: StockOutcome): string {
 export function summaryText(args: {
   departmentName: string; kind: SessionKind; finishedLabel: string | null; exceptionReason: string | null;
   people: string[]; view: DepartmentView; placements: PlacementView[]; recordedAreas: Map<string, AreaStatus>;
+  /** The name confirmed on the Finish screen. */
+  completedBy?: string | null;
   skipReasons: Map<string, string>; items: Map<string, ItemState>; dateLabel: string;
 }): string {
   const { view, items, recordedAreas } = args;
@@ -578,6 +590,7 @@ export function summaryText(args: {
   L.push(`VILLAGE RESTOCK: ${args.departmentName}`);
   L.push(`${args.kind === 'full' ? 'Full' : args.kind === 'area' ? `${view.areas[0]?.area.name ?? 'Area'}` : 'Quick'} restock \u00b7 ${args.finishedLabel ? `finished ${args.finishedLabel}` : 'not finished'} \u00b7 ${args.dateLabel}${args.people.length ? ` \u00b7 ${args.people.join(', ')}` : ''}`);
   L.push(`Status: ${!args.finishedLabel ? 'In progress' : args.exceptionReason ? `Finished with exceptions (${args.exceptionReason})` : 'Complete'}`);
+  if (args.completedBy) L.push(`Completed by: ${args.completedBy}`);
 
   const lines = collectionLines(collectPlacements(args.kind, args.placements, recordedAreas), items);
   const outcomes = stockOutcomes(lines, items, view.byId, !!view.department.noneOnDisplay);

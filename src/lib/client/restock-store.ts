@@ -130,7 +130,7 @@ export async function startSession(departmentId: string, kind: LocalSession['kin
 }
 
 /** Device-only details (which area is open, the quick list). Not uploaded. */
-export async function updateLocalSession(id: string, changes: Partial<Pick<LocalSession, 'curAreaId' | 'selected' | 'note'>>) {
+export async function updateLocalSession(id: string, changes: Partial<Pick<LocalSession, 'curAreaId' | 'selected' | 'note' | 'completedBy'>>) {
   await localDb().sessions.update(id, changes);
 }
 
@@ -175,15 +175,16 @@ export async function setArea(sessionId: string, areaId: string, status: LocalAr
   requestSync();
 }
 
-export async function finishSession(sessionId: string, exceptionReason: string | null, who: string, note: string | null = null) {
+export async function finishSession(sessionId: string, exceptionReason: string | null, who: string, note: string | null = null, completedBy: string | null = null) {
   const db = localDb();
   await db.transaction('rw', db.sessions, db.outbox, async () => {
     const s = await db.sessions.get(sessionId);
     if (!s) return;
     await db.sessions.update(sessionId, {
       status: exceptionReason ? 'finished_exceptions' : 'finished', exceptionReason, finishedAt: now(), people: addPerson(s, who), updatedAt: now(), note,
+      completedBy: completedBy?.trim() || who || null,
     });
-    await queue({ type: 'session.finish', sessionId, exceptionReason, note }, who);
+    await queue({ type: 'session.finish', sessionId, exceptionReason, note, completedBy: completedBy?.trim() || who || null }, who);
   });
   requestSync();
 }
@@ -223,6 +224,8 @@ export async function importRemote(remote: RemoteSession) {
       startedAt: remote.startedAt, finishedAt: pendingSession && existing ? existing.finishedAt : remote.finishedAt,
       // Keep a comment being typed here; otherwise take the server's.
       note: pendingSession && existing ? existing.note ?? null : remote.note ?? existing?.note ?? null,
+      // The same for "Completed by": a draft here wins until it's uploaded.
+      completedBy: pendingSession && existing ? existing.completedBy ?? null : remote.completedBy ?? existing?.completedBy ?? null,
       selected: existing?.selected ?? [], curAreaId: existing?.curAreaId ?? null, updatedAt: remote.updatedAt,
     });
     for (const it of remote.items) {

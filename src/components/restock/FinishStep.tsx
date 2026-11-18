@@ -31,6 +31,29 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
   };
   useEffect(() => () => window.clearTimeout(noteTimer.current), []);
   const finalNote = note.trim() ? note.trim() : null;
+  // "Completed by": starts with the name already entered for this run; a change is kept on this device
+  // (also if staff leave the run open), and saved with the restock when it's finished.
+  const [doneBy, setDoneBy] = useState(session.completedBy ?? (who || session.people[session.people.length - 1] || ''));
+  const byTimer = useRef<number | undefined>(undefined);
+  const editDoneBy = (v: string) => {
+    setDoneBy(v);
+    window.clearTimeout(byTimer.current);
+    byTimer.current = window.setTimeout(() => void updateLocalSession(session.id, { completedBy: v }), 400);
+  };
+  useEffect(() => () => window.clearTimeout(byTimer.current), []);
+  const [saveError, setSaveError] = useState('');
+  /** Finish: the name and comments go with it. If saving fails, nothing typed is lost. */
+  const finish = async (reason: string | null) => {
+    setSaveError('');
+    window.clearTimeout(byTimer.current);
+    try {
+      await updateLocalSession(session.id, { completedBy: doneBy });
+      await finishSession(session.id, reason, who, finalNote, doneBy.trim() || null);
+      window.scrollTo({ top: 0 });
+    } catch {
+      setSaveError('Couldn’t save the restock on this device. Nothing was lost: try Finish again.');
+    }
+  };
   const finished = session.status === 'finished' || session.status === 'finished_exceptions';
   const ex = finished ? [] : exceptions({ kind: session.kind, view, placements, recordedAreas: recorded, items });
   // Area restocks (e.g. Candy Bar's confection stand) are named after their area.
@@ -99,7 +122,7 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
               <span className="fh-icon"><Icon name={session.status === 'finished_exceptions' ? 'warn' : 'check'} /></span>
               <div>
                 <h2>{session.status === 'finished_exceptions' ? 'Finished with exceptions' : areaName ? `${areaName} restocked` : 'Restock complete'}</h2>
-                <p>Finished at {timeOf(session.finishedAt)}{session.people.length ? <> &middot; {session.people.join(', ')}</> : null}</p>
+                <p>Finished at {timeOf(session.finishedAt)}{session.completedBy ? <> &middot; Completed by <b className="fh-by">{session.completedBy}</b></> : session.people.length ? <> &middot; {session.people.join(', ')}</> : null}</p>
                 {session.exceptionReason ? <p className="fh-reason"><Icon name="warn" />{session.exceptionReason}</p> : null}
               </div>
             </div>
@@ -131,12 +154,19 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
                 <div className="chips">{EXCEPTION_REASONS.map((r) => <button key={r} className={`chip ${exReason === r ? 'on' : ''}`} onClick={() => setExReason(r)}>{r}</button>)}</div>
                 <div className="row-actions">
                   <button className="btn" onClick={() => { setExOpen(false); setExReason(null); }}>Cancel</button>
-                  <button className="btn caution big" disabled={!exReason} onClick={() => { void finishSession(session.id, exReason, who, finalNote); setExOpen(false); window.scrollTo({ top: 0 }); }}><Icon name="warn" />Confirm finish with exceptions</button>
+                  <button className="btn caution big" disabled={!exReason} onClick={() => { void finish(exReason); setExOpen(false); }}><Icon name="warn" />Confirm finish with exceptions</button>
                 </div>
               </section>
             ) : null}
 
             {report}
+
+            {/* Always shown (also when there are no shortages): who is signing this restock off. */}
+            <section className="note-box by-box">
+              <label htmlFor="completed-by"><b>Completed by</b></label>
+              <input id="completed-by" type="text" maxLength={40} autoComplete="name" value={doneBy} onChange={(e) => editDoneBy(e.target.value)} placeholder="Your name" />
+            </section>
+            {saveError ? <p className="err" role="alert">{saveError}</p> : null}
 
             <section className="note-box">
               <label htmlFor="finish-note"><b>Comments for managers</b> <span className="muted">(optional)</span></label>
@@ -164,7 +194,7 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
         <Dock icon={ex.length ? 'warn' : 'check'} title={ex.length ? `${plural(ex.length, 'thing')} still to do` : ''}>
           <button className="btn save-exit" onClick={ctx.saveAndExit} aria-label="Save and exit"><Icon name="save" /><span className="lg">Save and exit</span><span className="sm">Save &amp; exit</span></button>
           {ex.length ? <button className="btn caution big" onClick={() => { setExOpen(true); window.setTimeout(() => document.getElementById('expanel')?.scrollIntoView({ block: 'start' }), 50); }}><span className="lg">Finish with exceptions&hellip;</span><span className="sm">With exceptions&hellip;</span></button> : null}
-          <button className="btn good big" disabled={ex.length > 0} onClick={() => { void finishSession(session.id, finishReason(null), who, finalNote); window.scrollTo({ top: 0 }); }}><Icon name="check" />{areaName ? 'Finish' : 'Finish restock'}</button>
+          <button className="btn good big" disabled={ex.length > 0} onClick={() => void finish(finishReason(null))}><Icon name="check" />{areaName ? 'Finish' : 'Finish restock'}</button>
         </Dock>
       )}
     </>

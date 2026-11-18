@@ -8,6 +8,7 @@ import { useCatalogue } from '@/lib/client/use-catalogue';
 import { useLive, useResetIds } from '@/lib/client/hooks';
 import { localDb, type LocalArea, type LocalItem, type LocalSession } from '@/lib/client/local-db';
 import { tradingDate } from '@/lib/restock-math';
+import { EMPTY_ITEM, departmentView, scopeView, shortageCount, type AreaStatus, type ItemState } from '@/lib/restock-logic';
 import { adminSignOut } from '@/app/actions/admin';
 import type { RemoteSession } from '@/lib/sync-types';
 import type { Catalogue, CatDepartment } from '@/lib/catalogue-types';
@@ -29,11 +30,25 @@ interface DeptState {
   reason: string | null;
   quickCount: number;
   updatedAt: string;
+  /** Finished tonight: how many stock shortages it recorded (out of stock or low). */
+  shortages: number;
+}
+
+/** A finished restock's stock shortages, from this device's copy or the uploaded one. */
+function shortagesOf(cat: Catalogue, d: CatDepartment, s: LocalSession | RemoteSession, localItems: LocalItem[], localAreas: LocalArea[]): number {
+  const whole = departmentView(cat, d.id);
+  if (!whole) return 0;
+  const view = s.kind === 'area' ? scopeView(whole, s.areaId) : whole;
+  const remote = 'items' in s ? s : null;
+  const items = new Map<string, ItemState>((remote ? remote.items : localItems.filter((i) => i.sessionId === s.id)).map((r) => [r.placementId, { ...EMPTY_ITEM, ...r }]));
+  const recorded = new Map<string, AreaStatus>((remote ? remote.areas : localAreas.filter((a) => a.sessionId === s.id))
+    .filter((a) => a.status === 'complete' || a.status === 'skipped').map((a) => [a.areaId, a.status as AreaStatus]));
+  return shortageCount(s.kind, view, items, recorded);
 }
 
 const t = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }).toLowerCase() : '');
 
-function stateFor(cat: Catalogue, d: CatDepartment, local: LocalSession | undefined, localAreas: LocalArea[], remote: RemoteSession | undefined, quick: LocalSession | undefined): DeptState {
+function stateFor(cat: Catalogue, d: CatDepartment, local: LocalSession | undefined, localAreas: LocalArea[], localItems: LocalItem[], remote: RemoteSession | undefined, quick: LocalSession | undefined): DeptState {
   const areas = cat.areas.filter((a) => a.departmentId === d.id && !a.parentAreaId).sort((a, b) => a.sortOrder - b.sortOrder); // sections are part of their area
   const areaIds = new Set(cat.areas.filter((a) => a.departmentId === d.id).map((a) => a.id)); // includes sections
   const products = cat.placements.filter((p) => areaIds.has(p.checkAreaId)).length;
@@ -47,6 +62,7 @@ function stateFor(cat: Catalogue, d: CatDepartment, local: LocalSession | undefi
     d, segs, doneAreas: segs.filter((x) => x !== 'none').length, products, people: s?.people ?? [], startedAt: s?.startedAt ?? null,
     finishedAt: s?.finishedAt ?? null, reason: s?.exceptionReason ?? null, quickCount: quick?.selected.length ?? 0,
     updatedAt: s?.updatedAt ?? quick?.updatedAt ?? '',
+    shortages: s && s.status !== 'open' && s.status !== 'unfinished' ? shortagesOf(cat, d, s, localItems, localAreas) : 0,
   };
   if (s && s.status === 'finished') return { ...base, kind: 'done', segs: segs.map(() => 'done'), doneAreas: segs.length };
   if (s && s.status === 'finished_exceptions') return { ...base, kind: 'exceptions' };
@@ -59,7 +75,7 @@ function stateFor(cat: Catalogue, d: CatDepartment, local: LocalSession | undefi
  * Departments restocked area by area (Candy Bar): an area counts as done once it has a finished
  * restock tonight. Opened-but-empty area restocks don't count as started.
  */
-function areaStateFor(cat: Catalogue, d: CatDepartment, local: LocalSession[], localItems: LocalItem[], remote: RemoteSession[], quick: LocalSession | undefined): DeptState {
+function areaStateFor(cat: Catalogue, d: CatDepartment, local: LocalSession[], localItems: LocalItem[], localAreas: LocalArea[], remote: RemoteSession[], quick: LocalSession | undefined): DeptState {
   const areas = cat.areas.filter((a) => a.departmentId === d.id && !a.parentAreaId).sort((a, b) => a.sortOrder - b.sortOrder);
   const areaIds = new Set(cat.areas.filter((a) => a.departmentId === d.id).map((a) => a.id));
   const products = cat.placements.filter((p) => areaIds.has(p.checkAreaId)).length;
@@ -81,11 +97,13 @@ function areaStateFor(cat: Catalogue, d: CatDepartment, local: LocalSession[], l
   const doneAreas = segs.filter((x) => x === 'done').length;
   const people = [...new Set(runs.filter((r) => r.entered || r.s.status !== 'open').flatMap((r) => r.s.people))];
   const kind: DeptState['kind'] = per.some((p) => p.open) ? 'active' : areas.length && doneAreas === areas.length ? 'done' : doneAreas ? 'part' : quick?.selected.length ? 'quick' : 'idle';
-  const areaDetail = per.map((p) => `${p.a.name} ${p.open ? 'in progress' : p.done ? `✓ ${t(p.done.s.finishedAt)}` : 'not yet'}`).join(' · ');
+  const short = per.map((p) => (p.done ? shortagesOf(cat, d, p.done.s, localItems, localAreas) : 0));
+  const areaDetail = per.map((p, i) => `${p.a.name} ${p.open ? 'in progress' : p.done ? `✓ ${t(p.done.s.finishedAt)}${short[i] ? ` · ${short[i]} short` : ''}` : 'not yet'}`).join(' · ');
   const updated = runs.map((r) => r.s.updatedAt).sort().pop() ?? quick?.updatedAt ?? '';
   return {
     d, kind, segs, doneAreas, products, people, startedAt: null, finishedAt: null, reason: null,
     quickCount: quick?.selected.length ?? 0, updatedAt: updated, areaDetail: areas.length ? areaDetail : undefined,
+    shortages: short.reduce((a, b) => a + b, 0),
   };
 }
 
@@ -121,14 +139,15 @@ export function HomeScreen({ isAdmin }: { isAdmin: boolean }) {
 
   const local = useLive(async () => (day ? (await localDb().sessions.toArray()).filter((s) => s.tradingDate === day || (s.kind === 'quick' && s.status === 'open')) : []), [day], [] as LocalSession[]);
   const localAreas = useLive(async () => localDb().areas.toArray(), [], [] as LocalArea[]);
-  const areaRunIds = local.filter((s) => s.kind === 'area').map((s) => s.id);
-  const localItems = useLive(async () => (areaRunIds.length ? localDb().items.where('sessionId').anyOf(areaRunIds).toArray() : []), [areaRunIds.join()], [] as LocalItem[]);
+  // Tonight's restocks on this device (area and full): their items, for progress and shortage counts.
+  const runIds = local.filter((s) => s.kind === 'area' || s.kind === 'full').map((s) => s.id);
+  const localItems = useLive(async () => (runIds.length ? localDb().items.where('sessionId').anyOf(runIds).toArray() : []), [runIds.join()], [] as LocalItem[]);
 
   const states = catalogue ? catalogue.departments.map((d) => {
     const quick = local.find((s) => s.departmentId === d.id && s.kind === 'quick' && s.status === 'open');
-    if (d.restockByArea) return areaStateFor(catalogue, d, local.filter((s) => s.tradingDate === day), localItems, remote, quick);
+    if (d.restockByArea) return areaStateFor(catalogue, d, local.filter((s) => s.tradingDate === day), localItems, localAreas, remote, quick);
     return stateFor(catalogue, d,
-      local.find((s) => s.departmentId === d.id && s.kind === 'full' && s.tradingDate === day), localAreas,
+      local.find((s) => s.departmentId === d.id && s.kind === 'full' && s.tradingDate === day), localAreas, localItems,
       remote.find((r) => r.departmentId === d.id && r.kind === 'full'), quick);
   }) : [];
   const doneCount = states.filter((s) => s.kind === 'done' || s.kind === 'exceptions').length;
@@ -201,22 +220,35 @@ const STATUS: Record<DeptState['kind'], { icon: 'half' | 'bolt' | 'check' | 'war
   idle: { icon: 'circle', text: 'Not started' },
 };
 
+/**
+ * Finished tonight: "✓ Stocked" (green), or "✓ Done · 2 shortages" (amber) so the team can see what
+ * still needs following up. Finished with exceptions and no shortages: "✓ Done · <reason>" (amber).
+ */
+function finishedLabel(s: DeptState): { text: string; warn: boolean } | null {
+  if (s.kind !== 'done' && s.kind !== 'exceptions') return null;
+  if (s.shortages > 0) return { text: `✓ Done · ${s.shortages} shortage${s.shortages === 1 ? '' : 's'}`, warn: true };
+  if (s.kind === 'exceptions') return { text: `✓ Done · ${s.reason ?? 'finished with exceptions'}`, warn: true };
+  return { text: '✓ Stocked', warn: false };
+}
+
 /** One department's line in tonight's overview: status, area progress, who and when. */
 function Lane({ s }: { s: DeptState }) {
   const unset = s.kind === 'idle' && s.segs.length === 0;
   const st = unset ? { icon: 'info' as const, text: 'Not set up yet' } : STATUS[s.kind];
+  const fin = finishedLabel(s);
   const detail = unset ? 'An admin can add its areas and products' : s.areaDetail ? s.areaDetail : s.kind === 'active' ? `${s.doneAreas} of ${s.segs.length} areas${s.people.length ? ` · ${s.people.join(', ')}` : ''}${s.startedAt ? ` · since ${t(s.startedAt)}` : ''}`
     : s.kind === 'quick' ? `${s.quickCount} on the list · full restock not started`
     : s.kind === 'done' ? `Finished ${t(s.finishedAt)}${s.people.length ? ` · ${s.people.join(', ')}` : ''}`
     : s.kind === 'exceptions' ? `${t(s.finishedAt)}${s.reason ? ` · ${s.reason}` : ''}`
     : `${s.segs.length} areas · ${s.products} products`;
   return (
-    <li className={`lane k-${unset ? 'unset' : s.kind} ${s.d.theme === 'gold' ? 'gold' : 'village'}`}>
+    <li className={`lane k-${unset ? 'unset' : s.kind} ${s.d.theme === 'gold' ? 'gold' : 'village'} ${fin ? `fin ${fin.warn ? 'fin-warn' : 'fin-ok'}` : ''}`}>
       <div className="ln-head">
         <span className="ln-icon" aria-hidden="true"><Icon name={s.d.icon} /></span>
         <span className="ln-name">{s.d.groupLabel ? <small>{s.d.groupLabel}</small> : null}<b>{s.d.shortName}</b></span>
       </div>
-      <p className="ln-st"><span className={`ln-dot ${s.kind === 'active' ? 'live' : ''}`} aria-hidden="true"><Icon name={st.icon} /></span>{st.text}</p>
+      {fin ? <p className={`ln-st fin-label ${fin.warn ? 'warn' : 'ok'}`}>{fin.text}</p>
+        : <p className="ln-st"><span className={`ln-dot ${s.kind === 'active' ? 'live' : ''}`} aria-hidden="true"><Icon name={st.icon} /></span>{st.text}</p>}
       <AreaMeter segs={s.segs} label={`${s.doneAreas} of ${s.segs.length} areas done`} />
       <p className="ln-meta">{detail}</p>
     </li>
@@ -230,8 +262,10 @@ function DepartmentCard({ s }: { s: DeptState }) {
   const unset = s.kind === 'idle' && s.segs.length === 0;
   const action = unset ? 'Not set up yet' : s.d.restockByArea ? (s.kind === 'active' ? 'Resume restock' : 'Choose an area')
     : { active: 'Resume restock', quick: 'Continue quick restock', done: 'View summary', exceptions: 'View summary', idle: 'Start restock', part: 'Resume restock' }[s.kind];
+  const fin = finishedLabel(s);
   return (
-    <Link href={`/d/${d.id}`} className={`dcard2 k-${unset ? 'unset' : s.kind} ${gold ? 'gold' : 'village'}`} aria-label={`${d.name}: ${unset ? 'Not set up yet' : `${STATUS[s.kind].text}. ${action}`}.`}>
+    <Link href={`/d/${d.id}`} className={`dcard2 k-${unset ? 'unset' : s.kind} ${gold ? 'gold' : 'village'} ${fin ? `fin ${fin.warn ? 'fin-warn' : 'fin-ok'}` : ''}`}
+      aria-label={`${d.name}: ${unset ? 'Not set up yet' : `${fin ? fin.text.replace('✓ ', '') : STATUS[s.kind].text}. ${action}`}.`}>
       {/* The colour-block title, as staff know it: Village blue, or Gold Class gold */}
       <span className="dc2-block">
         <span className="dc2-title">
@@ -240,6 +274,7 @@ function DepartmentCard({ s }: { s: DeptState }) {
         </span>
         <span className="dc2-icon" aria-hidden="true"><Icon name={s.kind === 'done' ? 'check' : d.icon} /></span>
       </span>
+      {fin ? <span className={`dc2-fin fin-label ${fin.warn ? 'warn' : 'ok'}`}>{fin.text}</span> : null}
       {d.description ? <span className="dc2-desc">{d.description}</span> : null}
       <span className="dc2-go">{action}<Icon name="next" /></span>
     </Link>

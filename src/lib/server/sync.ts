@@ -197,7 +197,8 @@ async function apply(tx: Tx, op: SyncOp, deviceId: string): Promise<{ mergedInto
 
     case 'session.finish': {
       const s = await sessionRow(tx, op.sessionId);
-      await finishSession(tx, { id: op.sessionId, departmentId: String(s.departmentId), kind: s.kind as SessionKind, areaId: (s.areaId as string) ?? null }, op.exceptionReason, op.at, op.by, op.note ?? null);
+      await finishSession(tx, { id: op.sessionId, departmentId: String(s.departmentId), kind: s.kind as SessionKind, areaId: (s.areaId as string) ?? null }, op.exceptionReason, op.at, op.by, op.note ?? null,
+        op.completedBy?.trim() || op.by || null);
       await addPerson(tx, op.sessionId, op.by);
       return {};
     }
@@ -246,6 +247,14 @@ async function apply(tx: Tx, op: SyncOp, deviceId: string): Promise<{ mergedInto
  */
 let hasNoteColumn: boolean | null = null;
 /** Migration 004 adds finish_note; until it's run, comments still go in the email. */
+let hasCompletedBy = false;
+async function completedByColumn(tx: Tx): Promise<boolean> {
+  if (!hasCompletedBy) {
+    hasCompletedBy = (await tx`select 1 from information_schema.columns where table_name = 'restock_sessions' and column_name = 'completed_by'`).length > 0;
+  }
+  return hasCompletedBy;
+}
+
 async function noteColumn(tx: Tx): Promise<boolean> {
   if (hasNoteColumn === null) {
     const r = await tx`select 1 from information_schema.columns where table_name = 'restock_sessions' and column_name = 'finish_note'`;
@@ -254,7 +263,7 @@ async function noteColumn(tx: Tx): Promise<boolean> {
   return hasNoteColumn;
 }
 
-async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind: SessionKind; areaId: string | null }, reason: string | null, at: string, by: string | null, note: string | null) {
+async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind: SessionKind; areaId: string | null }, reason: string | null, at: string, by: string | null, note: string | null, completedBy: string | null = null) {
   const comment = note?.trim() ? note.trim() : null;
   const cat = await loadCatalogue();
   const whole = departmentView(cat, s.departmentId);
@@ -295,6 +304,8 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
   }
   await tx`update restock_sessions set status = ${status}, exception_reason = ${finalReason}, finished_at = ${at} where id = ${s.id}`;
   if (await noteColumn(tx)) await tx`update restock_sessions set finish_note = ${comment} where id = ${s.id}`;
+  // "Completed by" (migration 015): kept on the finished restock.
+  if (await completedByColumn(tx)) await tx`update restock_sessions set completed_by = ${completedBy?.slice(0, 40) ?? null} where id = ${s.id}`;
 
   // Full and area restocks: queue the manager email in this same transaction.
   if (s.kind !== 'quick' && view) {
@@ -319,7 +330,7 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
       departmentName: `${String(dept?.name ?? view.department.name)}${s.kind === 'area' && view.areas[0] ? ` · ${view.areas[0].area.name}` : ''}`,
       finishedLabel: `${new Date(at).toLocaleDateString('en-AU', { timeZone: cat.settings.timeZone, weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '')}, ${new Date(at).toLocaleTimeString('en-AU', { timeZone: cat.settings.timeZone, hour: 'numeric', minute: '2-digit' }).toLowerCase()}`,
       people: (row?.people as string[]) ?? [], exceptionReason: finalReason,
-      areaRestock: s.kind === 'area', lowStockWording: !!view.department.noneOnDisplay,
+      areaRestock: s.kind === 'area', completedBy, lowStockWording: !!view.department.noneOnDisplay,
       outcomes: stockOutcomes(lines, items, view.byId, !!view.department.noneOnDisplay), notChecked, note: comment,
       link: host ? `https://${host}/admin/restocks/${s.id}` : null,
     }, Boolean(dept?.emailEveryRestock));
@@ -335,6 +346,7 @@ function toRemote(s: Record<string, unknown>, areas: Record<string, unknown>[], 
     id: String(s.id), departmentId: String(s.departmentId), kind: s.kind as RemoteSession['kind'], areaId: (s.areaId as string) ?? null,
     tradingDate: s.tradingDate instanceof Date ? s.tradingDate.toISOString().slice(0, 10) : String(s.tradingDate).slice(0, 10),
     status: s.status as RemoteSession['status'], exceptionReason: (s.exceptionReason as string) ?? null, note: (s.finishNote as string) ?? null,
+    completedBy: (s.completedBy as string) ?? null,
     people: (s.people as string[]) ?? [], startedAt: iso(s.startedAt)!, finishedAt: iso(s.finishedAt), updatedAt: iso(s.updatedAt)!,
     areas: areas.map((a) => ({ areaId: String(a.checkAreaId), status: a.status as RemoteSession['areas'][number]['status'], skipReason: (a.skipReason as string) ?? null, updatedBy: (a.updatedBy as string) ?? null, updatedAt: iso(a.updatedAt)! })),
     items: items.map((r) => ({

@@ -49,6 +49,8 @@ export interface RestockEmailInput {
   link: string | null;
   /** An area restock (e.g. Candy Bar's confection stand) rather than a full restock. */
   areaRestock?: boolean;
+  /** The name confirmed on the Finish screen. */
+  completedBy?: string | null;
   /** Candy Bar wording: "Low stock" instead of "Running low". */
   lowStockWording?: boolean;
 }
@@ -72,6 +74,7 @@ export function buildRestockEmail(i: RestockEmailInput): { subject: string; html
   const finishedWhat = i.areaRestock ? 'Restock finished' : 'Full restock finished';
 
   const T: string[] = [`${i.departmentName}: ${finishedWhat.toLowerCase()} ${i.finishedLabel}`];
+  if (i.completedBy) T.push(`Completed by: ${i.completedBy}`);
   if (i.people.length) T.push(`Staff: ${i.people.join(', ')}`);
   if (i.exceptionReason) T.push(`Finished with exceptions: ${i.exceptionReason}`);
   if (i.note) T.push('', 'COMMENTS FROM STAFF', i.note);
@@ -97,7 +100,7 @@ export function buildRestockEmail(i: RestockEmailInput): { subject: string; html
     <div style="background:linear-gradient(115deg,#101C55 0%,#2446B8 48%,#4588F4 100%);border-radius:18px;padding:18px 20px;color:#fff;margin-bottom:14px">
       <div style="font-size:13px;opacity:.85">Village Restock</div>
       <div style="font-size:22px;font-weight:700;margin-top:2px">${esc(i.departmentName)}</div>
-      <div style="font-size:14px;opacity:.9;margin-top:4px">${finishedWhat} ${esc(i.finishedLabel)}${i.people.length ? ` &middot; ${esc(i.people.join(', '))}` : ''}</div>
+      <div style="font-size:14px;opacity:.9;margin-top:4px">${finishedWhat} ${esc(i.finishedLabel)}${i.completedBy ? ` &middot; Completed by ${esc(i.completedBy)}` : i.people.length ? ` &middot; ${esc(i.people.join(', '))}` : ''}</div>
     </div>
     ${i.exceptionReason ? `<div style="background:#FDF0DA;border-radius:12px;padding:10px 14px;margin-bottom:14px;color:#8A5300;font-size:14px"><b>Finished with exceptions:</b> ${esc(i.exceptionReason)}</div>` : ''}
     ${i.note ? `<div style="background:#fff;border:2px solid #C9D6F5;border-radius:16px;padding:14px 18px;margin:0 0 14px">

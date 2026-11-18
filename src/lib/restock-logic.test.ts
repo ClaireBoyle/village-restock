@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Catalogue } from './catalogue-types';
-import { activePlacements, areaNotes, isRequired, scopeView, outcomeLine, shortStatus, collectPlacements, phaseAreas, refillLines, suggestions, usesRefill, withSuggestions,
+import { activePlacements, areaNotes, isRequired, scopeView, outcomeLine, shortageCount, shortStatus, collectPlacements, phaseAreas, refillLines, suggestions, usesRefill, withSuggestions,
   EMPTY_ITEM, areaStatus, cardState, isChecked, collectionLines, departmentView, exceptions, gotAllUpdates,
   gotFewerUpdates, groupByStoreroom, lineGot, lineState, needOf, stockOutcomes, summaryText, type AreaStatus, type ItemState,
 } from './restock-logic';
@@ -425,5 +425,19 @@ describe('None on display (Candy Bar): short is Low stock, even at zero', () => 
   it('got all or undo clears it', () => {
     expect(gotAllUpdates(line)[0].fields.noneOnDisplay).toBe(false);
     expect(m({}).get('p-cloth')!.noneOnDisplay).toBe(false);
+  });
+});
+
+describe('shortageCount: the Review screen\'s "Stock shortages", for the home screen', () => {
+  const recorded = (o: Record<string, AreaStatus>) => new Map(Object.entries(o));
+  it('counts confirmed out / low lines only', () => {
+    const base = items({ 'p-tom': { currentQty: 2 }, 'p-sauce': { currentQty: 1 }, 'p-cloth': { requestedQty: 2 } });
+    expect(shortageCount('full', kitchen, base, recorded({}))).toBe(0);
+    const lines = collectionLines(kitchen.placements, base);
+    const tom = lines.find((l) => l.productName === 'Tomatoes')!, sauce = lines.find((l) => l.productName === 'Sauce')!, cloth = lines.find((l) => l.productName === 'Cloths')!;
+    const m = new Map(base);
+    for (const u of [...gotFewerUpdates(tom, 0, 'insufficient', false), ...gotFewerUpdates(sauce, 1, 'insufficient', false), ...gotFewerUpdates(cloth, 1, 'time', false)]) m.set(u.placementId, { ...m.get(u.placementId)!, ...u.fields });
+    // Tomatoes out, Sauce low; Cloths "interrupted" is collection incomplete, not a shortage.
+    expect(shortageCount('full', kitchen, m, recorded({}))).toBe(2);
   });
 });

@@ -1133,3 +1133,7 @@ button.pnote.open span{display:block}
   .dock-in:has(.flow-next) .dock-acts{flex:1 1 100%;width:100%}
   .dock-in:has(.flow-next) .dock-acts .btn.flow-next{flex:1 1 auto}
 }
+/* Finish screen: "Completed by" (same look as the comments box, one line) */
+.by-box input{width:100%;min-height:48px;font:inherit;font-size:16px;padding:10px 14px;border:1.5px solid var(--hair);border-radius:12px;background:#fff;color:#17213B}
+.by-box input:focus{outline:none;border-color:#2446B8;box-shadow:0 0 0 3px rgba(36,70,184,.15)}
+.fh-by{font-weight:700}

@@ -969,3 +969,11 @@ body:has(.theme-gold) { background: #241B10; }
 .arr-hrow input { flex: 1; min-width: 0; min-height: 40px; font-weight: 700; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; }
 .arr-hx { width: 40px; height: 40px; min-height: 40px; flex: none; }
 .row.just-saved { background: var(--accent-soft, rgba(31,85,224,.08)); border-radius: 12px; transition: background .6s ease; }
+
+/* Home: finished tonight. A thin green outline and "✓ Stocked"; shortages say so in amber. */
+.lane.fin, .dcard2.fin { outline: 1.5px solid var(--ok); outline-offset: -1.5px; }
+.lane.fin { border-radius: 16px; outline-offset: -4px; }
+.fin-label { font-weight: 700; }
+.fin-label.ok { color: var(--ok); }
+.fin-label.warn { color: var(--warn); }
+.dc2-fin { font-size: 15px; line-height: 1.3; }
