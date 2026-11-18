@@ -10,7 +10,7 @@
 --   Chocolate hang bags    Snickers Pods, Mars Pods, Maltesers, Maltesers Duos ×2, M&Ms ×3, Reese's ×2, Cookie Time
 --   Lollies              Skittles ×5, Sour Patch Kids, Allen's ×2
 --   Bars & Nerds   Snickers Bar, Mars Bar, Kit Kat, Nerds ×2
---   Chips & Pringles     Pringles ×2, Thins, Smith's ×2, Twisties
+--   Chips & Pringles     Pringles ×2, Thins ×2, Smith's ×2, Twisties
 --   Fairy floss & popcorn  Fairy Floss, Parlour Lane ×4
 --
 -- The collection list follows the same order, so the Candy Bar BOH pick goes family by family too.
@@ -48,6 +48,7 @@ declare
     ['Berry Nerds Gummy Clusters', ''],
     ['Pringles Original', 'Chips & Pringles'],
     ['Pringles Sour Cream & Onion', ''],
+    ['Thins Original', ''],
     ['Thins Light & Tangy', ''],
     ['Smith''s Original', ''],
     ['Smith''s Salt & Vinegar', ''],

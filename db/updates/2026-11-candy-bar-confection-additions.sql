@@ -5,7 +5,7 @@
 --   Added:   Skittles Jellies Pandas          (after Kittens)
 --            Fairy Floss, in tubs             (end of the lollies)
 --            Cookie Time Strawberries & Cream (end of the chocolate)
---            Thins Light & Tangy              (after Smith's Salt & Vinegar)
+--            Thins Original, Thins Light & Tangy (after Smith's Salt & Vinegar)
 --            Mount Franklin Still Water       (end of the stand; the same product as in the drinks fridge)
 --
 -- * Staff enter what's needed (no targets). Collected from Candy Bar BOH, except the water,
@@ -33,7 +33,8 @@ begin
       (2, 'Fairy Floss', 'tub', 'tubs', 'Lollies & Gummies', 'Berry Nerds Gummy Clusters'),
       (3, 'Cookie Time Strawberries & Cream', 'cookie', 'cookies', 'Cookies', 'Snickers Bar'),
       (4, 'Thins Light & Tangy', 'packet', 'packets', 'Chips & Savoury', 'Smith''s Salt & Vinegar'),
-      (5, 'Mount Franklin Still Water', 'bottle', 'bottles', 'Water', '')) v(k, name, one, many, catname, after)
+      (5, 'Mount Franklin Still Water', 'bottle', 'bottles', 'Water', ''),
+      (6, 'Thins Original', 'packet', 'packets', 'Chips & Savoury', 'Smith''s Salt & Vinegar')) v(k, name, one, many, catname, after)
     order by k
   loop
     insert into categories (department_id, name, sort_order) select dept, r.catname, 100
