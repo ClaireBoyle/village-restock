@@ -13,7 +13,12 @@ export async function shrink(file: File): Promise<Blob> {
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(bmp.width * scale);
   canvas.height = Math.round(bmp.height * scale);
-  canvas.getContext('2d')!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  const g = canvas.getContext('2d')!;
+  // JPEG has no transparency: without this, see-through backgrounds (cut-out product PNGs) turn black.
+  // White matches the white photo frames in the app.
+  g.fillStyle = '#fff';
+  g.fillRect(0, 0, canvas.width, canvas.height);
+  g.drawImage(bmp, 0, 0, canvas.width, canvas.height);
   bmp.close();
   for (const q of [0.82, 0.7, 0.55]) {
     const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', q));
