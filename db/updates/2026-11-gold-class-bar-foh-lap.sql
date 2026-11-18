@@ -59,10 +59,13 @@ begin
   update check_areas set guide_text = 'From the sink: liqueurs & vermouth, syrups & mixers, then spirits & red wine on the benchtop. Add only what needs topping up.'
     where id = bench and (trim(coalesce(guide_text, '')) = '' or guide_text like 'From the sink to the milkshake machine%');
 
-  -- 2. Coffee cupboard: the supplies first, then the sugar container at the coffee machine.
+  -- 2. Coffee cupboard: the supplies first, then the sugar container at the coffee machine
+  --    (skipped once 2026-11-gold-class-bar-coffee-cupboard.sql has given the sugar its own tab).
   k := 0;
   for r in select x.id, lower(p.name) = 'sugar container' as sugar from product_placements x join products p on p.id = x.product_id
-           where x.check_area_id = coffee order by (lower(p.name) = 'sugar container'), x.sort_order, x.created_at loop
+           where x.check_area_id = coffee
+             and exists (select 1 from product_placements y join products q on q.id = y.product_id where y.check_area_id = coffee and lower(q.name) = 'sugar container')
+           order by (lower(p.name) = 'sugar container'), x.sort_order, x.created_at loop
     k := k + 1;
     update product_placements set sort_order = k,
       heading = case when r.sugar then 'Coffee machine' when k = 1 then 'Coffee supplies' else null end where id = r.id;

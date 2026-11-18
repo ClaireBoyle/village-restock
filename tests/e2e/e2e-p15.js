@@ -25,6 +25,8 @@ const waitCur = async (P, name) => { await P.waitForSelector(`.area-btn.cur:has-
   await sql.file('db/updates/2026-11-gold-class-bar-foh-lap.sql');
   await sql.file('db/updates/2026-11-gold-class-bar-back-bench-walk.sql');
   await sql.file('db/updates/2026-11-gold-class-bar-foh-lap.sql');
+  await sql.file('db/updates/2026-11-gold-class-bar-coffee-cupboard.sql');
+  await sql.file('db/updates/2026-11-gold-class-bar-coffee-cupboard.sql');
   const b = await chromium.launch(); const errs = [];
   const c = await b.newContext({ ...devices['iPhone 13'] }); const P = await c.newPage(); P.on('pageerror', (e) => errs.push(e.message));
   await P.goto(B + '/'); await P.waitForSelector('.dcard2');
@@ -106,8 +108,19 @@ const waitCur = async (P, name) => { await P.waitForSelector(`.area-btn.cur:has-
   await primary(P).click(); await waitCur(P, 'Cups, Lids & Straws storage');
   ok(await primaryText(P) === 'Done → Coffee cupboard', 'up the left side: "Done → Coffee cupboard"');
   await primary(P).click(); await waitCur(P, 'Coffee cupboard');
-  ok(JSON.stringify(await listOf(P)) === JSON.stringify(['# Coffee supplies', 'Coffee Beans', 'Hot Chocolate Powder', 'Lemon Lime Cordial', '# Coffee machine', 'Sugar container']),
-    'Coffee cupboard: supplies, then the sugar container at the coffee machine');
+  ok(JSON.stringify(await listOf(P)) === JSON.stringify(['# Top shelf', 'Coffee Beans', 'Hot Chocolate Powder', 'Decaf Coffee', 'Chai Powder', 'Matcha Powder', 'Biscoff Biscuits',
+    '# Bottom shelf', 'Lemon Cordial', 'Lime Cordial', 'Raspberry Cordial', 'Bitters', 'Orange Bitters', 'Honey', 'Hazelnut Syrup']), 'Coffee cupboard: top shelf, then bottom shelf');
+  const tea = P.locator('.psec:has-text("Tea bags")');
+  ok(await tea.locator('article.prow').count() === 0 && await sees(P, '.psec:has-text("Tea bags") .psec-h', '5 products'), 'tea bags: a closed tab ("5 products")');
+  await tea.locator('.psec-h').click();
+  ok(JSON.stringify(await tea.locator('article.prow h3').allInnerTexts()) === JSON.stringify(['Earl Grey Tea Bags', 'English Breakfast Tea Bags', 'Chamomile Tea Bags', 'Green Tea Bags', 'Peppermint Tea Bags'])
+    && await sees(P, '.psec:has-text("Tea bags") .psec-hint', 'tea bag tubs'), '...opens to the five teas, with "check the tea bag tubs"');
+  await tea.locator('article.prow:has(h3:text-is("Earl Grey Tea Bags")) button.padd').click();
+  ok(await sees(P, '.psec:has-text("Coffee machine")', 'Sugar container'), 'the sugar container is at the coffee machine');
+  const [cord] = await sql`select count(*)::int as n from products p join departments d on d.id = p.department_id where d.name = 'Gold Class Bar' and p.status = 'active' and p.name = 'Lemon Lime Cordial'`;
+  const [alcs] = await sql`select count(*)::int as n from product_placements pl join products p on p.id = pl.product_id join check_areas a on a.id = pl.check_area_id
+    join storage_locations l on l.id = p.default_location_id where a.name in ('Coffee cupboard', 'Tea bags') and lower(l.name) <> 'alcohol storeroom'`;
+  ok(cord.n === 0 && alcs.n === 0, 'Lemon Lime Cordial split into Lemon and Lime; everything in the cupboard comes from the Alcohol storeroom');
   ok(await P.locator(`${row('Sugar container')} .pseg button`).innerText() === 'Needs refill' && await P.locator(`${row('Sugar container')} .pnote.task`).count() === 0, 'sugar: one "Needs refill" button (instructions are on the pickup list)');
   await P.click(`${row('Sugar container')} .pseg button`);
   ok(await sees(P, `${row('Sugar container')} .ps`, 'On the Refill FOH list'), '...then "On the Refill FOH list"');
@@ -122,7 +135,7 @@ const waitCur = async (P, name) => { await P.waitForSelector(`.area-btn.cur:has-
   const rooms = await P.$$eval('.room', (els) => els.map((r) => [r.querySelector('h3').textContent, [...r.querySelectorAll('.line')].map((l) => l.dataset.line)]));
   ok(JSON.stringify(rooms) === JSON.stringify([['Upstairs cupboards', ['Cadbury Flake container', 'Sugar container']], ['Wine cupboard', ['Red Claw Shiraz']]]), 'Refill FOH by source: ' + JSON.stringify(rooms));
   ok(await sees(P, '.line[data-line="Sugar container"]', 'next to the coffee machine') && await sees(P, '.line[data-line="Cadbury Flake container"]', 'fill it to the top'), 'refill instructions on the pickup list');
-  ok(!JSON.stringify(rooms).includes('Crème de Café') && !JSON.stringify(rooms).includes('Coffee Beans'), 'downstairs items are not upstairs pickups');
+  ok(!JSON.stringify(rooms).includes('Crème de Café') && !JSON.stringify(rooms).includes('Coffee Beans') && !JSON.stringify(rooms).includes('Earl Grey'), 'downstairs items are not upstairs pickups');
   await P.screenshot({ path: `${OUT}/p15-refill-phone.png`, fullPage: true });
   ok(!errs.length, 'no page errors ' + errs.join(' | '));
   await b.close(); await sql.end();

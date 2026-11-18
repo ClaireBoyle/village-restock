@@ -99,6 +99,11 @@ begin
     end if;
   end if;
   for i in 1 .. array_length(cupboard, 1) loop
+    -- Split into Lemon Cordial and Lime Cordial by 2026-11-gold-class-bar-coffee-cupboard.sql: don't bring it back.
+    if lower(cupboard[i][1]) = 'lemon lime cordial'
+       and exists (select 1 from products where department_id = dept and lower(name) in ('lime cordial', 'lemon cordial')) then
+      continue;
+    end if;
     p := (select id from products where department_id = dept and lower(name) = lower(cupboard[i][1]) order by (status = 'active') desc, created_at limit 1);
     if p is null then
       insert into categories (department_id, name, sort_order) select dept, 'Coffee & Cordial', 100
