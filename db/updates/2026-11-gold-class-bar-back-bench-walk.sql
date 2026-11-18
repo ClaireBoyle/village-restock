@@ -94,10 +94,9 @@ begin
   if p is not null then
     if exists (select 1 from product_placements where product_id = p and check_area_id = coffee) then
       delete from product_placements where product_id = p and check_area_id = bench;
-    else
-      update product_placements set check_area_id = coffee, heading = null where product_id = p and check_area_id = bench;
+    elsif exists (select 1 from product_placements where product_id = p and check_area_id = bench) then
+      update product_placements set check_area_id = coffee, heading = null, sort_order = 1 where product_id = p and check_area_id = bench;
     end if;
-    update product_placements set sort_order = 1 where product_id = p and check_area_id = coffee;
   end if;
   for i in 1 .. array_length(cupboard, 1) loop
     p := (select id from products where department_id = dept and lower(name) = lower(cupboard[i][1]) order by (status = 'active') desc, created_at limit 1);

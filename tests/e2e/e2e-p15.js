@@ -22,7 +22,9 @@ const waitCur = async (P, name) => { await P.waitForSelector(`.area-btn.cur:has-
   require('fs').mkdirSync(OUT, { recursive: true });
   await sql.file('db/updates/2026-11-gold-class-bar-refill-foh.sql');
   await sql.file('db/updates/2026-11-gold-class-bar-back-bench-walk.sql');
+  await sql.file('db/updates/2026-11-gold-class-bar-foh-lap.sql');
   await sql.file('db/updates/2026-11-gold-class-bar-back-bench-walk.sql');
+  await sql.file('db/updates/2026-11-gold-class-bar-foh-lap.sql');
   const b = await chromium.launch(); const errs = [];
   const c = await b.newContext({ ...devices['iPhone 13'] }); const P = await c.newPage(); P.on('pageerror', (e) => errs.push(e.message));
   await P.goto(B + '/'); await P.waitForSelector('.dcard2');
@@ -30,29 +32,22 @@ const waitCur = async (P, name) => { await P.waitForSelector(`.area-btn.cur:has-
   await P.click('.dcard2:has-text("Bar") >> nth=0'); await P.click('.type-full button.btn.primary'); await P.waitForSelector('article.prow');
 
   const foh = await rail(P);
-  ok(JSON.stringify(foh) === JSON.stringify(['FOH beer fridge', 'FOH freezer', 'Coffee cupboard', 'Back bench', 'Back shelves', 'Popcorn boxes', 'Cups, Lids & Straws storage', 'Confection']),
-    'Check FOH walk: ' + foh.join(' › '));
+  ok(JSON.stringify(foh) === JSON.stringify(['FOH freezer', 'Confection', 'Popcorn boxes', 'Back bench', 'Back shelves', 'FOH beer fridge', 'Milkshake station', 'Cups, Lids & Straws storage', 'Coffee cupboard']),
+    'Check FOH follows the lap of the bar: ' + foh.join(' › '));
   // One primary next action: in the bottom bar only, and Done works with nothing entered.
   ok(await primary(P).count() === 1 && await P.locator('main .btn.primary').count() === 0, 'one primary action (bottom bar), none repeated in the area');
-  ok(await primaryText(P) === 'Done → FOH freezer', 'FOH beer fridge: "Done → FOH freezer"');
-  await primary(P).click(); await waitCur(P, 'FOH freezer');
-  ok(await sees(P, '.area-btn:has-text("FOH beer fridge")', 'Complete'), 'Done with nothing entered marks the area complete');
-  await primary(P).click(); await waitCur(P, 'Coffee cupboard');
-
-  // Coffee cupboard: the sugar and the overflow stock.
-  ok(JSON.stringify(await listOf(P)) === JSON.stringify(['Sugar container', 'Coffee Beans', 'Hot Chocolate Powder', 'Lemon Lime Cordial']), 'Coffee cupboard: sugar, then coffee beans, hot chocolate, cordial');
-  ok(await P.locator(`${row('Sugar container')} .pseg button`).innerText() === 'Needs refill' && await P.locator(`${row('Sugar container')} .pnote.task`).count() === 0, 'sugar: one "Needs refill" button (instructions are on the pickup list)');
-  await P.click(`${row('Sugar container')} .pseg button`);
-  ok(await sees(P, `${row('Sugar container')} .ps`, 'On the Refill FOH list'), '...then "On the Refill FOH list"');
-  await P.click(`${row('Coffee Beans')} button.padd`);
-  ok(await sees(P, `${row('Coffee Beans')} .ps`, '1 bag'), 'bottles and stock keep + Add and quantity controls');
-  ok(await primaryText(P) === 'Done → Back bench', 'Coffee cupboard: "Done → Back bench"');
-  await primary(P).click(); await waitCur(P, 'Back bench');
+  ok(await primaryText(P) === 'Done → Confection', 'FOH freezer: "Done → Confection" (the confection wall is alongside)');
+  await primary(P).click(); await waitCur(P, 'Confection');
+  ok(await sees(P, '.area-btn:has-text("FOH freezer")', 'Complete'), 'Done with nothing entered marks the area complete');
+  ok(await primaryText(P) === 'Done → Popcorn boxes', 'Confection: "Done → Popcorn boxes"');
+  await primary(P).click(); await waitCur(P, 'Popcorn boxes');
+  // Jump ahead to the bench (Popcorn boxes stays open, so the flow comes back to it at the end).
+  await P.click('.area-btn:has-text("Back bench")'); await waitCur(P, 'Back bench');
 
   // Back bench: sink → milkshake machine.
   const bench = await listOf(P);
   const heads = bench.filter((x) => x.startsWith('# ')).map((x) => x.slice(2));
-  ok(JSON.stringify(heads) === JSON.stringify(['Liqueurs & Vermouth', 'Cocktail Syrups & Mixers', 'Spirits', 'Red Wines', 'Milkshake Syrups & Flake']), 'Back bench stops: ' + heads.join(' → '));
+  ok(JSON.stringify(heads) === JSON.stringify(['Liqueurs & Vermouth', 'Cocktail Syrups & Mixers', 'Spirits', 'Red Wines']), 'Back bench from the sink: ' + heads.join(' → '));
   const items = bench.filter((x) => !x.startsWith('# '));
   const added = ['Monin Passion Fruit Purée', 'Noilly Prat', 'Campari', 'Aperol', 'Disaronno', 'Vok White Crème de Cacao', 'De Kuyper Crème de Café', 'De Kuyper Blue Curaçao', 'De Kuyper Wild Strawberry', 'De Kuyper Triple Sec', 'Cawsey’s Grenadine', 'Master of Mixes Margarita Mixer'];
   ok(added.every((n) => items.includes(n)), 'the 12 bench bottles are on the Back bench');
@@ -63,7 +58,8 @@ const waitCur = async (P, name) => { await P.waitForSelector(`.area-btn.cur:has-
     && JSON.stringify(items.slice(11, 17)) === JSON.stringify(['Vok White Crème de Cacao', 'De Kuyper Blue Curaçao', 'De Kuyper Wild Strawberry', 'De Kuyper Crème de Café', 'De Kuyper Triple Sec', 'Monin Passion Fruit Purée']) && items[17] === 'Cawsey’s Grenadine',
     'left to right from the sink, as on the bench: ' + items.slice(0, 6).join(', ') + ' …');
   ok(items.indexOf('Alexander Hill Shiraz') + 5 === items.indexOf('Mt Yengo Chilled Shiraz') && items.indexOf('42 Below') < items.indexOf('Bombay Sapphire'), 'red wines and spirits left to right too');
-  ok(items[items.length - 1] === 'Cadbury Flake container' && !items.includes('Sugar container'), 'Flake container last (by the milkshake machine); sugar is in the Coffee cupboard');
+  ok(items[items.length - 1] === 'Mt Yengo Chilled Shiraz' && !items.includes('Cadbury Flake container') && !items.includes('Vanilla Syrup') && !items.includes('Sugar container'),
+    'the bench ends with the red wine; milkshake syrups, Flake and sugar are at their own stops');
   ok(!items.includes('Grey Goose') && !items.includes('Patron Silver'), 'glass-shelf bottles stay on Back shelves');
   const [{ n: dup }] = await sql`select count(*)::int as n from (select lower(p.name) from products p join departments d on d.id = p.department_id where d.name = 'Gold Class Bar' and p.status = 'active' group by 1 having count(*) > 1) x`;
   ok(dup === 0, 'no duplicate products after two runs');
@@ -76,8 +72,6 @@ const waitCur = async (P, name) => { await P.waitForSelector(`.area-btn.cur:has-
   await P.click(`${row('De Kuyper Crème de Café')} button.padd`);
   await P.click(`${row('Red Claw Shiraz')} button.padd`);
   ok(await sees(P, `${row('Red Claw Shiraz')} .pnote`, 'Grab it from the Wine cupboard') && await P.locator(`${row('De Kuyper Crème de Café')} .pnote`).count() === 0, 'Shiraz: grab from the Wine cupboard; Crème de Café: straight from downstairs');
-  ok(await P.locator(`${row('Cadbury Flake container')} .pseg button`).innerText() === 'Needs refill', 'Flake: "Needs refill"');
-  await P.click(`${row('Cadbury Flake container')} .pseg button`);
   ok(await primaryText(P) === 'Done → Back shelves', 'Back bench: "Done → Back shelves"');
 
   // Phone: stacked list, easy-to-tap controls.
@@ -100,17 +94,33 @@ const waitCur = async (P, name) => { await P.waitForSelector(`.area-btn.cur:has-
   // Done → Back shelves; Skip still works; then Done through the rest.
   await primary(P).click(); await waitCur(P, 'Back shelves');
   await P.click('.flow-end .area-skip-flow'); await P.click('.skip-panel .chip >> nth=1');
-  ok(await sees(P, '.area-btn:has-text("Back shelves")', 'Skipped') && await primaryText(P) === 'Next: Popcorn boxes', 'Skip still works; then "Next: Popcorn boxes"');
-  await primary(P).click(); await waitCur(P, 'Popcorn boxes');
-  ok(await primaryText(P) === 'Done → Cups, Lids & Straws storage', 'Popcorn boxes: "Done → Cups, Lids & Straws storage"');
+  ok(await sees(P, '.area-btn:has-text("Back shelves")', 'Skipped') && await primaryText(P) === 'Next: FOH beer fridge', 'Skip still works; then "Next: FOH beer fridge"');
+  await primary(P).click(); await waitCur(P, 'FOH beer fridge');
+  ok(await primaryText(P) === 'Done → Milkshake station', 'FOH beer fridge (mid-bench): "Done → Milkshake station"');
+  await primary(P).click(); await waitCur(P, 'Milkshake station');
+  const shake = await listOf(P);
+  ok(shake[0] === 'Vanilla Syrup' && shake[shake.length - 1] === 'Cadbury Flake container' && shake.length === 9, 'Milkshake station: the 8 syrups, then the Flake container');
+  ok(await P.locator(`${row('Cadbury Flake container')} .pseg button`).innerText() === 'Needs refill', 'Flake: "Needs refill"');
+  await P.click(`${row('Cadbury Flake container')} .pseg button`);
+  ok(await primaryText(P) === 'Done → Cups, Lids & Straws storage', 'then across the aisle: "Done → Cups, Lids & Straws storage"');
   await primary(P).click(); await waitCur(P, 'Cups, Lids & Straws storage');
-  await primary(P).click(); await waitCur(P, 'Confection');
-  ok(await primaryText(P) === 'Done → Refill FOH', 'last area: "Done → Refill FOH"');
+  ok(await primaryText(P) === 'Done → Coffee cupboard', 'up the left side: "Done → Coffee cupboard"');
+  await primary(P).click(); await waitCur(P, 'Coffee cupboard');
+  ok(JSON.stringify(await listOf(P)) === JSON.stringify(['# Coffee supplies', 'Coffee Beans', 'Hot Chocolate Powder', 'Lemon Lime Cordial', '# Coffee machine', 'Sugar container']),
+    'Coffee cupboard: supplies, then the sugar container at the coffee machine');
+  ok(await P.locator(`${row('Sugar container')} .pseg button`).innerText() === 'Needs refill' && await P.locator(`${row('Sugar container')} .pnote.task`).count() === 0, 'sugar: one "Needs refill" button (instructions are on the pickup list)');
+  await P.click(`${row('Sugar container')} .pseg button`);
+  ok(await sees(P, `${row('Sugar container')} .ps`, 'On the Refill FOH list'), '...then "On the Refill FOH list"');
+  await P.click(`${row('Coffee Beans')} button.padd`);
+  ok(await sees(P, `${row('Coffee Beans')} .ps`, '1 bag'), 'stock keeps + Add and quantity controls');
+  ok(await primaryText(P) === 'Done → Popcorn boxes', 'an area still open earlier in the lap comes next: "Done → Popcorn boxes"');
+  await primary(P).click(); await waitCur(P, 'Popcorn boxes');
+  ok(await primaryText(P) === 'Done → Refill FOH', 'last open area: "Done → Refill FOH"');
   await primary(P).click(); await P.waitForSelector('.room');
 
   // Refill FOH, grouped by source.
   const rooms = await P.$$eval('.room', (els) => els.map((r) => [r.querySelector('h3').textContent, [...r.querySelectorAll('.line')].map((l) => l.dataset.line)]));
-  ok(JSON.stringify(rooms) === JSON.stringify([['Upstairs cupboards', ['Sugar container', 'Cadbury Flake container']], ['Wine cupboard', ['Red Claw Shiraz']]]), 'Refill FOH by source: ' + JSON.stringify(rooms));
+  ok(JSON.stringify(rooms) === JSON.stringify([['Upstairs cupboards', ['Cadbury Flake container', 'Sugar container']], ['Wine cupboard', ['Red Claw Shiraz']]]), 'Refill FOH by source: ' + JSON.stringify(rooms));
   ok(await sees(P, '.line[data-line="Sugar container"]', 'next to the coffee machine') && await sees(P, '.line[data-line="Cadbury Flake container"]', 'fill it to the top'), 'refill instructions on the pickup list');
   ok(!JSON.stringify(rooms).includes('Crème de Café') && !JSON.stringify(rooms).includes('Coffee Beans'), 'downstairs items are not upstairs pickups');
   await P.screenshot({ path: `${OUT}/p15-refill-phone.png`, fullPage: true });
