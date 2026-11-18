@@ -1,10 +1,12 @@
 -- Gold Class Bar: Jumbo straws at the Milkshake station (after the Flake container). Safe to run more than once.
--- Run AFTER 2026-11-gold-class-bar-foh-lap.sql. Staff enter how many packets are needed; collected from the
--- Alcohol storeroom (like the milkshake straws). An existing "Jumbo straws" product is reused.
+-- Run AFTER 2026-11-gold-class-bar-foh-lap.sql. Staff enter how many packets are needed; collected from
+-- Dry storage. An existing "Jumbo straws" product is reused (and moved to Dry storage if it was set to the
+-- Alcohol storeroom by an earlier version of this script).
 do $$
 declare
   dept uuid := (select id from departments where lower(name) = 'gold class bar');
   shake uuid; p uuid;
+  dry uuid := (select id from storage_locations where lower(name) = 'dry storage');
   alc uuid := (select id from storage_locations where lower(name) = 'alcohol storeroom');
 begin
   if dept is null then raise notice 'Gold Class Bar not found: nothing changed'; return; end if;
@@ -14,10 +16,10 @@ begin
   if p is null then
     insert into products (department_id, category_id, name, unit_singular, unit_plural, method, default_location_id, sort_order)
       values (dept, (select id from categories where department_id = dept and lower(name) = 'packaging' limit 1),
-              'Jumbo straws', 'packet', 'packets', 'manual', coalesce(alc, (select id from storage_locations order by sort_order limit 1)), 999)
+              'Jumbo straws', 'packet', 'packets', 'manual', coalesce(dry, (select id from storage_locations order by sort_order limit 1)), 999)
       returning id into p;
   else
-    update products set status = 'active' where id = p;
+    update products set status = 'active', default_location_id = case when default_location_id = alc and dry is not null then dry else default_location_id end where id = p;
   end if;
   if not exists (select 1 from product_placements where product_id = p and check_area_id = shake) then
     insert into product_placements (product_id, check_area_id, sort_order)
