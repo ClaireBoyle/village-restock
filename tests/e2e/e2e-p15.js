@@ -43,7 +43,7 @@ const waitCur = async (P, name) => { await P.waitForSelector(`.area-btn.cur:has-
   ok(await primary(P).count() === 1 && await P.locator('main .btn.primary').count() === 0, 'one primary action (bottom bar), none repeated in the area');
   ok(await primaryText(P) === 'Done → Confection', 'FOH freezer: "Done → Confection" (the confection wall is alongside)');
   await primary(P).click(); await waitCur(P, 'Confection');
-  ok(await sees(P, '.area-btn:has-text("FOH freezer")', 'Complete'), 'Done with nothing entered marks the area complete');
+  ok(await sees(P, '.area-btn:has-text("FOH freezer")', 'Checked · nothing needed'), 'Done with nothing entered: "Checked · nothing needed"');
   ok(await primaryText(P) === 'Done → Popcorn boxes', 'Confection: "Done → Popcorn boxes"');
   await primary(P).click(); await waitCur(P, 'Popcorn boxes');
   // Jump ahead to the bench (Popcorn boxes stays open, so the flow comes back to it at the end).
@@ -128,19 +128,23 @@ const waitCur = async (P, name) => { await P.waitForSelector(`.area-btn.cur:has-
   ok(cord.n === 0 && alcs.n === 0, 'Lemon Lime Cordial split into Lemon and Lime; everything in the cupboard comes from the Alcohol storeroom');
   ok(await P.locator(`${row('Sugar container')} .pseg button`).innerText() === 'Needs refill' && await P.locator(`${row('Sugar container')} .pnote.task`).count() === 0, 'sugar: one "Needs refill" button (instructions are on the pickup list)');
   await P.click(`${row('Sugar container')} .pseg button`);
-  ok(await sees(P, `${row('Sugar container')} .ps`, 'On the Collect upstairs list'), '...then "On the Collect upstairs list"');
+  ok(await sees(P, `${row('Sugar container')} .ps`, 'To grab upstairs'), '...then "To grab upstairs"');
   await P.click(`${row('Coffee Beans')} button.padd`);
   ok(await sees(P, `${row('Coffee Beans')} .ps`, '1 bag'), 'stock keeps + Add and quantity controls');
   ok(await primaryText(P) === 'Done → Popcorn boxes', 'an area still open earlier in the lap comes next: "Done → Popcorn boxes"');
   await primary(P).click(); await waitCur(P, 'Popcorn boxes');
-  ok(await primaryText(P) === 'Done → Collect upstairs', 'last open area: "Done → Collect upstairs"');
-  await primary(P).click(); await P.waitForSelector('.room');
+  ok(await primaryText(P) === 'Done → Upstairs', 'last open area: "Done → Upstairs"');
+  await primary(P).click(); await P.waitForSelector('.area-btn.cur:has-text("BOH bar fridge")');
 
-  // Refill FOH, grouped by source.
-  const rooms = await P.$$eval('.room', (els) => els.map((r) => [r.querySelector('h3').textContent, [...r.querySelectorAll('.line')].map((l) => l.dataset.line)]));
-  ok(JSON.stringify(rooms) === JSON.stringify([['Upstairs cupboards', ['Cadbury Flake container', 'Sugar container']], ['Wine cupboard', ['Red Claw Shiraz']]]), 'Refill FOH by source: ' + JSON.stringify(rooms));
-  ok(await sees(P, '.line[data-line="Sugar container"]', 'next to the coffee machine') && await sees(P, '.line[data-line="Cadbury Flake container"]', 'fill it to the top'), 'refill instructions on the pickup list');
+  // Upstairs, one screen per spot: grab for the bar, then bring up from downstairs.
+  ok(await P.locator('.grab').count() === 0 && await sees(P, '.bring-h', 'Bring up from downstairs'), 'BOH bar fridge: nothing to grab, so straight to the top-up check');
+  await primary(P).click(); await P.waitForSelector('.area-btn.cur:has-text("Walk in fridge")');
+  await primary(P).click(); await P.waitForSelector('.area-btn.cur:has-text("Upstairs cupboards")');
+  const rooms = await P.$$eval('.grab .grab-group', (els) => els.map((g) => [g.querySelector('.phead')?.textContent ?? '', [...g.querySelectorAll('.line')].map((l) => l.dataset.line)]));
+  ok(JSON.stringify(rooms) === JSON.stringify([['Upstairs cupboards', ['Cadbury Flake container', 'Sugar container']], ['Wine cupboard', ['Red Claw Shiraz']]]), 'Upstairs cupboards: grab for the bar, by cupboard: ' + JSON.stringify(rooms));
+  ok(await sees(P, '.grab .line[data-line="Sugar container"]', 'next to the coffee machine') && await sees(P, '.grab .line[data-line="Cadbury Flake container"]', 'fill it to the top'), 'refill instructions on the grab list');
   ok(!JSON.stringify(rooms).includes('Crème de Café') && !JSON.stringify(rooms).includes('Coffee Beans') && !JSON.stringify(rooms).includes('Earl Grey'), 'downstairs items are not upstairs pickups');
+  ok(await primaryText(P) === 'Done → Collect downstairs', 'then "Done → Collect downstairs" (coffee beans and Crème de Café are on it)');
   await P.screenshot({ path: `${OUT}/p15-refill-phone.png`, fullPage: true });
   ok(!errs.length, 'no page errors ' + errs.join(' | '));
   await b.close(); await sql.end();

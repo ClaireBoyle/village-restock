@@ -1,4 +1,5 @@
-// Gold Class Bar Refill FOH: Check FOH → Refill FOH (grab upstairs) → Check BOH (suggestions) → Collect downstairs → Finish.
+// Gold Class Bar Full Restock: Check the bar → Upstairs (at each spot: Grab for the bar, then Bring up from downstairs,
+// with what was grabbed suggested) → Collect downstairs → Finish.
 // Before running: reset the test database (migrations up to 012), then load gcbar-refill-fixture.sql
 // (a copy of the live Gold Class Bar catalogue). The test applies the db/updates script itself, twice.
 const { chromium, devices } = require('playwright');
@@ -16,6 +17,7 @@ const rail = (P) => P.$$eval('.area-btn b', (els) => els.map((e) => e.textConten
 const text = (P, sel) => P.locator(sel).first().innerText();
 // Waits for the screen to show it (rows update a moment after a tap).
 const valueIs = async (P, n, v) => { const end = Date.now() + 6000; while (Date.now() < end) { if (await P.inputValue(`${row(n)} input.qty-input`).catch(() => '') === v) return true; await P.waitForTimeout(150); } return false; };
+const primaryIs = async (P, t) => { const end = Date.now() + 6000; while (Date.now() < end) { if ((await P.locator('.dock .dock-acts .btn.primary').innerText().catch(() => '')).replace(/\s+/g, ' ').trim() === t) return true; await P.waitForTimeout(150); } return false; };
 const sees = (P, sel, t) => P.locator(sel).filter({ hasText: t }).first().waitFor({ timeout: 6000 }).then(() => true, () => false);
 const rooms = (P) => P.$$eval('.room', (els) => els.map((r) => [r.querySelector('h3').textContent,
   [...r.querySelectorAll('.line')].map((l) => `${l.querySelector('.l-amt b')?.textContent ?? '✓'} ${l.querySelector('.l-amt small')?.textContent ?? ''} ${l.dataset.line}`.replace(/\s+/g, ' ').trim())]));
@@ -33,87 +35,86 @@ const rooms = (P) => P.$$eval('.room', (els) => els.map((r) => [r.querySelector(
   await P.click('.who'); await P.fill('#staffname', 'Mia'); await P.click('.sheet .btn.primary');
   await P.click('.dcard2:has-text("Bar") >> nth=0'); await P.click('.type-full button.btn.primary'); await P.waitForSelector('article.prow');
 
-  // Check FOH
+  // Check the bar
   const steps = await P.$$eval('.rbar .stage .sm', (els) => els.map((e) => e.textContent));
-  ok(JSON.stringify(steps) === JSON.stringify(['Bar', 'Up', 'BOH', 'Down', 'Finish']), 'five steps: ' + steps.join(' › '));
+  ok(JSON.stringify(steps) === JSON.stringify(['Bar', 'Upstairs', 'Downstairs', 'Finish']), 'four steps: ' + steps.join(' › '));
+  ok(await sees(P, '.dock', 'Nothing added to the collection list'), 'nothing entered yet: "Nothing added to the collection list"');
   const foh = await rail(P);
-  ok(foh[0] === 'FOH beer fridge' && !foh.includes('BOH bar fridge') && !foh.includes('Upstairs cupboards') && foh.includes('Back bench') && foh.includes('Confection'), 'Check FOH shows front-of-house areas only: ' + foh.join(', '));
+  ok(foh[0] === 'FOH beer fridge' && !foh.includes('BOH bar fridge') && !foh.includes('Upstairs cupboards') && foh.includes('Back bench') && foh.includes('Confection'), 'Check the bar shows front-of-house areas only: ' + foh.join(', '));
   const heads = await P.$$eval('.area > .prows > .phead', (els) => els.map((e) => e.textContent));
   ok(JSON.stringify(heads) === JSON.stringify(['Beer, Cider & Hard Soda', 'Mixers & Water', 'Curatif Cocktails']), 'FOH beer fridge: ' + heads.join(' | '));
   ok(await P.locator('.area > .prows > article.prow').count() === 23, '12 beers, 2 Kirks, 2 waters, 7 Curatif');
   for (const [p, q] of [['Heineken', 3], ['Kirks Indian Tonic Water', 2], ['Mount Franklin Sparkling Water 330ml', 4], ['Mount Franklin Still Water', 6], ['Curatif Negroni', 2]]) await add(P, p, q);
   ok(await sees(P, `${row('Heineken')} .ps`, '3 bottles'), 'beers counted as single bottles in the FOH fridge (packs in the BOH fridge)');
   ok(await sees(P, `${row('Heineken')} .pnote`, 'Grab it from the BOH bar fridge'), 'says where to grab it');
-  await P.screenshot({ path: `${OUT}/p13-foh-fridge.png` });
   await goArea(P, 'Back bench');
   await add(P, 'Red Claw Shiraz'); await add(P, 'Vanilla Syrup');
   ok(await sees(P, `${row('Red Claw Shiraz')} .pnote`, 'Grab it from the Wine cupboard'), 'red wine: grab it from the Wine cupboard');
-  ok(await P.locator(`${row('Vanilla Syrup')} .pnote`).count() === 0, 'syrups: no upstairs note (straight from downstairs)');
   await P.click(`${row('Sugar container')} .pseg button`);
   await goArea(P, 'Back shelves'); await add(P, 'Grey Goose'); await add(P, 'Patron Silver');
+  // Checked with nothing needed vs not checked yet
+  await goArea(P, 'FOH freezer'); await P.click('.dock .dock-acts .btn.primary');
+  ok(await sees(P, '.area-btn:has-text("FOH freezer")', 'Checked · nothing needed') && await sees(P, '.area-btn:has-text("Popcorn boxes")', 'Unchecked'),
+    '"Checked · nothing needed" (Done with nothing entered) vs "Unchecked"');
+  await P.screenshot({ path: `${OUT}/p13-bar.png` });
 
-  // Collect upstairs
-  await P.click('.rbar .stage:has-text("Upstairs")'); await P.waitForSelector('.room');
-  const r1 = await rooms(P);
-  ok(JSON.stringify(r1) === JSON.stringify([
-    ['BOH bar fridge', ['3 bottles Heineken', '2 bottles Kirks Indian Tonic Water', '4 bottles Mount Franklin Sparkling Water 330ml']],
-    ['Walk in fridge', ['6 bottles Mount Franklin Still Water']],
-    ['Upstairs cupboards', ['✓ Sugar container']],
-    ['Wine cupboard', ['1 bottle Red Claw Shiraz']],
-    ['Spirits cupboard', ['1 bottle Grey Goose', '1 bottle Patron Silver']]]), 'Collect upstairs grouped by pickup spot: ' + JSON.stringify(r1));
-  ok(!JSON.stringify(r1).includes('Curatif') && !JSON.stringify(r1).includes('Vanilla'), 'Curatif and syrups are not upstairs pickups');
-  ok(await sees(P, line('Red Claw Shiraz'), 'For Back bench') && await sees(P, line('Heineken'), 'For FOH beer fridge'), 'each line says how much to grab and where it goes');
-  ok(await sees(P, `${line('Sugar container')}`, 'fill it to the top'), 'sugar: refill the container to the top');
-  for (const n of ['Heineken', 'Kirks Indian Tonic Water', 'Mount Franklin Sparkling Water 330ml', 'Mount Franklin Still Water', 'Sugar container', 'Red Claw Shiraz', 'Patron Silver']) await P.click(`${line(n)} button.l-all`);
-  // None left upstairs: Got fewer → 0 (just the amount, no reasons to pick)
-  await P.click(`${line('Grey Goose')} .l-few`);
-  ok(await sees(P, `${line('Grey Goose')} .fewer`, 'How many did you get?') && await P.locator(`${line('Grey Goose')} .fw-more`).count() === 0, 'Got fewer upstairs: just "How many did you get?"');
-  await P.fill(`${line('Grey Goose')} .fewer .qty-input`, '0'); await P.click(`${line('Grey Goose')} .fw-ok`);
-  ok(await sees(P, `${line('Grey Goose')} .l-why`, 'Grabbed 0 of 1') && await sees(P, '.dock', '8 of 8 grabbed'), 'Grey Goose: "Grabbed 0 of 1"; 8 of 8 done');
-  await P.screenshot({ path: `${OUT}/p13-refill.png`, fullPage: true });
-  // Tablet and desktop: the same screen, wider
+  // Upstairs: one screen per spot
+  await P.click('.rbar .stage:has-text("Upstairs")'); await P.waitForSelector('article.prow');
+  ok(JSON.stringify(await rail(P)) === JSON.stringify(['BOH bar fridge', 'Walk in fridge', 'Upstairs cupboards']), 'Upstairs: the three spots, in order');
+  await goArea(P, 'BOH bar fridge');
+  const grabLines = (P) => P.$$eval('.grab .line', (els) => els.map((l) => `${l.querySelector('.l-amt b')?.textContent ?? '✓'} ${l.dataset.line}`));
+  ok(JSON.stringify(await grabLines(P)) === JSON.stringify(['3 Heineken', '2 Kirks Indian Tonic Water', '4 Mount Franklin Sparkling Water 330ml'])
+    && await sees(P, '.grab .line[data-line="Heineken"]', 'For FOH beer fridge'), 'BOH bar fridge: "Grab for the bar" first, with how many and where each goes');
+  ok(await sees(P, '.bring-h', 'Bring up from downstairs') && await P.locator(`.prows ${row('Mount Franklin Sparkling Water 330ml')} button.padd`).count() === 1,
+    '"Bring up from downstairs" below; nothing suggested until it\'s grabbed');
+  await P.click(`.grab ${line('Mount Franklin Sparkling Water 330ml')} button.l-all`);
+  ok(await valueIs(P, 'Mount Franklin Sparkling Water 330ml', '4') && await sees(P, `${row('Mount Franklin Sparkling Water 330ml')} .pnote`, 'Suggested: 4 taken for FOH beer fridge'),
+    'ticked: 4 Sparkling suggested straight away, on the same screen');
+  await P.click(`.grab ${line('Heineken')} button.l-all`); await P.click(`.grab ${line('Kirks Indian Tonic Water')} button.l-all`);
+  ok(await P.locator(`.prows ${row('Heineken')} button.padd`).count() === 1, 'beers are not suggested (the fridge is counted in packs)');
+  await add(P, 'Kirks Indian Tonic Water');
+  ok(await sees(P, `.prows ${row('Kirks Indian Tonic Water')} .ps`, '1 pack'), 'and anything else that looks low can be added (Kirks, in packs)');
+  await P.screenshot({ path: `${OUT}/p13-upstairs-fridge.png`, fullPage: true });
+  ok(await primaryIs(P, 'Done → Walk in fridge'), '"Done → Walk in fridge"');
+  await P.click('.dock .dock-acts .btn.primary'); await P.waitForSelector('.area-btn.cur:has-text("Walk in fridge")');
+  await P.click(`.grab ${line('Mount Franklin Still Water')} button.l-all`);
+  ok(await P.locator(`.prows ${row('Mount Franklin Still Water')} button.padd`).count() === 1 && await sees(P, `.prows ${row('Mount Franklin Still Water')}`, 'less than ¼'), 'Still Water: grabbed, not suggested; a slab only when under ¼ is left');
+  await add(P, 'Mount Franklin Still Water');
+  ok(await sees(P, `.prows ${row('Mount Franklin Still Water')} .ps`, '1 slab'), 'Still Water counted in slabs upstairs');
+  await P.click('.dock .dock-acts .btn.primary'); await P.waitForSelector('.area-btn.cur:has-text("Upstairs cupboards")');
+  const groups = await P.$$eval('.grab .grab-group', (els) => els.map((g) => [g.querySelector('.phead')?.textContent ?? '', [...g.querySelectorAll('.line')].map((l) => l.dataset.line)]));
+  ok(JSON.stringify(groups) === JSON.stringify([['Upstairs cupboards', ['Sugar container']], ['Wine cupboard', ['Red Claw Shiraz']], ['Spirits cupboard', ['Grey Goose', 'Patron Silver']]]),
+    'Upstairs cupboards: grab list by cupboard: ' + JSON.stringify(groups));
+  ok(await sees(P, `.grab ${line('Sugar container')}`, 'fill it to the top'), 'sugar: refill instructions on the grab list');
+  for (const n of ['Sugar container', 'Red Claw Shiraz', 'Patron Silver']) await P.click(`.grab ${line(n)} button.l-all`);
+  // None left upstairs: Got fewer → 0 (just the amount)
+  await P.click(`.grab ${line('Grey Goose')} .l-few`);
+  ok(await sees(P, `.grab ${line('Grey Goose')} .fewer`, 'How many did you get?') && await P.locator(`.grab ${line('Grey Goose')} .fw-more`).count() === 0, 'Got fewer upstairs: just "How many did you get?"');
+  await P.fill(`.grab ${line('Grey Goose')} .fewer .qty-input`, '0'); await P.click(`.grab ${line('Grey Goose')} .fw-ok`);
+  ok(await sees(P, `.grab ${line('Grey Goose')} .l-why`, 'Grabbed 0 of 1') && await sees(P, '.grab .sec-title', '4 of 4'), 'Grey Goose: "Grabbed 0 of 1"; all 4 done');
+  const top = await P.$$eval('.area > .prows > *', (els) => els.map((e) => (e.matches('.phead') ? `# ${e.querySelector('span')?.textContent ?? e.textContent}` : e.querySelector('h3')?.textContent)));
+  ok(JSON.stringify(top.slice(0, 3)) === JSON.stringify(['# Replace what you grabbed', 'Red Claw Shiraz', 'Patron Silver']), 'Bring up: what was grabbed, first: ' + top.slice(0, 3).join(', '));
+  ok(await P.locator(`.prows ${row('Grey Goose')} button.padd`).count() === 1, 'Grey Goose: none grabbed, so nothing suggested');
+  ok(await valueIs(P, 'Red Claw Shiraz', '1'), 'Shiraz: took 1 from the Wine cupboard → 1 suggested');
+  await P.click(`.prows ${row('Red Claw Shiraz')} button[aria-label="One more Red Claw Shiraz"]`); await P.click(`.prows ${row('Red Claw Shiraz')} button[aria-label="One more Red Claw Shiraz"]`);
+  ok(await sees(P, `.prows ${row('Red Claw Shiraz')} .pnote`, '(suggested 1)') && await sees(P, `.prows ${row('Red Claw Shiraz')} .ps`, '3 bottles'), 'changed to 3: 3 in total');
+  await P.click(`.prows ${row('Patron Silver')} button[aria-label="One less Patron Silver"]`);
+  ok(await sees(P, `.prows ${row('Patron Silver')} .ps`, 'Removed'), 'Patron: suggestion removed (there was enough)');
+  await P.click(`.prows ${row('Patron Silver')} button[aria-label="Back to the suggested 1 Patron Silver"]`);
+  ok(await valueIs(P, 'Patron Silver', '1'), '...and can be brought back');
+  await P.click(`.prows ${row('Patron Silver')} button[aria-label="One less Patron Silver"]`);
+  await P.screenshot({ path: `${OUT}/p13-upstairs-cupboards.png`, fullPage: true });
   for (const [name, vp] of [['tablet', { width: 834, height: 1194 }], ['desktop', { width: 1366, height: 900 }]]) {
     await P.setViewportSize(vp); await P.waitForTimeout(250);
-    ok(await P.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${name}: no sideways scrolling on Refill FOH`);
-    ok(await P.locator('.rbar .stage .lg:visible').count() === 5, `${name}: full step names`);
-    await P.screenshot({ path: `${OUT}/p13-refill-${name}.png` });
+    ok(await P.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth) && await P.locator('.rbar .stage .lg:visible').count() === 4, `${name}: no sideways scrolling, full step names`);
+    await P.screenshot({ path: `${OUT}/p13-upstairs-${name}.png` });
   }
   await P.setViewportSize(devices['iPhone 13'].viewport);
-  ok(await P.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'phone: no sideways scrolling; five steps fit');
-
-  // Check BOH
-  await P.click('.dock .dock-acts button:has-text("Top up BOH")'); await P.waitForSelector('article.prow');
-  ok(JSON.stringify(await rail(P)) === JSON.stringify(['BOH bar fridge', 'Walk in fridge', 'Upstairs cupboards']), 'Check BOH: the three upstairs spots');
-  await goArea(P, 'BOH bar fridge');
-  ok(await valueIs(P, 'Mount Franklin Sparkling Water 330ml', '4') && await sees(P, `${row('Mount Franklin Sparkling Water 330ml')} .pnote`, 'Suggested: 4 taken for FOH beer fridge'), 'Sparkling 330ml: 4 suggested from what was taken');
-  ok(await P.locator(`${row('Heineken')} button.padd`).count() === 1, 'beers are not suggested (the fridge is counted in packs)');
-  await add(P, 'Kirks Indian Tonic Water');
-  ok(await sees(P, `${row('Kirks Indian Tonic Water')} .ps`, '1 pack'), 'Kirks counted in packs in the BOH fridge');
-  await goArea(P, 'Walk in fridge');
-  ok(await P.locator(`${row('Mount Franklin Still Water')} button.padd`).count() === 1 && await sees(P, `${row('Mount Franklin Still Water')}`, 'less than ¼'), 'Still Water: not suggested; a slab only when under ¼ is left');
-  await add(P, 'Mount Franklin Still Water');
-  ok(await sees(P, `${row('Mount Franklin Still Water')} .ps`, '1 slab'), 'Still Water counted in slabs upstairs');
-  await goArea(P, 'Upstairs cupboards');
-  const top = await P.$$eval('.area > .prows > *', (els) => els.map((e) => (e.matches('.phead') ? `# ${e.querySelector('span')?.textContent ?? e.textContent}` : e.querySelector('h3')?.textContent)));
-  ok(JSON.stringify(top.slice(0, 3)) === JSON.stringify(['# Taken for FOH', 'Red Claw Shiraz', 'Patron Silver']), 'grabbed for FOH listed first: ' + top.slice(0, 3).join(', '));
-  ok(await P.locator(row('Red Claw Shiraz')).count() === 1 && await P.locator(row('Patron Silver')).count() === 1, '...and not repeated in the cupboard lists below');
-  ok(await sees(P, `${row('Patron Silver')} .parea`, 'Spirits cupboard'), '...each saying which cupboard it is in');
-  ok(await P.locator(`${row('Grey Goose')} button.padd`).count() === 1, 'Grey Goose: none grabbed upstairs, so nothing suggested');
-  ok(await valueIs(P, 'Red Claw Shiraz', '1'), 'Shiraz taken from the Wine cupboard: 1 suggested');
-  await P.click(`${row('Red Claw Shiraz')} button[aria-label="One more Red Claw Shiraz"]`); await P.click(`${row('Red Claw Shiraz')} button[aria-label="One more Red Claw Shiraz"]`);
-  ok(await sees(P, `${row('Red Claw Shiraz')} .pnote`, '(suggested 1)') && await sees(P, `${row('Red Claw Shiraz')} .ps`, '3 bottles'), 'changed to 3: 3 in total, and it says it was 1 suggested');
-  await P.click(`${row('Patron Silver')} button[aria-label="One less Patron Silver"]`);
-  ok(await sees(P, `${row('Patron Silver')} .ps`, 'Removed'), 'Patron: suggestion removed (there was enough)');
-  await P.click(`${row('Patron Silver')} button[aria-label="Back to the suggested 1 Patron Silver"]`);
-  ok(await valueIs(P, 'Patron Silver', '1'), '...and can be brought back');
-  await P.click(`${row('Patron Silver')} button[aria-label="One less Patron Silver"]`);
-  ok(await P.locator('.area > .prows > .phead.taken-h').count() === 1 && await P.locator(row('Patron Silver')).count() === 1, 'a removed suggestion stays at the top (nothing jumps)');
-  await P.screenshot({ path: `${OUT}/p13-boh.png`, fullPage: true });
-  await P.setViewportSize({ width: 1366, height: 900 }); await P.waitForTimeout(250); await P.screenshot({ path: `${OUT}/p13-boh-desktop.png` });
-  await P.setViewportSize(devices['iPhone 13'].viewport);
+  ok(await P.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'phone: no sideways scrolling');
+  ok(await primaryIs(P, 'Done → Collect downstairs'), 'last spot: "Done → Collect downstairs"');
+  await P.click('.dock .dock-acts .btn.primary'); await P.waitForSelector('.room');
 
   // Collect downstairs
-  await P.click('.rbar .stage:has-text("Downstairs")'); await P.waitForSelector('.room');
   const r2 = await rooms(P);
   ok(JSON.stringify(r2.map(([a, l]) => [a.toLowerCase(), [...l].sort()])) === JSON.stringify([
     ['alcohol storeroom', ['1 bottle Vanilla Syrup', '2 cans Curatif Negroni', '3 bottles Red Claw Shiraz']],
@@ -128,13 +129,12 @@ const rooms = (P) => P.$$eval('.room', (els) => els.map((r) => [r.querySelector(
   await P.click('.dock .dock-acts button:has-text("Review")'); await P.waitForSelector('.finish-title');
   await P.click('.dock button.good:has-text("Finish restock")'); await P.waitForSelector('.finish-hero');
   const [s] = await waitDb(() => sql`select status, exception_reason from restock_sessions where kind = 'full'`, (r) => r[0]?.status !== 'open');
-  ok(s.status === 'finished', 'finished cleanly (unticked upstairs pickups never block finishing)');
+  ok(s.status === 'finished', 'finished cleanly');
   const sp = await waitDb(() => sql`select si.requested_qty, si.collected_mode, si.collected_qty from session_items si join product_placements pl on pl.id = si.placement_id
     join check_areas a on a.id = pl.check_area_id where si.product_name = 'Mount Franklin Sparkling Water 330ml' and a.name = 'BOH bar fridge'`, (r) => r[0]?.collected_mode === 'all');
   ok(sp[0]?.requestedQty === null && Number(sp[0]?.collectedQty) === 4, 'the kept suggestion counted (4 collected) without staff typing it');
   const [{ c: shorts }] = await sql`select count(*)::int as c from shortages`;
-  ok(shorts === 0, 'no shortages recorded');
-
+  ok(shorts === 0, 'no shortages recorded (an upstairs Got fewer isn\'t a storeroom shortage)');
   ok(!errs.length, 'no page errors ' + errs.join(' | '));
   await b.close(); await sql.end();
 })().catch(async (e) => { console.error(e); await sql.end(); process.exit(1); });

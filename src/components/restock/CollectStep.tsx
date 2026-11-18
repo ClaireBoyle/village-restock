@@ -22,6 +22,8 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
   const shorts = lines.filter((l) => lineState(l, items) === 'short' && lineInfo(l, items).reason === 'insufficient').length;
   // Only missing target counts: a blank "staff enter" product just didn't need anything.
   const unchecked = covered.filter((p) => isRequired(p) && !isChecked(p, items.get(p.placementId) ?? EMPTY_ITEM));
+  // Areas not checked yet (neither done nor skipped): an empty list doesn't mean "nothing needed".
+  const checksPending = view.areas.some(({ area }) => !['complete', 'skipped'].includes(recorded.get(area.id) ?? ''));
   // One area (an area restock): every line is for it, so don't repeat its name on each line.
   const oneArea = view.areas.length === 1 ? view.areas[0].area.name : null;
   const write = (ups: { placementId: string; fields: Partial<ItemState> }[]) => void setItems(session.id, ups, who);
@@ -34,7 +36,8 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
         {unchecked.length ? (
           <button className="col-note" onClick={() => ctx.go('check')}><Icon name="circle" /><span><b>{plural(unchecked.length, 'product')} not checked</b> <span className="lg">, so not on this list</span></span><span className="col-go">Check them<Icon name="next" /></span></button>
         ) : null}
-        {lines.length === 0 ? <p className="empty">{session.kind === 'area' ? 'Nothing to collect. Nothing was entered as needed.' : 'Nothing to collect. Everything checked is at target.'}</p> : (
+        {lines.length === 0 ? <p className="empty">{session.kind === 'area' ? 'Nothing to collect. Nothing was entered as needed.'
+          : checksPending ? 'Nothing added to the collection list yet. Some areas haven’t been checked.' : 'Nothing to collect. Every area is checked and nothing is needed.'}</p> : (
           <div className="rooms">
             {groups.map((g) => <Room key={g.lines[0].locationId ?? g.name} name={g.name} lines={g.lines} items={items} write={write} oneArea={oneArea} displayRule={!!view.department.noneOnDisplay}
               note={roomNote(g.lines, view.locationNotes)} />)}
@@ -88,7 +91,7 @@ function Room({ name, lines, items, write, note, oneArea, tickOnly = false, disp
   );
 }
 
-function Line({ line, items, write, oneArea, tickOnly = false, displayRule = false }: { line: CollectionLine; items: Map<string, ItemState>; write: (u: { placementId: string; fields: Partial<ItemState> }[]) => void; oneArea: string | null; tickOnly?: boolean; displayRule?: boolean }) {
+export function Line({ line, items, write, oneArea, tickOnly = false, displayRule = false }: { line: CollectionLine; items: Map<string, ItemState>; write: (u: { placementId: string; fields: Partial<ItemState> }[]) => void; oneArea: string | null; tickOnly?: boolean; displayRule?: boolean }) {
   const st = lineState(line, items);
   const info = lineInfo(line, items);
   const got = lineGot(line, items);

@@ -70,7 +70,7 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
   else if (progressive && sug) status = <><Icon name="check" />Removed: none needed</>;
   else if (progressive) status = <><Icon name="check" />None needed</>;
   // A container refilled from an upstairs spot (e.g. sugar, Flake): its instructions are on the Refill FOH list.
-  else if (p.method === 'routine' && refillTask) status = item.routineChoice === 'needed' ? <><Icon name="up" />On the Collect upstairs list</> : <><Icon name="check" />Not needed</>;
+  else if (p.method === 'routine' && refillTask) status = item.routineChoice === 'needed' ? <><Icon name="up" />To grab upstairs</> : <><Icon name="check" />Not needed</>;
   else if (p.method === 'routine') status = item.routineChoice === 'needed' ? <><Icon name="up" />On the list</> : <><Icon name="check" />Not needed</>;
   else if ((need ?? 0) > 0) status = <>{target ? `${target} · ` : ''}<Icon name="up" /><b>{formatQty(need!, p.unitSingular, p.unitPlural)}</b><span className="lg">&nbsp;to collect</span></>;
   else status = <>{target ? `${target} · ` : ''}<Icon name="check" />{p.method === 'manual' ? 'None needed' : 'At target'}</>;

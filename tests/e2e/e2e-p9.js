@@ -93,7 +93,7 @@ const card = (n) => `.acard:has(h2:text-is("${n}"))`;
   // ---- FOH drinks fridge, later, nothing needed: finish straight away ----
   await P.click(`${card('FOH drinks fridge')} button:has-text("Start")`); await P.waitForSelector('article.prow');
   ok(await P.locator('article.prow:has-text("Maltesers")').count() === 0, 'drinks fridge shows only drinks');
-  ok(await has(P, '.dock', 'Nothing to collect yet'), 'nothing entered: no collection needed');
+  ok(await has(P, '.dock', 'Nothing added to the collection list'), 'nothing entered: no collection needed');
   await P.click('.dock .dock-acts button.primary'); await P.waitForSelector('.finish-title');
   await P.click('.dock button.good:has-text("Finish")'); await P.waitForSelector('.finish-hero');
   ok(await has(P, '.finish-hero', 'FOH drinks fridge restocked'), 'an area with nothing needed finishes without an empty collection step');

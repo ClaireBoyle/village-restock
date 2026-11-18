@@ -4,8 +4,9 @@ import Link from 'next/link';
 import { Icon } from '@/components/Icon';
 import {
   EMPTY_ITEM, SKIP_REASONS, type ItemState, activePlacements, areaNotes, areaStatus, collectPlacements, collectionLines, isChecked, isRequired, needOf,
-  phaseAreas, refillLines,
+  phaseAreas, refillLines, groupByStoreroom, lineState, type CollectionLine,
 } from '@/lib/restock-logic';
+import { Line } from './CollectStep';
 import { round2 } from '@/lib/restock-math';
 import { setArea, setItems, updateLocalSession } from '@/lib/client/restock-store';
 import { localDb } from '@/lib/client/local-db';
@@ -70,17 +71,27 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   const active = activePlacements(session.kind, view.placements, recorded);
   const byArea = session.kind === 'area';
   const single = view.areas.length === 1;
-  // What's on the lists so far: the downstairs run, plus (before Refill FOH) what's grabbed upstairs.
-  const lines = [...(phase === 'foh' ? refillLines(session.kind, ctx.placements, recorded, items) : []),
-    ...collectionLines(collectPlacements(session.kind, ctx.placements, recorded), items)];
-  const nextStep = phase === 'foh' ? 'refill' as const : 'collect' as const;
+  // What's on the lists so far: the downstairs run, plus (on Check the bar) what's to grab upstairs.
+  const grabAll = phase !== 'all' ? refillLines(session.kind, ctx.placements, recorded, items) : [];
+  const downstairs = collectionLines(collectPlacements(session.kind, ctx.placements, recorded), items);
+  const lines = [...(phase === 'foh' ? grabAll : []), ...downstairs];
+  // Upstairs, at this location: what to grab for the bar (from this spot or its cupboards).
+  const spotIds = new Set([cur.area.id, ...cur.sections.map((x) => x.area.id)]);
+  const grab = phase === 'boh' ? grabAll.filter((l) => l.locationId && spotIds.has(l.locationId)) : [];
+  const grabGroups = groupByStoreroom(grab, view.pickupOrder);
+  const lineStateOf = (l: CollectionLine) => lineState(l, items);
+  const writeItems = (ups: { placementId: string; fields: Partial<ItemState> }[]) => void setItems(session.id, ups, who);
+  // After the bar: upstairs. After upstairs: the downstairs list, or straight to sign-off when it's empty.
+  const nextStep = phase === 'foh' ? 'boh' as const : !downstairs.length && phase === 'boh' ? 'finish' as const : 'collect' as const;
   // Refill FOH flow: one next action. "Done → <next area>" marks this area done (nothing entered is fine)
   // and moves on; once every area here is done or skipped, it's the next step.
   const flow = phase !== 'all';
   const curIdx = view.areas.findIndex((a) => a.area.id === cur.area.id);
   const after = [...view.areas.slice(curIdx + 1), ...view.areas.slice(0, curIdx)];
   const nextOpen = after.find(({ area }) => !['complete', 'skipped'].includes(statusOf(area.id)));
-  const stepName = phase === 'foh' ? 'Collect upstairs' : 'Collect downstairs';
+  // Every area checked (done or skipped).
+  const allChecked = view.areas.every(({ area }) => ['complete', 'skipped'].includes(statusOf(area.id)));
+  const stepName = phase === 'foh' ? 'Upstairs' : nextStep === 'finish' ? 'Finish' : 'Collect downstairs';
   // What to show as progress. Target-level products need a count; everything else is exception-based,
   // so we count what was entered rather than "checked".
   const progressOf = (ps: typeof active) => {
@@ -234,10 +245,15 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
             const s = statusOf(area.id), r = areaRecords.get(area.id);
             const g = progressOf(placements);
             const pct = s === 'complete' || s === 'skipped' ? 1 : g.req ? g.counted / g.req : 0;
-            const sub = s === 'skipped' ? `Skipped${r?.skipReason ? ` · ${r.skipReason}` : ''}` : s === 'complete' ? 'Complete' : areaLabel(placements);
+            // "Checked · nothing needed" and "Unchecked" can both have nothing entered: say which.
+            const g2 = progressOf(placements);
+            const sub = s === 'skipped' ? `Skipped${r?.skipReason ? ` · ${r.skipReason}` : ''}`
+              : s === 'complete' ? (g2.entered || g2.req ? `Checked · ${g2.entered ? `${g2.entered} entered` : 'all counted'}` : 'Checked · nothing needed')
+              : g2.req || g2.entered ? areaLabel(placements) : 'Unchecked';
+            const subSm = s === 'complete' ? 'Checked' : s === 'skipped' ? 'Skipped' : g2.req || g2.entered ? areaLabel(placements, true) : 'Unchecked';
             return (
               <button key={area.id} className={`area-btn s-${AREA_BADGE[s]} ${area.id === cur.area.id ? 'cur' : ''}`} onClick={() => goArea(area.id)} aria-current={area.id === cur.area.id ? 'true' : undefined}>
-                <Ring pct={pct} st={AREA_BADGE[s]} /><span className="t"><b>{area.name}</b><small className="lg">{sub}</small><small className="sm">{s === 'complete' ? 'Done' : s === 'skipped' ? 'Skipped' : areaLabel(placements, true)}</small></span>
+                <Ring pct={pct} st={AREA_BADGE[s]} /><span className="t"><b>{area.name}</b><small className="lg">{sub}</small><small className="sm">{subSm}</small></span>
               </button>
             );
           })}
@@ -286,6 +302,22 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
           ) : null}
           {zoom && cur.area.guidePhotoPath ? <PhotoZoom src={cur.area.guidePhotoPath} title={`${cur.area.name} fully stocked`} onClose={() => setZoom(false)} /> : null}
 
+          {grab.length ? (
+            // Upstairs, one screen per location: first what to take to the bar (tick, or Got fewer if
+            // there wasn't enough), then below it what to bring up, with what was grabbed already suggested.
+            <section className="grab" aria-labelledby="grab-h">
+              <h3 className="sec-title" id="grab-h"><Icon name="up" />Grab for the bar<small>{grab.filter((l) => ['done', 'short'].includes(lineStateOf(l))).length} of {grab.length}</small></h3>
+              <p className="grab-hint">Tick each one as you take it, or use Got fewer if there wasn&rsquo;t enough.</p>
+              {grabGroups.map((g) => (
+                <div key={g.lines[0].locationId ?? g.name} className="grab-group">
+                  {grabGroups.length > 1 ? <h4 className="phead">{g.name}</h4> : null}
+                  <div className="room-lines">{g.lines.map((l) => <Line key={l.key} line={l} items={items} write={writeItems} oneArea={null} tickOnly />)}</div>
+                </div>
+              ))}
+            </section>
+          ) : null}
+          {phase === 'boh' ? <h3 className="sec-title bring-h"><Icon name="down" />Bring up from downstairs<small>Add only what looks low</small></h3> : null}
+
           <div className="prows">
             {cur.placements.length === 0 ? <p className="meta">No products in this area yet.</p> : null}
             {/* Optional subheadings (e.g. "Mixers, Water & Milk") in the same list */}
@@ -293,7 +325,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
               // Refill FOH: everything taken for front of house first, so none of it is lost in a long list.
               // A row stays here even after it's changed or removed, so it never jumps away mid-tap.
               <>
-                <h3 className="phead taken-h"><span>Taken for FOH</span><small>{taken.length} to check</small></h3>
+                <h3 className="phead taken-h"><span>Replace what you grabbed</span><small>{taken.length} suggested</small></h3>
                 {taken.map((p) => renderRow(p, p.areaId !== cur.area.id))}
                 {/* The rest starts with its own subheading if it has one; otherwise a plain divider. */}
                 {rest(cur.own).length && !rest(cur.own).some((x) => x.heading) ? <h3 className="phead">Everything else</h3> : null}
@@ -316,7 +348,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
                   <>
                     {sec.mode === 'optional' ? <p className="psec-hint"><Icon name="info" /><span>{ctx.refill ? <>What was taken for front of house is already suggested. Add anything else that looks low.</> : <>Only add <b>extra</b> stock this needs from downstairs. Anything already entered above is already on the collection list.</>}</span></p>
                       : sec.area.guideText ? <p className="psec-hint"><Icon name="info" /><span>{sec.area.guideText}</span></p> : null}
-                    <div className="prows">{renderList(rest(sec.placements))}{taken.length && !rest(sec.placements).length ? <p className="meta">All taken for FOH: see the top of this page.</p> : null}</div>
+                    <div className="prows">{renderList(rest(sec.placements))}{taken.length && !rest(sec.placements).length ? <p className="meta">All suggested above (Replace what you grabbed).</p> : null}</div>
                   </>
                 ) : null}
               </section>
@@ -367,7 +399,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
         ) : null}
         title={<>{all.req ? <>{`${all.counted} of ${all.req} counted`}<span className="dock-sep"> &middot; </span></> : null}
           <button type="button" className="dock-2 dock-review" onClick={() => setReview(!review)} disabled={!lines.length} aria-expanded={review} aria-controls="entered-list">
-            {lines.length ? `${lines.length} to collect` : 'Nothing to collect yet'}{lines.length ? <Icon name={review ? 'down' : 'up'} /> : null}</button></>}
+            {lines.length ? `${lines.length} to collect` : 'Nothing added to the collection list'}{lines.length ? <Icon name={review ? 'down' : 'up'} /> : null}</button></>}
         sub={flow ? undefined : next && st === 'complete' ? `Next area: ${next.area.name}` : byArea && !lines.length ? 'Tap + Add on anything that needs topping up' : undefined}>
         <button className="btn save-exit" onClick={ctx.saveAndExit} aria-label="Save and exit"><Icon name="save" /><span className="lg">Save and exit</span><span className="sm">Save &amp; exit</span></button>
         {flow ? (
@@ -379,9 +411,9 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
                   <span className="fn-l">Done</span><span className="fn-to" aria-hidden="true">&rarr;</span><span className="fn-n">{nextOpen ? nextOpen.area.name : stepName}</span><Icon name="next" /></button>
               : <button className="btn primary big flow-next" onClick={() => (nextOpen ? goArea(nextOpen.area.id) : ctx.go(nextStep))}>
                   <span className="fn-n">{nextOpen ? `Next: ${nextOpen.area.name}` : stepName}</span><Icon name="next" /></button>
-        ) : byArea && !lines.length
+        ) : (byArea || allChecked) && !lines.length
+          // Nothing on the collection list and nothing left to check: straight to sign-off.
           ? <button className="btn primary big" onClick={() => ctx.go('finish')}><span className="lg">Nothing needed: finish</span><span className="sm">Finish</span><Icon name="next" /></button>
-          : nextStep === 'refill' ? <button className="btn primary big" onClick={() => ctx.go('refill')}><span className="lg">Refill FOH</span><span className="sm">Refill</span><Icon name="next" /></button>
           : <button className="btn primary big" onClick={() => ctx.go('collect')}><span className="lg">Collection list</span><span className="sm">Collect</span><Icon name="next" /></button>}
       </Dock>
     </>
