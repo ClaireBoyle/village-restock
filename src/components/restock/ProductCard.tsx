@@ -28,6 +28,7 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
   note?: string | null;
 }) {
   const st = cardState(p, item);
+  const refillTask = p.method === 'routine' && !!p.pickupAreaId;
   const need = needOf(p, item);
   const field: 'currentQty' | 'requestedQty' = p.method === 'par' ? 'currentQty' : 'requestedQty';
   const value = item[field];
@@ -68,6 +69,8 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
   else if (progressive && (need ?? 0) > 0) status = <><b>{formatQty(need!, p.unitSingular, p.unitPlural)}</b><span>to collect</span></>;
   else if (progressive && sug) status = <><Icon name="check" />Removed: none needed</>;
   else if (progressive) status = <><Icon name="check" />None needed</>;
+  // A container refilled from an upstairs spot (e.g. sugar, Flake): its instructions are on the Refill FOH list.
+  else if (p.method === 'routine' && refillTask) status = item.routineChoice === 'needed' ? <><Icon name="up" />On the Refill FOH list</> : <><Icon name="check" />Not needed</>;
   else if (p.method === 'routine') status = item.routineChoice === 'needed' ? <><Icon name="up" />On the list</> : <><Icon name="check" />Not needed</>;
   else if ((need ?? 0) > 0) status = <>{target ? `${target} · ` : ''}<Icon name="up" /><b>{formatQty(need!, p.unitSingular, p.unitPlural)}</b><span className="lg">&nbsp;to collect</span></>;
   else status = <>{target ? `${target} · ` : ''}<Icon name="check" />{p.method === 'manual' ? 'None needed' : 'At target'}</>;
@@ -106,9 +109,9 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
   } else {
     controls = (
       // One toggle: tap if the task is needed tonight; left alone it isn't.
-      <div className="pseg" role="group" aria-label={`${p.productName}: needed tonight?`}>
+      <div className="pseg" role="group" aria-label={refillTask ? `${p.productName}: needs refill?` : `${p.productName}: needed tonight?`}>
         <button type="button" className={item.routineChoice === 'needed' ? 'on warn' : ''} aria-pressed={item.routineChoice === 'needed'}
-          onClick={() => onChange({ routineChoice: item.routineChoice === 'needed' ? null : 'needed' })}><Icon name={item.routineChoice === 'needed' ? 'check' : 'plus'} />Needed</button>
+          onClick={() => onChange({ routineChoice: item.routineChoice === 'needed' ? null : 'needed' })}><Icon name={item.routineChoice === 'needed' ? 'check' : 'plus'} />{refillTask ? 'Needs refill' : 'Needed'}</button>
       </div>
     );
   }
@@ -132,7 +135,7 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
     );
   }
 
-  const routineText = p.method === 'routine' ? (p.instructions || 'Routine task') : null;
+  const routineText = p.method === 'routine' && !refillTask ? (p.instructions || 'Routine task') : null;
   return (
     <article className={`prow card s-${st} m-${p.method} ${quiet ? 'quiet' : ''} ${sug ? 'suggested' : ''}`} data-placement={p.placementId}>
       {/* A fixed photo slot, so adding a photo never moves anything. */}

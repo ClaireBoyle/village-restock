@@ -53,7 +53,7 @@ const rooms = (P) => P.$$eval('.room', (els) => els.map((r) => [r.querySelector(
   await goArea(P, 'Back shelves'); await add(P, 'Grey Goose');
 
   // Refill FOH
-  await P.click('.dock .dock-acts button:has-text("Refill")'); await P.waitForSelector('.room');
+  await P.click('.rbar .stage:has-text("Refill")'); await P.waitForSelector('.room');
   const r1 = await rooms(P);
   ok(JSON.stringify(r1) === JSON.stringify([
     ['BOH bar fridge', ['3 bottles Heineken', '2 bottles Kirks Indian Tonic Water', '4 bottles Mount Franklin Sparkling Water 330ml']],
@@ -108,7 +108,7 @@ const rooms = (P) => P.$$eval('.room', (els) => els.map((r) => [r.querySelector(
   await P.setViewportSize(devices['iPhone 13'].viewport);
 
   // Collect downstairs
-  await P.click('.dock .dock-acts button:has-text("Collect")'); await P.waitForSelector('.room');
+  await P.click('.rbar .stage:has-text("Collect")'); await P.waitForSelector('.room');
   const r2 = await rooms(P);
   ok(JSON.stringify(r2.map(([a, l]) => [a.toLowerCase(), [...l].sort()])) === JSON.stringify([
     ['alcohol storeroom', ['1 bottle Vanilla Syrup', '2 cans Curatif Negroni', '3 bottles Red Claw Shiraz']],

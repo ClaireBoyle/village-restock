@@ -74,6 +74,13 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   const lines = [...(phase === 'foh' ? refillLines(session.kind, ctx.placements, recorded, items) : []),
     ...collectionLines(collectPlacements(session.kind, ctx.placements, recorded), items)];
   const nextStep = phase === 'foh' ? 'refill' as const : 'collect' as const;
+  // Refill FOH flow: one next action. "Done → <next area>" marks this area done (nothing entered is fine)
+  // and moves on; once every area here is done or skipped, it's the next step.
+  const flow = phase !== 'all';
+  const curIdx = view.areas.findIndex((a) => a.area.id === cur.area.id);
+  const after = [...view.areas.slice(curIdx + 1), ...view.areas.slice(0, curIdx)];
+  const nextOpen = after.find(({ area }) => !['complete', 'skipped'].includes(statusOf(area.id)));
+  const stepName = phase === 'foh' ? 'Refill FOH' : 'Collect';
   // What to show as progress. Target-level products need a count; everything else is exception-based,
   // so we count what was entered rather than "checked".
   const progressOf = (ps: typeof active) => {
@@ -187,6 +194,12 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
     }
     return out;
   };
+  /** Mark this area done (even with nothing entered) and go to the next one still to do, or the next step. */
+  const doneAndNext = async () => {
+    pin();
+    await setArea(session.id, cur.area.id, 'complete', null, who);
+    if (nextOpen) goArea(nextOpen.area.id); else ctx.go(nextStep);
+  };
   const reopen = () => { pin(); void setArea(session.id, cur.area.id, 'not_started', null, who); };
   const firstUnchecked = () => {
     const p = cur.placements.find((x) => !chk(x));
@@ -196,9 +209,8 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
     row.querySelector<HTMLElement>('input.qty-input, .pseg button')?.focus({ preventScroll: true });
   };
 
-  const nextBtn = next
+  const nextBtn = flow ? null : next
     ? <button className="btn primary" onClick={() => goArea(next.area.id)}>Next: {next.area.name}<Icon name="next" /></button>
-    : phase === 'foh' ? <button className="btn primary" onClick={() => ctx.go('refill')}>Refill FOH<Icon name="next" /></button>
     : <button className="btn primary" onClick={() => ctx.go(byArea && !lines.length ? 'finish' : 'collect')}>{byArea && !lines.length ? 'Finish' : 'Collection list'}<Icon name="next" /></button>;
 
   return (
@@ -240,7 +252,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
             </div>
             <div className="acts">
               {reqLeft > 0 && done > 0 && st !== 'skipped' ? <button className="btn small" onClick={firstUnchecked}><Icon name="down" /><span className="lg">Next to count</span><span className="sm">Next</span></button> : null}
-              {st !== 'complete' && st !== 'skipped' && !byArea ? <button className="btn small" onClick={() => setSkipOpen(true)}><Icon name="skip" />Skip</button> : null}
+              {st !== 'complete' && st !== 'skipped' && !byArea && !flow ? <button className="btn small" onClick={() => setSkipOpen(true)}><Icon name="skip" />Skip</button> : null}
             </div>
           </div>
 
@@ -320,6 +332,12 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
             <div className="banner s-none area-end"><Icon name="circle" /><div><b>{reqLeft} target {reqLeft === 1 ? 'count' : 'counts'} still needed</b><p>Count what&rsquo;s on the shelf, or tap Full.</p></div>
               <button className="btn" onClick={firstUnchecked}>Go to the first one</button>
               <button className="btn area-skip-end" onClick={() => { setSkipOpen(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}><Icon name="skip" />Skip area</button></div>
+          ) : flow ? (
+            // Refill FOH flow: "Done" is in the bottom bar; an area nobody checked can be skipped here (every screen size).
+            <div className="area-end area-next flow-end">
+              <button className="btn area-skip-flow" onClick={() => { setSkipOpen(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}><Icon name="skip" />Skip {cur.area.name}</button>
+              <span className="meta">Only if it wasn&rsquo;t checked</span>
+            </div>
           ) : byArea ? null : (
             // Nothing required is missing: just a quiet pointer to the next area (no sign-off needed).
             <div className="area-end area-next">
@@ -347,9 +365,18 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
         title={<>{all.req ? <>{`${all.counted} of ${all.req} counted`}<span className="dock-sep"> &middot; </span></> : null}
           <button type="button" className="dock-2 dock-review" onClick={() => setReview(!review)} disabled={!lines.length} aria-expanded={review} aria-controls="entered-list">
             {lines.length ? `${lines.length} to collect` : 'Nothing to collect yet'}{lines.length ? <Icon name={review ? 'down' : 'up'} /> : null}</button></>}
-        sub={next && st === 'complete' ? `Next area: ${next.area.name}` : byArea && !lines.length ? 'Tap + Add on anything that needs topping up' : undefined}>
+        sub={flow ? undefined : next && st === 'complete' ? `Next area: ${next.area.name}` : byArea && !lines.length ? 'Tap + Add on anything that needs topping up' : undefined}>
         <button className="btn save-exit" onClick={ctx.saveAndExit} aria-label="Save and exit"><Icon name="save" /><span className="lg">Save and exit</span><span className="sm">Save &amp; exit</span></button>
-        {byArea && !lines.length
+        {flow ? (
+          // One primary next action, the same on phone, iPad and laptop.
+          reqLeft > 0 && !['complete', 'skipped'].includes(st)
+            ? <button className="btn primary big" onClick={firstUnchecked}><span>Count {reqLeft} left</span><Icon name="down" /></button>
+            : !['complete', 'skipped'].includes(st)
+              ? <button className="btn primary big flow-next" onClick={() => void doneAndNext()}>
+                  <span className="fn-l">Done</span><span className="fn-to" aria-hidden="true">&rarr;</span><span className="fn-n">{nextOpen ? nextOpen.area.name : stepName}</span><Icon name="next" /></button>
+              : <button className="btn primary big flow-next" onClick={() => (nextOpen ? goArea(nextOpen.area.id) : ctx.go(nextStep))}>
+                  <span className="fn-n">{nextOpen ? `Next: ${nextOpen.area.name}` : stepName}</span><Icon name="next" /></button>
+        ) : byArea && !lines.length
           ? <button className="btn primary big" onClick={() => ctx.go('finish')}><span className="lg">Nothing needed: finish</span><span className="sm">Finish</span><Icon name="next" /></button>
           : nextStep === 'refill' ? <button className="btn primary big" onClick={() => ctx.go('refill')}><span className="lg">Refill FOH</span><span className="sm">Refill</span><Icon name="next" /></button>
           : <button className="btn primary big" onClick={() => ctx.go('collect')}><span className="lg">Collection list</span><span className="sm">Collect</span><Icon name="next" /></button>}
