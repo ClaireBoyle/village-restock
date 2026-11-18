@@ -37,7 +37,7 @@ const rooms = (P) => P.$$eval('.room', (els) => els.map((r) => [r.querySelector(
 
   // Check the bar
   const steps = await P.$$eval('.rbar .stage .sm', (els) => els.map((e) => e.textContent));
-  ok(JSON.stringify(steps) === JSON.stringify(['Bar', 'Upstairs', 'Downstairs', 'Finish']), 'four steps: ' + steps.join(' › '));
+  ok(JSON.stringify(steps) === JSON.stringify(['Bar', 'Up', 'Down', 'Finish']), 'four steps: ' + steps.join(' › '));
   ok(await sees(P, '.dock', 'Nothing added to the collection list'), 'nothing entered yet: "Nothing added to the collection list"');
   const foh = await rail(P);
   ok(foh[0] === 'FOH beer fridge' && !foh.includes('BOH bar fridge') && !foh.includes('Upstairs cupboards') && foh.includes('Back bench') && foh.includes('Confection'), 'Check the bar shows front-of-house areas only: ' + foh.join(', '));

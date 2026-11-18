@@ -1168,3 +1168,4 @@ button.pnote.open span{display:block}
 .grab-group{display:flex;flex-direction:column;gap:6px}
 .grab .phead{margin:4px 2px 0}
 .bring-h{margin-top:14px}
+@media (max-width:640px){.sec-title{flex-wrap:wrap;row-gap:0}.sec-title small{flex-basis:100%;margin-left:26px}}
