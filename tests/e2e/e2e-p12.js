@@ -88,7 +88,8 @@ const contrast = (P, sel) => P.$eval(sel, (el) => {
   ok((await reasonOf('Kirin Ichiban')).collectedMode === null, '5. opening Got fewer saves nothing');
   await P.click(`${line('Kirin Ichiban')} .fw-x`);
   ok(await P.locator(`${line('Kirin Ichiban')} .fewer`).count() === 0 && await P.locator(`${line('Kirin Ichiban')}.todo .l-all`).count() === 1
-    && (await reasonOf('Kirin Ichiban')).collectedMode === null && await P.evaluate(() => document.activeElement?.closest('.line')?.dataset.line) === 'Kirin Ichiban',
+    && (await reasonOf('Kirin Ichiban')).collectedMode === null
+    && await P.waitForFunction(() => document.activeElement?.closest('.line')?.dataset.line === 'Kirin Ichiban', null, { timeout: 3000 }).then(() => true, () => false),
     '5. Cancel: back on the same row, unchanged (an accidental tap does nothing)');
   await P.click(`${line('Kirin Ichiban')} .l-few`); await P.fill(`${line('Kirin Ichiban')} .fewer .qty-input`, '2');
   ok(await has(P, `${line('Kirin Ichiban')} .fewer`, 'of 3') && await has(P, `${line('Kirin Ichiban')} .short-txt`, 'Short 1 pack'), '5. typed 2 of 3: Short 1 pack');
