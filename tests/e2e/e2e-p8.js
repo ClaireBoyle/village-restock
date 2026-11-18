@@ -50,7 +50,7 @@ const row = (scope, n) => `${scope} article.prow:has(h3:text-is("${n}"))`;
   ok(await has(P, '.line .l-few', 'Got fewer'), 'collection buttons read "Got fewer" and "Got all"');
   await P.screenshot({ path: (process.env.E2E_OUT || 'tests/e2e/out') + '/p8-collect.png' });
   // Partial collection + shortage on the merged line still works
-  await P.click('.line[data-line="Jim Beam"] .l-few'); 
+  await P.click('.line[data-line="Jim Beam"] .l-few'); await P.fill(`.line[data-line="Jim Beam"] .fewer .qty-input`, String(Number(await P.textContent(`.line[data-line="Jim Beam"] .l-amt b`)) - 1));
   ok(await has(P, '.line[data-line="Jim Beam"] .short-txt', 'Short 1'), 'shortage recorded on the merged line');
   await P.click('.line[data-line="Jim Beam"] .fw-ok');
   while (await P.$('.line.todo .l-all')) { await P.click('.line.todo .l-all >> nth=0'); await P.waitForTimeout(100); }

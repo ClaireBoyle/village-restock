@@ -17,13 +17,14 @@ const add = async (P, n, qty) => { await P.click(`${row(n)} button.padd`); for (
 // Got fewer, step down to `got`, Confirm
 const fewer = async (P, n, total, got) => {
   await P.click(`${line(n)} .l-few`); await P.waitForSelector(`${line(n)} .fewer`);
-  for (let k = total - 1; k > got; k--) await P.click(`${line(n)} button[aria-label="One less"]`);
+  await P.fill(`${line(n)} .fewer .qty-input`, String(got)); // the amount starts blank
   await P.click(`${line(n)} .fw-ok`); await gone(P, `${line(n)} .fewer`);
 };
 
 (async () => {
   require('fs').mkdirSync(OUT, { recursive: true });
   await sql`update departments set none_on_display = true, email_every_restock = true where name = 'Candy Bar'`;
+  await sql.file('db/updates/2026-11-candy-bar-dry-storage.sql'); await sql.file('db/updates/2026-11-candy-bar-dry-storage.sql');
   // Manager emails switched on, to a placeholder address (nothing is actually sent in tests).
   await sql`insert into app_settings (key, value) values ('manager_email', '"manager@example.com"'::jsonb), ('manager_email_enabled', 'true'::jsonb)
     on conflict (key) do update set value = excluded.value`;
@@ -35,6 +36,14 @@ const fewer = async (P, n, total, got) => {
   await P.click(`${card('Confection stand')} button:has-text("Start")`); await P.waitForSelector('article.prow');
   await add(P, 'Maltesers', 4); await add(P, 'Kit Kat', 3); await add(P, 'Twix', 2);
   await P.click('.dock .dock-acts button:has-text("Collect")'); await P.waitForSelector('.line');
+  ok(JSON.stringify(await P.$$eval('.room-h h3', (e) => e.map((x) => x.textContent))) === JSON.stringify(['Dry storage'])
+    && await sees(P, '.room-note', 'Use stock from the open-box shelf first. Only open a new box if you still need more.'), 'confection collected from Dry storage, with the open-box reminder once');
+  // An accidental tap on Got fewer: Cancel, nothing saved, same row.
+  await P.click(`${line('Twix')} .l-few`);
+  ok(await sees(P, `${line('Twix')} .fewer`, 'How many did you get?') && await P.inputValue(`${line('Twix')} .fewer .qty-input`) === '', 'Got fewer: "How many did you get?" with a blank amount');
+  await P.click(`${line('Twix')} .fw-x`);
+  const [tw] = await sql`select collected_mode from session_items where product_name = 'Twix'`;
+  ok(await P.locator(`${line('Twix')} .fewer`).count() === 0 && tw?.collectedMode == null && await P.locator(`${line('Twix')} .l-all`).isVisible(), 'Cancel: back on the row, nothing saved, Got all still one tap');
 
   // Collected none: Low stock, short 4, with "None on display" underneath
   await fewer(P, 'Maltesers', 4, 0);

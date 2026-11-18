@@ -113,6 +113,7 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
   ok(!(await A.isVisible('.line:has-text("Tomato sauce")')), 'skipped area left off the collection list');
   await A.click('.line:has-text("Tomatoes") button.l-few');
   await A.waitForSelector('.line:has-text("Tomatoes") .fewer');
+  await A.fill(`.line[data-line="Tomatoes"] .fewer .qty-input`, String(Number(await A.textContent(`.line[data-line="Tomatoes"] .l-amt b`)) - 1));
   ok(await hasText(A, '.line[data-line="Tomatoes"] .short-txt', 'Short 1'), 'scenario 7: collected fewer than requested, shortfall shown');
   await A.click('.line:has-text("Tomatoes") .fw-ok'); // Confirm: "not enough in storeroom" by default
   ok(await hasText(A, '.line[data-line="Tomatoes"] .l-why', 'Running low'), 'confirmed without choosing a reason: recorded as running low');

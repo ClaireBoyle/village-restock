@@ -101,8 +101,9 @@ const FRIDGE = ['Fuze Peach Iced Tea', 'Monster Original', 'Monster White', 'Mon
   const order2 = await P.$$eval('.line', (els) => els.map((e) => e.dataset.line));
   ok(JSON.stringify(order1) === JSON.stringify(order2), 'Undo works and rows never jump around');
   await P.click('.line[data-line="Mount Franklin Still Water"] .l-few');
+  await P.fill(`.line[data-line="Mount Franklin Still Water"] .fewer .qty-input`, String(Number(await P.textContent(`.line[data-line="Mount Franklin Still Water"] .l-amt b`)) - 1));
   ok(await has(P, '.line[data-line="Mount Franklin Still Water"] .short-txt', 'Short 1'), 'Got fewer: actual amount, shortfall shown');
-  await P.click('.line[data-line="Mount Franklin Still Water"] .flag');
+  await P.click('.line[data-line="Mount Franklin Still Water"] .fw-more'); await P.click('.line[data-line="Mount Franklin Still Water"] .flag');
   await P.click('.line[data-line="Mount Franklin Still Water"] .fw-ok');
   ok(await has(P, '.line[data-line="Mount Franklin Still Water"] .l-amt', '11/12'), 'partial line folds to a one-line summary');
   ok(await has(P, '.dock', '1 of'), 'bottom bar: collected count');

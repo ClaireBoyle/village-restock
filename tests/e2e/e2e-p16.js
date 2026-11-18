@@ -18,7 +18,7 @@ const outlined = (P, sel) => P.$eval(sel, (e) => { const cs = getComputedStyle(e
 const colour = (P, sel) => P.$eval(sel, (e) => getComputedStyle(e).color);
 const fewer = async (P, n, total, got) => {
   await P.click(`${line(n)} .l-few`); await P.waitForSelector(`${line(n)} .fewer`);
-  for (let k = total - 1; k > got; k--) await P.click(`${line(n)} button[aria-label="One less"]`);
+  await P.fill(`${line(n)} .fewer .qty-input`, String(got)); // the amount starts blank
   await P.click(`${line(n)} .fw-ok`); await P.locator(`${line(n)} .fewer`).waitFor({ state: 'detached' });
 };
 

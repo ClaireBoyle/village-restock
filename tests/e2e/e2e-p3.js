@@ -75,6 +75,7 @@ const hasText = (p, sel, t, timeout = 10000) => p.locator(sel).filter({ hasText:
   }
   await A.click('.dock button:has-text("Collection list")'); await A.waitForSelector('.line');
   await A.click('.line[data-line="Tomatoes"] button.l-few');
+  await A.fill(`.line[data-line="Tomatoes"] .fewer .qty-input`, String(Number(await A.textContent(`.line[data-line="Tomatoes"] .l-amt b`)) - 1));
   await A.click('.line[data-line="Tomatoes"] .fw-ok');
   while (await A.$('.line.todo button.l-all')) { await A.click('.line.todo button.l-all >> nth=0'); await A.waitForTimeout(150); }
   await A.click('.dock button:has-text("Review and finish")'); await A.click('.dock button:has-text("Finish with exceptions")');

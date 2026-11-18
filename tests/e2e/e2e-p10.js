@@ -99,7 +99,7 @@ const syncNow = (p) => p.evaluate(() => window.dispatchEvent(new Event('online')
   await S.p.click(`${row('Maltesers')} button.padd`); await S.p.click(`${row('Kit Kat')} button.padd`); await S.p.click(`${row('Kit Kat')} button[aria-label="One more Kit Kat"]`);
   await S.p.click('.dock .dock-acts button:has-text("Collect")'); await S.p.waitForSelector('.line');
   await S.p.click('.line[data-line="Maltesers"] .l-all');
-  await S.p.click('.line[data-line="Kit Kat"] .l-few');  await S.p.click('.line[data-line="Kit Kat"] .fw-ok');
+  await S.p.click('.line[data-line="Kit Kat"] .l-few'); await S.p.fill(`.line[data-line="Kit Kat"] .fewer .qty-input`, String(Number(await S.p.textContent(`.line[data-line="Kit Kat"] .l-amt b`)) - 1)); await S.p.click('.line[data-line="Kit Kat"] .fw-ok');
   await S.p.click('.dock .dock-acts button:has-text("Review")'); await S.p.click('.dock button.good:has-text("Finish")'); await S.p.waitForSelector('.finish-hero');
   await waitDb(() => sql`select count(*)::int as n from shortages`, (r) => r[0].n === 1);
   await S.p.click('.dock button:has-text("Back to Candy Bar")'); await S.p.waitForSelector('.acard');

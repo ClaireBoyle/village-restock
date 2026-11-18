@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
   EMPTY_ITEM, SHORT_REASONS, activePlacements, clearCollectedUpdates, collectPlacements, refillLines, collectionLines, gotAllUpdates, gotFewerUpdates,
@@ -82,9 +82,15 @@ function Line({ line, items, write, oneArea, tickOnly = false, displayRule = fal
   const st = lineState(line, items);
   const info = lineInfo(line, items);
   const got = lineGot(line, items);
-  // Editing a shortfall: open after "Got fewer" or "Change", or whenever a fewer amount isn't confirmed yet.
+  // "Got fewer" opens a small editor. Nothing is saved until Confirm; Cancel puts the row back as it was.
   const [editing, setEditing] = useState(false);
-  const [others, setOthers] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [more, setMore] = useState(false);
+  const [dReason, setDReason] = useState<ShortReason | null>(null); // null = not enough in the storeroom
+  const [dFlag, setDFlag] = useState(false);
+  const fewRef = useRef<HTMLButtonElement>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
+  // An amount left unconfirmed by an older version of the app also opens the editor, to be finished.
   const open = line.kind === 'qty' && st !== 'done' && (editing || st === 'part');
   // Where it goes back to, so staff know where to restock (several areas are listed with their amounts).
   const forTxt = line.kind === 'task' ? line.parts[0].areaName
@@ -92,46 +98,68 @@ function Line({ line, items, write, oneArea, tickOnly = false, displayRule = fal
   const step = Number.isInteger(line.total) ? 1 : 0.5;
   const short = round2(line.total - got);
   const u = (n: number) => (n === 1 ? line.unitSingular : line.unitPlural);
-  const reasonText = (r: ShortReason | null) => SHORT_REASONS.find((x) => x[0] === r)?.[1] ?? '';
-  // Short labels for the folded line (the full wording is in the editor).
+  // Short labels for the folded line.
   const shortReason = (r: ShortReason | null) => (r === 'access' ? 'Couldn’t access' : r === 'time' ? 'Interrupted' : r === 'other' ? 'Other reason' : '');
 
-  /** Save the amount collected. Nothing counts as a shortage until it's confirmed. */
-  const setGot = (g: number) => {
-    if (g >= line.total) { write(gotAllUpdates(line)); setEditing(false); setOthers(false); return; }
-    // A result already confirmed keeps its reason while the amount is corrected.
-    write(gotFewerUpdates(line, g, info.reason, info.flagged, info.noneOnDisplay));
+  // The amount typed in the editor (blank until staff enter one).
+  const num = draft.trim() === '' ? null : Number(draft.replace(',', '.'));
+  const valid = num !== null && Number.isFinite(num) && num >= 0 && (step === 0.5 ? Number.isInteger(num * 2) : Number.isInteger(num));
+  const dShort = valid ? round2(Math.max(0, line.total - num!)) : null;
+  const inputId = `got-${line.key.replace(/[^a-z0-9]/gi, '')}`;
+
+  /** Open the editor: blank for a new shortfall, the recorded amount when changing one. */
+  const openEditor = () => {
+    setEditing(true); setMore(false);
+    setDraft(st === 'short' || st === 'part' ? String(round2(got)) : '');
+    setDReason(info.reason && info.reason !== 'insufficient' ? info.reason : null);
+    setDFlag(info.flagged);
+    window.setTimeout(() => document.getElementById(inputId)?.focus(), 30);
   };
-  /** Confirm: a plain shortfall is "not enough in storeroom" unless another reason was picked. */
-  const confirm = (reason: ShortReason | null = info.reason) => {
-    write(gotFewerUpdates(line, got, reason ?? 'insufficient', info.flagged, info.noneOnDisplay));
-    setEditing(false); setOthers(false);
+  /** Back to the same row (focus and scroll stay there). */
+  const close = () => {
+    setEditing(false); setMore(false);
+    window.setTimeout(() => { (fewRef.current ?? rowRef.current)?.focus({ preventScroll: true }); rowRef.current?.scrollIntoView({ block: 'nearest' }); }, 30);
   };
-  const pickReason = (r: ShortReason) => write(gotFewerUpdates(line, got, r, info.flagged, info.noneOnDisplay));
-  const flag = () => write(gotFewerUpdates(line, got, info.reason, !info.flagged, info.noneOnDisplay));
+  const cancel = () => { if (st === 'part') write(clearCollectedUpdates(line)); close(); };
+  /** Confirm saves it: all of it is "got all"; less is a shortfall ("not enough in storeroom" unless another reason). */
+  const confirm = () => {
+    if (!valid) return;
+    if (num! >= line.total) write(gotAllUpdates(line));
+    else write(gotFewerUpdates(line, num!, dReason ?? 'insufficient', dFlag, info.noneOnDisplay));
+    close();
+  };
+  const bump = (dir: 1 | -1) => {
+    const next = valid ? num! + dir * step : dir > 0 ? step : 0;
+    setDraft(String(round2(Math.min(line.total, Math.max(0, next)))));
+  };
+
   /** Candy Bar: none collected and none left on display → Out of stock (tap again to undo). */
   const toggleNone = () => write(gotFewerUpdates(line, got, info.reason, info.flagged, !info.noneOnDisplay));
   const stockShort = st === 'short' && info.reason === 'insufficient';
   const stockLabel = displayRule ? (stockShort && got === 0 && info.noneOnDisplay ? 'Out of stock' : 'Low stock') : (got === 0 ? 'Out of stock' : 'Running low');
   const askNone = displayRule && stockShort && got === 0 && !open;
-  const undo = () => { write(clearCollectedUpdates(line)); setEditing(false); setOthers(false); };
+  const undo = () => { write(clearCollectedUpdates(line)); setEditing(false); setMore(false); };
 
-  // One glance: the amount first and biggest, then the name, then one round tick for "got all".
-  // "Got fewer" is a small link; done / short lines say so quietly with Undo / Change.
+  // One glance: the amount first and biggest, then the name, then "Got all" (one tap) with
+  // "Got fewer" as its own, separate button. Done / short lines say so quietly with Undo / Change.
   const all = () => write(gotAllUpdates(line));
-  const startFewer = () => { setEditing(true); setGot(Math.max(0, Math.floor(line.total) - 1)); };
   let act: React.ReactNode = null;
   if (st === 'done') {
     act = <button type="button" className="l-tick on" onClick={undo} aria-label={`Undo ${line.productName}`}><Icon name="check" /></button>;
-  } else if (!open && !(st === 'short')) {
-    act = <button type="button" className="l-tick l-all" onClick={all}
-      aria-label={line.kind === 'task' ? `Done: ${line.productName}` : tickOnly ? `Grabbed ${round2(line.total)} ${line.productName}` : `Got all ${round2(line.total)} ${line.productName}`}><Icon name="check" /></button>;
+  } else if (!open && st !== 'short') {
+    act = (
+      <span className="l-btns">
+        {line.kind === 'qty' && !tickOnly ? <button ref={fewRef} type="button" className="btn l-few" onClick={openEditor} aria-label={`Got fewer ${line.productName}`}>Got fewer</button> : null}
+        <button type="button" className="l-tick l-all" onClick={all}
+          aria-label={line.kind === 'task' ? `Done: ${line.productName}` : tickOnly ? `Grabbed ${round2(line.total)} ${line.productName}` : `Got all ${round2(line.total)} ${line.productName}`}><Icon name="check" /></button>
+      </span>
+    );
   }
   const sub = line.kind === 'task' ? (line.instructions || forTxt)
     : oneArea && line.parts.length === 1 ? null : `For ${forTxt}`;
 
   return (
-    <div className={`line ${st === 'done' ? 'done' : st === 'short' ? (info.reason === 'insufficient' ? 'short' : 'short op') : 'todo'} ${open ? 'editing' : ''}`} data-line={line.productName}>
+    <div ref={rowRef} tabIndex={-1} className={`line ${st === 'done' ? 'done' : st === 'short' ? (info.reason === 'insufficient' ? 'short' : 'short op') : 'todo'} ${open ? 'editing' : ''}`} data-line={line.productName}>
       <div className="lrow">
         {line.kind === 'qty' ? (
           <span className="l-amt l-qty" aria-label={`${round2(line.total)} ${u(line.total)}`}>
@@ -143,13 +171,10 @@ function Line({ line, items, write, oneArea, tickOnly = false, displayRule = fal
           <b>{line.productName}</b>
           {st === 'short' && !open ? (
             <small className="l-why">{info.reason === 'insufficient' ? stockLabel : shortReason(info.reason)} &middot; short {formatQty(short, line.unitSingular, line.unitPlural)}{info.flagged ? ' · flagged' : ''}
-              <button type="button" className="linkbtn l-link" onClick={() => setEditing(true)}>Change</button></small>
+              <button type="button" className="linkbtn l-link" onClick={openEditor}>Change</button></small>
           ) : st === 'done' ? (
             <small className="l-ok">{line.kind === 'task' ? 'Done' : tickOnly ? 'Grabbed' : 'Collected'}<button type="button" className="linkbtn l-link" onClick={undo}>Undo</button></small>
-          ) : (
-            <small>{sub ? <span>{sub}</span> : null}
-              {line.kind === 'qty' && !open && !tickOnly ? <button type="button" className="linkbtn l-link l-few" onClick={startFewer} aria-label={`Got fewer ${line.productName}`}>Got fewer</button> : null}</small>
-          )}
+          ) : sub ? <small><span>{sub}</span></small> : null}
         </div>
         {act}
       </div>
@@ -162,31 +187,38 @@ function Line({ line, items, write, oneArea, tickOnly = false, displayRule = fal
         </div>
       ) : null}
       {open ? (
-        <div className="fewer">
+        <div className="fewer" role="group" aria-labelledby={`${inputId}-q`}>
+          <label className="fw-q" id={`${inputId}-q`} htmlFor={inputId}>How many did you get?</label>
           <div className="fw-row">
-            <b>Got</b>
             <div className="pstep">
-              <button onClick={() => setGot(Math.max(0, round2(got - step)))} aria-label="One less" disabled={got <= 0}><Icon name="minus" /></button>
-              <input className="qty-input" readOnly value={round2(got)} aria-label={`Collected of ${round2(line.total)}`} />
-              <button onClick={() => setGot(round2(got + step))} aria-label="One more"><Icon name="plus" /></button>
+              <button type="button" onClick={() => bump(-1)} aria-label="One less" disabled={valid && num! <= 0}><Icon name="minus" /></button>
+              <input id={inputId} className="qty-input" type="text" inputMode={step === 0.5 ? 'decimal' : 'numeric'} autoComplete="off" placeholder="–" value={draft}
+                aria-label={`How many ${line.productName} did you get, of ${round2(line.total)}`}
+                onChange={(e) => setDraft(e.target.value.replace(/[^0-9.,]/g, '').slice(0, 6))}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirm(); } else if (e.key === 'Escape') { e.preventDefault(); cancel(); } }} />
+              <button type="button" onClick={() => bump(1)} aria-label="One more"><Icon name="plus" /></button>
             </div>
-            <span className="fw-of">of {round2(line.total)}</span>
-            {info.reason ? <button className="linkbtn fw-x" onClick={undo}>Clear</button> : <button className="linkbtn fw-x" onClick={undo}>Cancel</button>}
-            <span className="short-txt"><Icon name="warn" />Short {formatQty(short, line.unitSingular, line.unitPlural)}</span>
+            <span className="fw-of">of {round2(line.total)} {u(line.total)}</span>
+            {dShort !== null && dShort > 0 ? <span className="short-txt"><Icon name="warn" />Short {formatQty(dShort, line.unitSingular, line.unitPlural)}</span>
+              : dShort === 0 ? <span className="fw-all"><Icon name="check" />That&rsquo;s all of it</span> : null}
           </div>
-          {others ? (
-            <div className="chips fw-reasons" role="group" aria-label="Reason">
-              {SHORT_REASONS.map(([v, l]) => <button key={v} className={`chip ${(info.reason ?? 'insufficient') === v ? 'on' : ''}`} onClick={() => pickReason(v)}>{l}</button>)}
+          <div className="fw-foot">
+            <button type="button" className="btn fw-x" onClick={cancel}>Cancel</button>
+            <button type="button" className="linkbtn fw-more" onClick={() => setMore(!more)} aria-expanded={more}>More options{dReason || dFlag ? ' (1+)' : ''}<Icon name={more ? 'up' : 'down'} /></button>
+            <span style={{ flex: 1 }} />
+            <button type="button" className="btn primary fw-ok" disabled={!valid} onClick={confirm}><Icon name="check" />Confirm</button>
+          </div>
+          {more ? (
+            <div className="fw-options">
+              <div className="chips fw-reasons" role="group" aria-label="Other reason">
+                {SHORT_REASONS.filter(([v]) => v !== 'insufficient').map(([v, l]) => (
+                  <button type="button" key={v} className={`chip ${dReason === v ? 'on' : ''}`} aria-pressed={dReason === v} onClick={() => setDReason(dReason === v ? null : v)}>{l}</button>
+                ))}
+              </div>
+              <button type="button" className={`flag ${dFlag ? 'on' : ''}`} aria-pressed={dFlag} onClick={() => setDFlag(!dFlag)}><Icon name="flag" /><span>{dFlag ? 'Flagged for manager' : 'Flag for manager'}</span></button>
+              <p className="meta">With no other reason, it&rsquo;s recorded as &ldquo;not enough in the storeroom&rdquo;.</p>
             </div>
           ) : null}
-          <div className="fw-foot">
-            <button className="linkbtn fw-other" onClick={() => setOthers(!others)} aria-expanded={others}>
-              {info.reason && info.reason !== 'insufficient' ? reasonText(info.reason) : 'Other reason'}<Icon name={others ? 'up' : 'down'} />
-            </button>
-            <button className={`flag ${info.flagged ? 'on' : ''}`} aria-pressed={info.flagged} onClick={flag} aria-label={info.flagged ? 'Flagged for manager' : 'Flag for manager'}><Icon name="flag" /><span>{info.flagged ? 'Flagged' : 'Flag'}</span></button>
-            <span style={{ flex: 1 }} />
-            <button className="btn primary fw-ok" onClick={() => confirm()}><Icon name="check" />Confirm</button>
-          </div>
         </div>
       ) : null}
     </div>

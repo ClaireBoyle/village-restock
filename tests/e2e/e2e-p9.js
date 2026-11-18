@@ -66,7 +66,7 @@ const card = (n) => `.acard:has(h2:text-is("${n}"))`;
   ok(await P.locator('.line').count() === 2, 'collection list has only the confection stand products');
   ok(await has(P, '.room-h', 'Candy Bar BOH') && await P.locator('.room-note').count() === 1 && await has(P, '.room-note', 'Use opened boxes in Candy Bar BOH first'), 'opened-boxes reminder shown once, under Candy Bar BOH');
   ok(!(await P.textContent('.rooms')).includes('For Confection stand'), 'no "For Confection stand" repeated on each line');
-  await P.click('.line[data-line="Kit Kat"] .l-few'); 
+  await P.click('.line[data-line="Kit Kat"] .l-few'); await P.fill(`.line[data-line="Kit Kat"] .fewer .qty-input`, String(Number(await P.textContent(`.line[data-line="Kit Kat"] .l-amt b`)) - 1));
   await P.click('.line[data-line="Kit Kat"] .fw-ok');
   await P.click('.line[data-line="Maltesers"] .l-all');
   ok(await has(P, '.line.done', 'Maltesers'), 'collected line has a done state');

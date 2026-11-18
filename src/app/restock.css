@@ -1137,3 +1137,25 @@ button.pnote.open span{display:block}
 .by-box input{width:100%;min-height:48px;font:inherit;font-size:16px;padding:10px 14px;border:1.5px solid var(--hair);border-radius:12px;background:#fff;color:#17213B}
 .by-box input:focus{outline:none;border-color:#2446B8;box-shadow:0 0 0 3px rgba(36,70,184,.15)}
 .fh-by{font-weight:700}
+
+/* Collect: "Got all" is the big one-tap tick; "Got fewer" is its own button beside it */
+.l-btns{flex:none;display:flex;align-items:center;gap:8px}
+.lrow .btn.l-few{min-height:44px;padding:0 12px;border-radius:12px;font-size:14px;font-weight:600;white-space:nowrap;background:transparent;border:1px solid var(--line);color:var(--ink-2);box-shadow:none;grid-area:auto;text-decoration:none}
+.lrow .btn.l-few:hover{color:var(--ink);border-color:var(--ink-2)}
+@media (max-width:380px){.lrow .btn.l-few{padding:0 9px;font-size:13px}}
+/* "How many did you get?": blank amount, Cancel and Confirm, More options tucked away */
+.fewer .fw-q{font-weight:700;font-size:15px;color:var(--ink)}
+.fewer .pstep .qty-input{font-size:18px;font-weight:700;text-align:center}
+.fewer .pstep .qty-input::placeholder{color:var(--ink-2);opacity:.6}
+.fewer .fw-all{margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-size:14.5px;color:var(--ok);font-weight:600}
+.fewer .fw-all .ic{width:16px;height:16px}
+.fw-foot .btn.fw-x{min-height:44px;padding:0 16px}
+.fw-foot .btn.fw-ok{min-height:44px}
+.fw-foot .btn.fw-ok:disabled{opacity:.45;cursor:not-allowed}
+.fw-more{display:inline-flex;gap:4px;align-items:center;font-size:14px}
+.fw-more .ic{width:14px;height:14px}
+.fw-options{display:flex;flex-direction:column;gap:8px;padding-top:4px;border-top:1px solid var(--hair)}
+.fw-options .flag{align-self:flex-start;min-height:44px}
+.fw-options .meta{margin:0;font-size:13px}
+.line:focus{outline:none}
+.line:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
