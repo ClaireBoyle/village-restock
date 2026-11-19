@@ -9,17 +9,20 @@ import { AREA_BADGE, AREA_LABEL, Badge, timeOf } from './shared';
 import type { RemoteSession } from '@/lib/sync-types';
 import { AdminMenu } from './ResetControls';
 import type { ResetFor } from './RestockApp';
+import { MorningPrepHome } from './MorningPrep';
 
 const TIPS_KEY = 'vr-hide-tips';
 
 /** Choose Full or Quick Restock, with tonight's progress at a glance. */
-export function TypeStep({ view, fullSession, remoteFull, quickSession, opening, onStart, onSummary, hasDefrost = false, onReset }: {
+export function TypeStep({ view, fullSession, remoteFull, quickSession, opening, onStart, onSummary, hasDefrost = false, onReset, prep }: {
   view: DepartmentView; fullSession: LocalSession | null; remoteFull: RemoteSession | null; quickSession: LocalSession | null; opening: boolean;
   onStart: (m: 'full' | 'quick') => void; onSummary: () => void;
   /** Gold Class Kitchen: offer the (optional) Defrost Planner beside Kitchen Restock. */
   hasDefrost?: boolean;
   /** Admins only: reset a restock. */
   onReset?: (r: ResetFor) => void;
+  /** Gold Class Kitchen: the morning prep handover for the morning team. */
+  prep?: { today: string; who: string } | null;
 }) {
   const [hideTips, setHideTips] = useState(true);
   // Closed unless someone opened it on this device: the Start button comes first.
@@ -63,6 +66,8 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className="dh-mark" src="/brand/village-v-white.png" alt="" aria-hidden="true" />
       </section>
+      {/* Kitchen: last night's morning prep handover, for the morning team (tracked apart from the restock). */}
+      {prep ? <MorningPrepHome departmentId={view.department.id} today={prep.today} who={prep.who} /> : null}
       {hideTips ? (
         <button className="linkbtn" style={{ alignSelf: 'flex-start' }} onClick={toggleTips}><Icon name="info" />How restocking works</button>
       ) : (

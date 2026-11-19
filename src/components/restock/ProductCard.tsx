@@ -66,6 +66,8 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
   let status: React.ReactNode;
   if (c) status = <><Icon name="warn" />Two different {p.method === 'routine' ? 'answers' : 'counts'}: choose below</>;
   else if (st === 'none') status = p.method === 'par' ? <>Not checked &middot; {target ?? 'no target set'}</> : <span className="sr-only">Not entered</span>;
+  // Made or portioned in morning prep (e.g. cut carrot): it goes to the morning team, not the collection list.
+  else if (progressive && (need ?? 0) > 0 && p.prepTaskId) status = <><Icon name="clock" /><b>{formatQty(need!, p.unitSingular, p.unitPlural)}</b>{' '}<span>for morning prep</span></>;
   else if (progressive && (need ?? 0) > 0) status = <><b>{formatQty(need!, p.unitSingular, p.unitPlural)}</b><span>to collect</span></>;
   else if (progressive && sug) status = <><Icon name="check" />Removed: none needed</>;
   else if (progressive) status = <><Icon name="check" />None needed</>;

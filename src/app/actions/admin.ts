@@ -184,6 +184,7 @@ const MOVABLE = {
   location: { table: 'storage_locations', scope: null },
   product: { table: 'products', scope: 'department_id' },
   placement: { table: 'product_placements', scope: 'check_area_id' },
+  prepTask: { table: 'prep_tasks', scope: 'department_id' },
 } as const;
 
 const moveSchema = z.object({ kind: z.enum(Object.keys(MOVABLE) as [keyof typeof MOVABLE, ...(keyof typeof MOVABLE)[]]), id: uuid, dir: z.enum(['up', 'down']) });
@@ -214,6 +215,33 @@ export async function moveItem(form: FormData): Promise<void> {
       where t.id = x.id and t.sort_order is distinct from x.k`;
   });
   revalidatePath('/admin', 'layout');
+}
+
+// ---------------------------------------------------------------------------
+// Morning prep checklist (Gold Class Kitchen)
+// ---------------------------------------------------------------------------
+const prepTaskSchema = z.object({
+  id: optUuid, departmentId: uuid, name: text(80, 'Task'),
+  group: z.enum(['vegetables', 'proteins', 'sauces', 'other']), active: checkbox,
+});
+
+export async function savePrepTask(_: ActionResult, form: FormData): Promise<ActionResult> {
+  await requireAdmin();
+  const p = prepTaskSchema.safeParse(Object.fromEntries(form));
+  if (!p.success) return firstIssue(p.error);
+  const t = p.data;
+  const sql = db();
+  try {
+    if (!(await sql`select to_regclass('public.prep_tasks') is not null as ok`)[0].ok) return { error: 'Run db/migrations/017_morning_prep.sql first.' };
+    if (t.id) {
+      const r = await sql`update prep_tasks set name = ${t.name}, grp = ${t.group}, active = ${t.active} where id = ${t.id} and department_id = ${t.departmentId} returning id`;
+      if (!r.length) return { error: 'That task no longer exists.' };
+      return done('Task saved.');
+    }
+    const [{ n }] = await sql`select coalesce(max(sort_order), 0) + 1 as n from prep_tasks where department_id = ${t.departmentId}`;
+    await sql`insert into prep_tasks (department_id, grp, name, sort_order) values (${t.departmentId}, ${t.group}, ${t.name}, ${Number(n)})`;
+    return done(`${t.name} added.`);
+  } catch (e) { return fail(e); }
 }
 
 // ---------------------------------------------------------------------------

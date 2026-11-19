@@ -266,9 +266,12 @@ export async function importRemote(remote: RemoteSession) {
 export async function mergeSessionInto(fromId: string, intoId: string) {
   if (fromId === intoId) return;
   const db = localDb();
-  await db.transaction('rw', db.sessions, db.items, db.areas, db.outbox, async () => {
+  await db.transaction('rw', [db.sessions, db.items, db.areas, db.outbox, db.prep], async () => {
     const from = await db.sessions.get(fromId);
     if (!from) return;
+    // The morning prep handover moves too (the one already on the kept restock wins).
+    const prep = await db.prep.get(fromId);
+    if (prep) { if (!(await db.prep.get(intoId))) await db.prep.put({ ...prep, sessionId: intoId }); await db.prep.delete(fromId); }
     const into = await db.sessions.get(intoId);
     if (!into) await db.sessions.put({ ...from, id: intoId });
     else await db.sessions.update(intoId, { people: [...new Set([...into.people, ...from.people])], curAreaId: into.curAreaId ?? from.curAreaId, forecastAdmits: into.forecastAdmits ?? from.forecastAdmits ?? null });
@@ -310,8 +313,9 @@ const opSessionId = (op: SyncOp) => ('sessionId' in op ? op.sessionId : op.type 
 export async function purgeSession(id: string, notice = true) {
   const db = localDb();
   await rememberReset([id]);
-  await db.transaction('rw', [db.sessions, db.items, db.areas, db.outbox, db.problems, db.kv], async () => {
+  await db.transaction('rw', [db.sessions, db.items, db.areas, db.outbox, db.problems, db.kv, db.prep], async () => {
     const s = await db.sessions.get(id);
+    await db.prep.delete(id); // its morning prep handover goes with it
     const queued = await db.outbox.where('sessionId').equals(id).count();
     const entered = await db.items.where('sessionId').equals(id).count();
     if (!s && !queued && !entered) return;

@@ -1,7 +1,7 @@
 // Small forms shared by the admin pages. Server components that render
 // <ActionForm> (a client component) around plain inputs.
 import { ActionForm, SubmitButton } from './ActionForm';
-import { saveArea, saveCategory, saveDepartment, saveLocation } from '@/app/actions/admin';
+import { saveArea, saveCategory, saveDepartment, saveLocation, savePrepTask } from '@/app/actions/admin';
 
 const grid2: React.CSSProperties = { display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))' };
 const stack: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 12 };
@@ -104,6 +104,25 @@ export function LocationForm({ l }: { l?: { id: string; name: string; active: bo
         <input id={`lc-${k}`} name="collectNote" defaultValue={l.collectNote ?? ''} maxLength={200} placeholder="Shown once under this storeroom on collection lists, e.g. Use opened boxes first." /></div> : null}
       {l ? <label className="check"><input type="checkbox" name="active" defaultChecked={l.active} />In use</label> : <input type="hidden" name="active" value="on" />}
       <SubmitButton className="btn">{l ? 'Save' : 'Add storeroom'}</SubmitButton>
+    </ActionForm>
+  );
+}
+
+/** One morning prep task (Admin → Morning prep): name, group, in use. */
+export function PrepTaskForm({ departmentId, t }: { departmentId: string; t?: { id: string; name: string; group: string; active: boolean } }) {
+  const k = t?.id ?? 'new';
+  return (
+    <ActionForm action={savePrepTask} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }} resetOnSuccess={!t}>
+      {t ? <input type="hidden" name="id" value={t.id} /> : null}
+      <input type="hidden" name="departmentId" value={departmentId} />
+      <div className="field" style={{ flex: '2 1 260px' }}><label htmlFor={`pt-${k}`}>{t ? 'Task' : 'New task'}</label>
+        <input id={`pt-${k}`} name="name" defaultValue={t?.name} required maxLength={80} placeholder="e.g. Cut lettuce for burgers" /></div>
+      <div className="field" style={{ flex: '1 1 160px' }}><label htmlFor={`pg-${k}`}>Group</label>
+        <select id={`pg-${k}`} name="group" defaultValue={t?.group ?? 'vegetables'}>
+          <option value="vegetables">Vegetables</option><option value="proteins">Proteins</option><option value="sauces">Sauces</option><option value="other">Other</option>
+        </select></div>
+      {t ? <label className="check"><input type="checkbox" name="active" defaultChecked={t.active} />On the checklist</label> : <input type="hidden" name="active" value="on" />}
+      <SubmitButton className="btn">{t ? 'Save' : 'Add task'}</SubmitButton>
     </ActionForm>
   );
 }

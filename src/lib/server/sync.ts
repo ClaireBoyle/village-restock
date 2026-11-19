@@ -1,4 +1,5 @@
 import type postgres from 'postgres';
+import { prepLines, type PrepGroup } from '@/lib/prep';
 import { db } from './db';
 import { loadCatalogue } from './catalogue';
 import { queueRestockEmail } from './email';
@@ -203,6 +204,44 @@ async function apply(tx: Tx, op: SyncOp, deviceId: string): Promise<{ mergedInto
       return {};
     }
 
+    case 'prep.set': {
+      const s = await sessionRow(tx, op.sessionId);
+      // Needs migration 017. Until then, keep it on the device and retry later rather than lose it.
+      if (!(await prepTables(tx))) throw new OpError('The server needs a database update (017_morning_prep.sql)', false);
+      if (op.status === null) { await tx`delete from prep_handovers where session_id = ${op.sessionId}`; return {}; }
+      const [row] = await tx`select trading_date from restock_sessions where id = ${op.sessionId}`;
+      await tx`insert into prep_handovers (session_id, department_id, trading_date, status, updated_by, updated_at)
+        values (${op.sessionId}, ${String(s.departmentId)}, ${row.tradingDate as string}, ${op.status}, ${op.by}, ${op.at})
+        on conflict (session_id) do update set status = excluded.status, updated_by = excluded.updated_by, updated_at = excluded.updated_at`;
+      const items = op.status === 'none' ? [] : op.items;
+      const ids = items.map((i) => i.id);
+      if (ids.length) await tx`delete from prep_handover_items where session_id = ${op.sessionId} and not (id in ${tx(ids)})`;
+      else await tx`delete from prep_handover_items where session_id = ${op.sessionId}`;
+      // A task id from an old checklist that no longer exists is kept as typed text.
+      const taskIds = [...new Set(items.flatMap((i) => (i.taskId ? [i.taskId] : [])))];
+      const known = new Set((taskIds.length ? await tx`select id from prep_tasks where id in ${tx(taskIds)}` : []).map((r) => String(r.id)));
+      for (const [n, i] of items.entries()) {
+        const taskId = i.taskId && known.has(i.taskId) ? i.taskId : null;
+        // Done marks are the morning team's: kept when the closing team edits the list.
+        await tx`insert into prep_handover_items (id, session_id, task_id, grp, name, qty, note, sort_order, updated_at)
+          values (${i.id}, ${op.sessionId}, ${taskId}, ${i.group}, ${i.name}, ${i.qty || null}, ${i.note || null}, ${n}, ${op.at})
+          on conflict (id) do update set task_id = excluded.task_id, grp = excluded.grp, name = excluded.name, qty = excluded.qty,
+            note = excluded.note, sort_order = excluded.sort_order, updated_at = excluded.updated_at
+          where prep_handover_items.session_id = ${op.sessionId}`;
+      }
+      return {};
+    }
+
+    case 'prep.done': {
+      await sessionRow(tx, op.sessionId);
+      if (!(await prepTables(tx))) throw new OpError('The server needs a database update (017_morning_prep.sql)', false);
+      const r = await tx`update prep_handover_items set done_at = ${op.done ? op.at : null}, done_by = ${op.done ? op.by : null}, updated_at = now()
+        where id = ${op.itemId} and session_id = ${op.sessionId} returning id`;
+      // The list may still be on its way from the closing team's device: try again shortly.
+      if (!r.length) throw new OpError('That prep task isn’t on the server yet', false);
+      return {};
+    }
+
     case 'session.admits': {
       await sessionRow(tx, op.sessionId);
       // Needs migration 016. Until then, keep it on the device and retry later rather than lose it.
@@ -262,6 +301,12 @@ async function completedByColumn(tx: Tx): Promise<boolean> {
     hasCompletedBy = (await tx`select 1 from information_schema.columns where table_name = 'restock_sessions' and column_name = 'completed_by'`).length > 0;
   }
   return hasCompletedBy;
+}
+
+let hasPrep = false;
+async function prepTables(tx: Tx): Promise<boolean> {
+  if (!hasPrep) hasPrep = !!(await tx`select to_regclass('public.prep_handover_items') is not null as ok`)[0]?.ok;
+  return hasPrep;
 }
 
 let hasAdmits = false;
@@ -345,12 +390,19 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
     }
     const lines = collectionLines(collectPlacements(s.kind, view.placements, recorded), items);
     const host = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+    // Kitchen: the morning prep handover (already uploaded: it's queued before the finish).
+    let prep: string[] = [];
+    if (await prepTables(tx)) {
+      const [h] = await tx`select status from prep_handovers where session_id = ${s.id}`;
+      const its = h ? await tx`select grp, name, qty, note, done_at from prep_handover_items where session_id = ${s.id} order by sort_order` : [];
+      prep = prepLines(h ? { status: h.status as 'needed' | 'none', items: its.map((r) => ({ id: '', taskId: null, group: r.grp as PrepGroup, name: String(r.name), qty: (r.qty as string) ?? null, note: (r.note as string) ?? null, doneAt: r.doneAt ? String(r.doneAt) : null, doneBy: null })) } : null);
+    }
     await queueRestockEmail(tx, s.id, at, {
       departmentName: `${String(dept?.name ?? view.department.name)}${s.kind === 'area' && view.areas[0] ? ` · ${view.areas[0].area.name}` : ''}`,
       finishedLabel: `${new Date(at).toLocaleDateString('en-AU', { timeZone: cat.settings.timeZone, weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '')}, ${new Date(at).toLocaleTimeString('en-AU', { timeZone: cat.settings.timeZone, hour: 'numeric', minute: '2-digit' }).toLowerCase()}`,
       people: (row?.people as string[]) ?? [], exceptionReason: finalReason,
       areaRestock: s.kind === 'area', completedBy, lowStockWording: !!view.department.noneOnDisplay,
-      outcomes: stockOutcomes(lines, items, view.byId, !!view.department.noneOnDisplay), notChecked, note: comment,
+      outcomes: stockOutcomes(lines, items, view.byId, !!view.department.noneOnDisplay), notChecked, note: comment, prep,
       link: host ? `https://${host}/admin/restocks/${s.id}` : null,
     }, Boolean(dept?.emailEveryRestock));
   }

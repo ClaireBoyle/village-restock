@@ -74,6 +74,9 @@ export interface PlacementView {
   readyUnitPlural?: string | null;
   readyPer?: number | null;
   readyTargets?: ReadyTarget[];
+  /** Made or portioned in morning prep (e.g. cut carrot): entered amounts are for the morning team, not collected. */
+  prepTaskId?: string | null;
+  prepTaskName?: string | null;
 }
 
 /** What staff have recorded for one placement during a restock. Blank = not yet. */
@@ -124,6 +127,7 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
   const products = new Map(cat.products.map((p) => [p.id, p]));
   const locations = new Map(cat.locations.map((l) => [l.id, l]));
   const categories = new Map(cat.categories.map((c) => [c.id, c.name]));
+  const prepNames = new Map((cat.prepTasks ?? []).filter((t) => t.departmentId === departmentId).map((t) => [t.id, t.name]));
   const all = cat.areas
     .filter((a) => a.departmentId === departmentId)
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
@@ -163,6 +167,8 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
         photoCredit: p.photoCredit ?? null,
         heading: pl.heading?.trim() || null,
         screenAreaId, optional,
+        prepTaskId: pl.prepTaskId && prepNames.has(pl.prepTaskId) ? pl.prepTaskId : null,
+        prepTaskName: pl.prepTaskId ? prepNames.get(pl.prepTaskId) ?? null : null,
         ...defrostFields(pl, p.method),
       };
     });
@@ -455,7 +461,7 @@ export function exceptions(args: {
   if (clashes.length) out.push({ kind: 'unchecked', status: 'not_started', text: `${clashes.length} product${clashes.length === 1 ? ' needs' : 's need'} a decision`, detail: `Two different counts: ${clashes.map((p) => p.productName).join(', ')}`, areaId: clashes[0].areaId });
   // Outstanding = nobody has recorded what happened yet. A confirmed result (all, fewer with
   // "not enough in storeroom", or a reason such as "couldn't access stock") is resolved.
-  const outstanding = collectionLines(covered.filter((p) => !isPickup(kind, p)), items).filter((l) => {
+  const outstanding = collectionLines(covered.filter((p) => !isPickup(kind, p) && !isPrepMade(p)), items).filter((l) => {
     const st = lineState(l, items);
     return st === 'todo' || st === 'part';
   });
@@ -483,9 +489,24 @@ export const usesRefill = (kind: SessionKind, view: DepartmentView) => kind === 
  */
 export const isPickup = (kind: SessionKind, p: PlacementView) => kind === 'full' && !!p.pickupAreaId;
 
-/** What the downstairs collection list covers: skipped areas and upstairs pickups left out. */
+/** Made or portioned in morning prep (e.g. cut carrot, vodka sauce): shown for the morning team, never collected. */
+export const isPrepMade = (p: PlacementView) => !!p.prepTaskId;
+
+/** What the downstairs collection list covers: skipped areas, upstairs pickups and prep-made stock left out. */
 export function collectPlacements(kind: SessionKind, placements: PlacementView[], recordedAreas: Map<string, AreaStatus>) {
-  return activePlacements(kind, placements, recordedAreas).filter((p) => !isPickup(kind, p));
+  return activePlacements(kind, placements, recordedAreas).filter((p) => !isPickup(kind, p) && !isPrepMade(p));
+}
+
+/** Stock entered for morning prep tonight, by checklist task (e.g. Cut carrots → 2 tubs of cut carrot). */
+export function prepFromStock(kind: SessionKind, placements: PlacementView[], recordedAreas: Map<string, AreaStatus>, items: Map<string, ItemState>) {
+  const out = new Map<string, { productName: string; qty: number; unitSingular: string; unitPlural: string; areaName: string }[]>();
+  for (const p of activePlacements(kind, placements, recordedAreas)) {
+    if (!p.prepTaskId) continue;
+    const need = needOf(p, items.get(p.placementId) ?? EMPTY_ITEM) ?? 0;
+    if (need <= 0) continue;
+    out.set(p.prepTaskId, [...(out.get(p.prepTaskId) ?? []), { productName: p.productName, qty: need, unitSingular: p.unitSingular, unitPlural: p.unitPlural, areaName: p.areaName }]);
+  }
+  return out;
 }
 
 /** The areas (screens) for one part of the flow: front of house first, then upstairs back of house. */

@@ -6,6 +6,7 @@ import Dexie, { type Table } from 'dexie';
 import type { Catalogue } from '@/lib/catalogue-types';
 import type { ItemState } from '@/lib/restock-logic';
 import type { SyncOp } from '@/lib/sync-types';
+import type { PrepHandover } from '@/lib/prep';
 
 interface KV { key: string; value: unknown }
 
@@ -62,6 +63,12 @@ export interface LocalDefrost {
   updatedBy: string | null; updatedAt: string;
 }
 
+/** A morning prep handover on this device (the closing team's draft, or one brought in for the morning team). */
+export interface LocalPrep extends PrepHandover {
+  /** The restock's status as last known (the morning team sees handovers from finished restocks). */
+  restockStatus?: string;
+}
+
 export interface OutboxRow { seq?: number; opId: string; sessionId: string | null; op: SyncOp; createdAt: string; attempts: number }
 export interface ProblemRow { seq?: number; opId: string; op: SyncOp; error: string; at: string }
 
@@ -73,6 +80,7 @@ class LocalDb extends Dexie {
   outbox!: Table<OutboxRow, number>;
   problems!: Table<ProblemRow, number>;
   defrost!: Table<LocalDefrost, [string, string, string]>;
+  prep!: Table<LocalPrep, string>;
   constructor() {
     super('village-restock');
     this.version(1).stores({ kv: 'key' });
@@ -86,6 +94,9 @@ class LocalDb extends Dexie {
     });
     this.version(3).stores({
       defrost: '[departmentId+serviceDate+itemId], [departmentId+serviceDate]',
+    });
+    this.version(4).stores({
+      prep: 'sessionId, departmentId, [departmentId+tradingDate]',
     });
   }
 }

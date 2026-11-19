@@ -46,7 +46,9 @@ export async function loadCatalogue(): Promise<Catalogue> {
              -- Defrost rows (migration 016)
              (to_jsonb(pl)->>'grab_note') as grab_note, (to_jsonb(pl)->>'fallback_note') as fallback_note, (to_jsonb(pl)->>'put_note') as put_note,
              (to_jsonb(pl)->>'ready_unit_singular') as ready_unit_singular, (to_jsonb(pl)->>'ready_unit_plural') as ready_unit_plural,
-             (to_jsonb(pl)->>'ready_per')::numeric as ready_per, coalesce(to_jsonb(pl)->'ready_targets', '[]'::jsonb) as ready_targets
+             (to_jsonb(pl)->>'ready_per')::numeric as ready_per, coalesce(to_jsonb(pl)->'ready_targets', '[]'::jsonb) as ready_targets,
+             -- Morning prep (migration 017)
+             (to_jsonb(pl)->>'prep_task_id') as prep_task_id
       from product_placements pl
       join products p on p.id = pl.product_id and p.status = 'active'
       join check_areas a on a.id = pl.check_area_id and a.active
@@ -58,8 +60,14 @@ export async function loadCatalogue(): Promise<Catalogue> {
              i.pack_size, i.min_qty, i.thaw_method, i.thaw_hours, i.shelf_life_hours, i.safety_notes, i.sort_order
       from defrost_items i join departments d on d.id = i.department_id and d.active
       where i.active order by i.sort_order, i.name` : [];
+    // Morning prep checklist exists once migration 017 has run.
+    const [{ hasPrep }] = await tx`select to_regclass('public.prep_tasks') is not null as has_prep`;
+    const prepTasks = hasPrep ? await tx`
+      select t.id, t.department_id, t.grp as "group", t.name, t.sort_order from prep_tasks t join departments d on d.id = t.department_id and d.active
+      where t.active order by t.sort_order, t.name` : [];
     return {
       version: Number(setting('catalogue_version') ?? 1),
+      prepTasks,
       defrostItems: defrostItems.map((r) => ({ ...r, weekdayDemand: r.weekdayDemand ?? {} })),
       generatedAt: new Date().toISOString(),
       settings: { timeZone: String(setting('timezone') ?? 'Australia/Melbourne'), cutoffHour: Number(setting('trading_day_cutoff_hour') ?? 5), defrostServiceTime: String(setting('defrost_service_time') ?? '11:00') },

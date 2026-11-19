@@ -1,4 +1,5 @@
 import type { DefrostItem } from './defrost';
+import type { PrepTask } from './prep';
 // The catalogue is the permanent configuration a device needs to run a
 // restock: departments, areas, storerooms, categories, products and par levels.
 // It is downloaded whole (it is small) and kept on the device for offline use.
@@ -63,6 +64,8 @@ export interface CatPlacement {
   readyPer?: number | null;
   /** Ready-stock targets by tomorrow's forecast admits, in the ready unit. */
   readyTargets?: ReadyTarget[];
+  /** Made or portioned in morning prep (e.g. cut carrot, vodka sauce): not on the downstairs list. */
+  prepTaskId?: string | null;
 }
 
 /** A ready-stock target for a range of forecast admits (max null = and above). */
@@ -81,6 +84,8 @@ export interface Catalogue {
   placements: CatPlacement[];
   /** Defrost Planner items (Gold Class Kitchen). Empty until a manager sets them up. */
   defrostItems: DefrostItem[];
+  /** Morning prep checklist (Gold Class Kitchen). Empty until migration 017 and its data have run. */
+  prepTasks?: PrepTask[];
 }
 
 export type CatalogueResponse = { unchanged: true; version: number } | ({ unchanged: false } & Catalogue);

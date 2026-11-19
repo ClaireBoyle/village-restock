@@ -19,6 +19,7 @@ import { AreaPicker } from './AreaPicker';
 import { ResetSheet, type ResetScope } from './ResetControls';
 import { Stages, timeOf, type Step } from './shared';
 import type { RemoteSession } from '@/lib/sync-types';
+import type { PrepTask } from '@/lib/prep';
 
 export interface RestockCtx {
   view: DepartmentView;
@@ -44,6 +45,8 @@ export interface RestockCtx {
   hasDefrost: boolean;
   /** Where "done" goes: home, or (area restocks) back to choosing an area. */
   doneLabel: string;
+  /** Morning prep checklist for this department (Gold Class Kitchen); empty = no handover. */
+  prepTasks: PrepTask[];
 }
 
 type Mode = 'full' | 'quick' | 'area';
@@ -193,6 +196,7 @@ export function RestockApp({ departmentId, isAdmin = false }: { departmentId: st
 
   const gold = view?.department.theme === 'gold';
   const hasDefrost = !!catalogue?.defrostItems?.some((i) => i.departmentId === departmentId);
+  const prepTasks = useMemo(() => (catalogue?.prepTasks ?? []).filter((t) => t.departmentId === departmentId), [catalogue, departmentId]);
   // Each department has its own backdrop: deep navy (Village) or dark gold (Gold Class).
   const themeCls = `theme-navy ${gold ? 'theme-gold gc' : ''}`;
   const activeSession = session;
@@ -234,7 +238,7 @@ export function RestockApp({ departmentId, isAdmin = false }: { departmentId: st
     return (
       <div className={themeCls}>{top}
         <TypeStep view={view} fullSession={fullSession} remoteFull={remoteFull} quickSession={quickSession} opening={opening}
-          onStart={(m) => void begin(m)} onSummary={showFullSummary} hasDefrost={hasDefrost}
+          onStart={(m) => void begin(m)} onSummary={showFullSummary} hasDefrost={hasDefrost} prep={prepTasks.length && today ? { today, who } : null}
           onReset={isAdmin ? (r) => void startReset(r) : undefined} />
         {resetSheet}{toastEl}
       </div>
@@ -261,7 +265,7 @@ export function RestockApp({ departmentId, isAdmin = false }: { departmentId: st
   const byArea = session.kind === 'area';
 
   const ctx: RestockCtx = {
-    view: scoped, session, placements, items, rawItems, suggested, refill, areaRecords, recorded, who, go, hasDefrost,
+    view: scoped, session, placements, items, rawItems, suggested, refill, areaRecords, recorded, who, go, hasDefrost, prepTasks,
     // Restock screens: one slim step bar, no banner, so products start near the top of the screen.
     header: <div className="rbar"><Stages kind={session.kind} current={shownStep} onGo={go} refill={refill} /></div>,
     // Area restocks go back to choosing an area, where this one shows as saved (or done).

@@ -29,6 +29,12 @@ export const defrostFieldsSchema = z.object({
 }).strict();
 export type DefrostFields = z.infer<typeof defrostFieldsSchema>;
 
+// Morning prep handover: one task chosen (or typed in) by the closing team.
+export const prepItemSchema = z.object({
+  id: z.uuid(), taskId: z.uuid().nullable(), group: z.enum(['vegetables', 'proteins', 'sauces', 'other']),
+  name: z.string().trim().min(1).max(80), qty: z.string().trim().max(30).nullable(), note: z.string().trim().max(200).nullable(),
+}).strict();
+
 export const opSchema = z.discriminatedUnion('type', [
   z.object({
     ...base, type: z.literal('session.start'),
@@ -56,6 +62,10 @@ export const opSchema = z.discriminatedUnion('type', [
     /** The name confirmed on the Finish screen ("Completed by"). */
     completedBy: z.string().trim().max(40).nullable().optional() }),
   z.object({ ...base, type: z.literal('session.reopen'), sessionId: z.uuid() }),
+  // Morning prep handover for this restock: the whole list each time (null status = not answered yet).
+  z.object({ ...base, type: z.literal('prep.set'), sessionId: z.uuid(), status: z.enum(['needed', 'none']).nullable(), items: z.array(prepItemSchema).max(60) }),
+  // The morning team marks one task Done (or undoes it). Never changes the restock.
+  z.object({ ...base, type: z.literal('prep.done'), sessionId: z.uuid(), itemId: z.uuid(), done: z.boolean() }),
   // Defrost rows: tomorrow's forecast admits, entered once per restock (blank = not entered).
   z.object({ ...base, type: z.literal('session.admits'), sessionId: z.uuid(), admits: z.number().int().min(0).max(9999).nullable() }),
   // Defrost Planner: one item's entry for a department's next service (blank = not entered).

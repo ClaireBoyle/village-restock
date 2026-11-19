@@ -13,6 +13,7 @@ const LINKS: { href: string; label: string; icon: IconName }[] = [
   { href: '/admin/departments', label: 'Departments & areas', icon: 'layers' },
   { href: '/admin/storerooms', label: 'Storerooms', icon: 'box' },
   { href: '/admin/defrost', label: 'Defrost Planner', icon: 'clock' },
+  { href: '/admin/prep', label: 'Morning prep', icon: 'task' },
   { href: '/admin/import', label: 'Spreadsheets', icon: 'copy' },
   { href: '/admin/settings', label: 'Access & settings', icon: 'cog' },
 ];

@@ -3,7 +3,7 @@ import { useFormStatus } from 'react-dom';
 import { Icon } from '@/components/Icon';
 import { moveItem } from '@/app/actions/admin';
 
-type Kind = 'department' | 'area' | 'category' | 'location' | 'product' | 'placement';
+type Kind = 'department' | 'area' | 'category' | 'location' | 'product' | 'placement' | 'prepTask';
 
 /** The arrow shows it's working (and can't be tapped twice) until the move is saved. */
 function Arrow({ dir, disabled, label }: { dir: 'up' | 'down'; disabled: boolean; label: string }) {

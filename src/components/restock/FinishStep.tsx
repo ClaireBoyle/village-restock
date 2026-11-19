@@ -3,8 +3,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
   EXCEPTION_REASONS, EMPTY_ITEM, SHORT_REASONS, activePlacements, areaStatus, collectPlacements, collectionLines, exceptions, isChecked, isRequired,
-  lineGot, lineInfo, lineState, stockOutcomes, type StockOutcome,
+  lineGot, lineInfo, lineState, prepFromStock, stockOutcomes, type StockOutcome,
 } from '@/lib/restock-logic';
+import { useLive } from '@/lib/client/hooks';
+import { localDb } from '@/lib/client/local-db';
+import { setPrep } from '@/lib/client/prep-store';
+import { MorningPrepPicker, PrepSummary } from './MorningPrep';
 import { formatQty, round2 } from '@/lib/restock-math';
 import { finishSession, reopenSession, updateLocalSession } from '@/lib/client/restock-store';
 import { useSyncStatus } from '@/lib/client/hooks';
@@ -55,6 +59,12 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
     }
   };
   const finished = session.status === 'finished' || session.status === 'finished_exceptions';
+  // Morning prep handover (Kitchen full restocks): its own record, answered before finishing.
+  const prepOn = ctx.prepTasks.length > 0 && session.kind === 'full';
+  const handover = useLive(async () => (prepOn ? localDb().prep.get(session.id) : undefined), [session.id, prepOn], undefined);
+  const prepMissing = prepOn && !handover && !finished;
+  const prepHints = prepOn ? prepFromStock(session.kind, placements, recorded, items) : new Map();
+  const goPrep = () => document.getElementById('morning-prep')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   const ex = finished ? [] : exceptions({ kind: session.kind, view, placements, recordedAreas: recorded, items });
   // Area restocks (e.g. Candy Bar's confection stand) are named after their area.
   const areaName = session.kind === 'area' ? view.areas[0]?.area.name ?? 'Area' : null;
@@ -126,6 +136,8 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
                 {session.exceptionReason ? <p className="fh-reason"><Icon name="warn" />{session.exceptionReason}</p> : null}
               </div>
             </div>
+            {prepOn ? <section className="prep done-view"><PrepSummary handover={handover} title="Morning prep handover" />
+              <p className="meta">{handover ? 'Saved for the morning team on the Kitchen screen.' : 'No handover was given.'}</p></section> : null}
             {session.note ? (
               <section className="note-sent"><h3><Icon name="list" />Comments{emailed ? ' sent to managers' : ''}</h3><p>{session.note}</p></section>
             ) : null}
@@ -161,6 +173,9 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
 
             {report}
 
+            {prepOn ? <MorningPrepPicker tasks={ctx.prepTasks} handover={handover} hints={prepHints}
+              onSave={(st, list) => void setPrep(session, st, list, who)} /> : null}
+
             {/* Always shown (also when there are no shortages): who is signing this restock off. */}
             <section className="note-box by-box">
               <label htmlFor="completed-by"><b>Completed by</b></label>
@@ -191,10 +206,10 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
           <button className="btn primary big" onClick={ctx.done}><Icon name={areaName ? 'back' : 'home'} />{ctx.doneLabel}</button>
         </Dock>
       ) : (
-        <Dock icon={ex.length ? 'warn' : 'check'} title={ex.length ? `${plural(ex.length, 'thing')} still to do` : ''}>
+        <Dock icon={ex.length || prepMissing ? 'warn' : 'check'} title={ex.length ? `${plural(ex.length, 'thing')} still to do` : prepMissing ? <button type="button" className="dock-2 linkbtn" onClick={goPrep}>Answer Morning prep first</button> : ''}>
           <button className="btn save-exit" onClick={ctx.saveAndExit} aria-label="Save and exit"><Icon name="save" /><span className="lg">Save and exit</span><span className="sm">Save &amp; exit</span></button>
-          {ex.length ? <button className="btn caution big" onClick={() => { setExOpen(true); window.setTimeout(() => document.getElementById('expanel')?.scrollIntoView({ block: 'start' }), 50); }}><span className="lg">Finish with exceptions&hellip;</span><span className="sm">With exceptions&hellip;</span></button> : null}
-          <button className="btn good big" disabled={ex.length > 0} onClick={() => void finish(finishReason(null))}><Icon name="check" />{areaName ? 'Finish' : 'Finish restock'}</button>
+          {ex.length ? <button className="btn caution big" disabled={prepMissing} onClick={() => { setExOpen(true); window.setTimeout(() => document.getElementById('expanel')?.scrollIntoView({ block: 'start' }), 50); }}><span className="lg">Finish with exceptions&hellip;</span><span className="sm">With exceptions&hellip;</span></button> : null}
+          <button className="btn good big" disabled={ex.length > 0 || prepMissing} onClick={() => void finish(finishReason(null))}><Icon name="check" />{areaName ? 'Finish' : 'Finish restock'}</button>
         </Dock>
       )}
     </>

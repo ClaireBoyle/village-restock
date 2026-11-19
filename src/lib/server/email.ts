@@ -53,6 +53,8 @@ export interface RestockEmailInput {
   completedBy?: string | null;
   /** Candy Bar wording: "Low stock" instead of "Running low". */
   lowStockWording?: boolean;
+  /** Kitchen: the morning prep handover, one line per task (or "No morning prep needed"). */
+  prep?: string[];
 }
 
 /** The email managers receive. Leads with what's out of stock (red) and running low (orange). */
@@ -83,6 +85,7 @@ export function buildRestockEmail(i: RestockEmailInput): { subject: string; html
   if (!out.length && !low.length) T.push('', 'Nothing low or out of stock.');
   if (other.length) T.push('', `Collection incomplete (not a storeroom shortage): ${other.map((o) => o.productName).join(', ')}`);
   if (i.notChecked.length) T.push('', `Not checked: ${i.notChecked.join('; ')}`);
+  if (i.prep?.length) T.push('', 'MORNING PREP', ...i.prep.map((l) => `- ${l}`));
   if (i.link) T.push('', `Details: ${i.link}`);
 
   // Invisible, different in every email: stops Gmail hiding sections that match an earlier email.
@@ -112,6 +115,9 @@ export function buildRestockEmail(i: RestockEmailInput): { subject: string; html
     ${!out.length && !low.length ? `<div style="background:#E1F2E8;border-radius:16px;padding:16px 18px;margin-bottom:14px;color:#177245;font-size:17px;font-weight:700">Nothing low or out of stock${uniq}</div>` : ''}
     ${other.length ? `<p style="font-size:13px;color:#56607A;margin:0 0 8px"><b>Collection incomplete</b> (not a storeroom shortage): ${esc(other.map((o) => o.productName).join(', '))}</p>` : ''}
     ${i.notChecked.length ? `<p style="font-size:13px;color:#56607A;margin:0 0 8px"><b>Not checked:</b> ${esc(i.notChecked.join('; '))}</p>` : ''}
+    ${i.prep?.length ? `<div style="background:#fff;border:2px solid #C9D6F5;border-radius:16px;padding:14px 18px;margin:0 0 14px">
+      <div style="font-size:15px;font-weight:700;color:#2446B8;margin:0 0 6px">Morning prep</div>
+      ${i.prep.map((l) => `<div style="font-size:15px;color:#17213B;margin:2px 0">${esc(l)}</div>`).join('')}${uniq}</div>` : ''}
     ${i.link ? `<p style="font-size:13px;margin:14px 0 0"><a href="${esc(i.link)}" style="color:#2446B8">View this restock</a></p>` : ''}
   </div></body></html>`;
   return { subject, html, text: T.join('\n') };
