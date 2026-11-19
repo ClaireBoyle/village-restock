@@ -3,8 +3,8 @@
 --
 -- The Kitchen restock, in walking order:
 --   1 Defrost          (from 2026-11-gold-class-kitchen-defrost.sql)
---   2 Freezer 1        topped up from the downstairs walk-in freezer
---   3 Freezer 2        topped up from the downstairs walk-in freezer
+--   2 Freezer 2        refilled first (see 2026-11-gold-class-kitchen-refills.sql)
+--   3 Freezer 1        its overflow checked after refilling
 --   4 Walk in fridge   the upstairs walk-in fridge, topped up from the downstairs walk-in fridge
 --   5 Dry stock        topped up from Dry storage
 --
@@ -18,8 +18,8 @@ declare
   a uuid; k int := 0; i int;
   -- name, match (lowercase letters and numbers only), short note for staff
   list text[][] := array[
-    ['Freezer 1', 'freezer1', 'Add only what needs topping up. It comes up from the downstairs walk-in freezer.'],
     ['Freezer 2', 'freezer2', 'Add only what needs topping up. It comes up from the downstairs walk-in freezer.'],
+    ['Freezer 1', 'freezer1', 'Add only what needs topping up. It comes up from the downstairs walk-in freezer.'],
     ['Walk in fridge', 'walkinfridge', 'The upstairs walk-in fridge. Add only what needs topping up from the downstairs walk-in fridge.'],
     ['Dry stock', 'drystock', 'Add only what needs topping up. It comes up from Dry storage.']
   ];
@@ -44,8 +44,8 @@ begin
     update check_areas set active = true, parent_area_id = null, sort_order = k where id = a;
     update check_areas set guide_text = list[i][3] where id = a and trim(coalesce(guide_text, '')) = '';
     done := done || a;
-    -- The chest freezer (2026-11-gold-class-kitchen-freezers.sql) stays straight after Freezer 2.
-    if list[i][2] = 'freezer2' then
+    -- The chest freezer (2026-11-gold-class-kitchen-freezers.sql) stays straight after the freezers.
+    if list[i][2] = 'freezer1' then
       for a in select id from check_areas where department_id = dept and parent_area_id is null and regexp_replace(lower(name), '[^a-z0-9]', '', 'g') = 'chestfreezer' limit 1 loop
         k := k + 1; update check_areas set sort_order = k where id = a; done := done || a;
       end loop;

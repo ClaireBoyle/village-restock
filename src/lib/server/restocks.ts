@@ -85,7 +85,8 @@ export async function restockDetail(id: string) {
     currentQty: r.currentQty as number | null, requestedQty: r.requestedQty as number | null,
     routineChoice: r.routineChoice as ItemState['routineChoice'], collectedMode: r.collectedMode as ItemState['collectedMode'],
     collectedQty: r.collectedQty as number | null, shortfallReason: r.shortfallReason as ItemState['shortfallReason'],
-    flagged: Boolean(r.flagged), noneOnDisplay: Boolean(r.noneOnDisplay), conflict: (r.conflict as Conflict | null) ?? null,
+    flagged: Boolean(r.flagged), noneOnDisplay: Boolean(r.noneOnDisplay), refillStatus: (r.refillStatus as ItemState['refillStatus']) ?? null,
+    conflict: (r.conflict as Conflict | null) ?? null,
   }]));
   const recorded = new Map<string, AreaStatus>(areas.map((a) => [String(a.checkAreaId), a.status as AreaStatus]));
   const placements: PlacementView[] = view ? (s.kind !== 'quick' ? view.placements : view.placements.filter((p) => itemMap.has(p.placementId))) : [];

@@ -4,7 +4,7 @@ import { db } from './db';
 import { loadCatalogue } from './catalogue';
 import { queueRestockEmail } from './email';
 import {
-  CONFLICT_FIELDS, EMPTY_ITEM, areaStatus, isChecked, isRequired, stockOutcomes, type Conflict, collectionLines, collectPlacements, withSuggestions, departmentView, exceptions, lineGot, lineInfo, lineState,
+  CONFLICT_FIELDS, EMPTY_ITEM, areaStatus, pendingRefills, isChecked, isRequired, stockOutcomes, type Conflict, collectionLines, collectPlacements, withSuggestions, departmentView, exceptions, lineGot, lineInfo, lineState,
   scopeView, type AreaStatus, type ItemState, type SessionKind,
 } from '@/lib/restock-logic';
 import { defrostWasReset, sessionWasReset, startedBeforeReset } from './reset';
@@ -22,8 +22,15 @@ const RESET = 'An admin reset this restock. It has been cleared from this device
 const COLUMN: Record<keyof ItemFields, string> = {
   currentQty: 'current_qty', requestedQty: 'requested_qty', routineChoice: 'routine_choice',
   collectedMode: 'collected_mode', collectedQty: 'collected_qty', shortfallReason: 'shortfall_reason', flagged: 'flagged',
-  noneOnDisplay: 'none_on_display',
+  noneOnDisplay: 'none_on_display', refillStatus: 'refill_status',
 };
+
+/** Migration 018 adds refill tasks. */
+let hasRefill = false;
+async function refillReady(tx: Tx) {
+  if (!hasRefill) hasRefill = (await tx`select 1 from information_schema.columns where table_name = 'session_items' and column_name = 'refill_status'`).length > 0;
+  return hasRefill;
+}
 
 /** Migration 013 adds "None on display". Remembered once it's there (it's never taken away). */
 let hasNoneOnDisplay = false;
@@ -139,6 +146,10 @@ async function apply(tx: Tx, op: SyncOp, deviceId: string): Promise<{ mergedInto
         }
       }
       // Before migration 013: a cleared "None on display" is simply not stored; a set one waits for the update.
+      if ('refillStatus' in f && !(await refillReady(tx))) {
+        if (f.refillStatus) throw new OpError('The server needs a database update (018_refills_and_linked_rows.sql)', false);
+        delete f.refillStatus;
+      }
       if ('noneOnDisplay' in f && !(await noneOnDisplayReady(tx))) {
         if (f.noneOnDisplay) throw new OpError('The server needs a database update (013_none_on_display.sql)', false);
         delete f.noneOnDisplay;
@@ -337,6 +348,7 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
     currentQty: r.currentQty as number | null, requestedQty: r.requestedQty as number | null,
     routineChoice: r.routineChoice as ItemState['routineChoice'], collectedMode: r.collectedMode as ItemState['collectedMode'],
     collectedQty: r.collectedQty as number | null, shortfallReason: r.shortfallReason as ItemState['shortfallReason'], flagged: Boolean(r.flagged), noneOnDisplay: Boolean(r.noneOnDisplay),
+    refillStatus: (r.refillStatus as ItemState['refillStatus']) ?? null,
     conflict: (r.conflict as Conflict | null) ?? null,
   }]));
   const recorded = new Map<string, AreaStatus>(areaRows.map((r) => [String(r.checkAreaId), r.status as AreaStatus]));
@@ -403,6 +415,7 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
       people: (row?.people as string[]) ?? [], exceptionReason: finalReason,
       areaRestock: s.kind === 'area', completedBy, lowStockWording: !!view.department.noneOnDisplay,
       outcomes: stockOutcomes(lines, items, view.byId, !!view.department.noneOnDisplay), notChecked, note: comment, prep,
+      refills: pendingRefills(s.kind, view.placements, recorded, items).map((p) => p.productName),
       link: host ? `https://${host}/admin/restocks/${s.id}` : null,
     }, Boolean(dept?.emailEveryRestock));
   }
@@ -426,7 +439,8 @@ function toRemote(s: Record<string, unknown>, areas: Record<string, unknown>[], 
       currentQty: (r.currentQty as number) ?? null, requestedQty: (r.requestedQty as number) ?? null,
       routineChoice: (r.routineChoice as 'needed' | 'not_needed') ?? null, collectedMode: (r.collectedMode as 'all' | 'partial') ?? null,
       collectedQty: (r.collectedQty as number) ?? null, shortfallReason: (r.shortfallReason as RemoteSession['items'][number]['shortfallReason']) ?? null,
-      flagged: Boolean(r.flagged), noneOnDisplay: Boolean(r.noneOnDisplay), conflict: (r.conflict as Conflict | null) ?? null,
+      flagged: Boolean(r.flagged), noneOnDisplay: Boolean(r.noneOnDisplay), refillStatus: (r.refillStatus as RemoteSession['items'][number]['refillStatus']) ?? null,
+      conflict: (r.conflict as Conflict | null) ?? null,
     })),
   };
 }

@@ -77,6 +77,10 @@ export interface PlacementView {
   /** Made or portioned in morning prep (e.g. cut carrot): entered amounts are for the morning team, not collected. */
   prepTaskId?: string | null;
   prepTaskName?: string | null;
+  /** A working drawer or tub refilled from stock already upstairs: a task (Refilled / Already full / Needs stock), never an amount. */
+  refillSource?: string | null;
+  /** Shows and edits another row's requirement (e.g. "Already planned in Defrost"): never a requirement of its own. */
+  linkedPlacementId?: string | null;
 }
 
 /** What staff have recorded for one placement during a restock. Blank = not yet. */
@@ -90,13 +94,15 @@ export interface ItemState {
   flagged: boolean;
   /** Candy Bar: nothing collected and none left on display (Out of stock). */
   noneOnDisplay?: boolean;
+  /** Kitchen refill task: refilled · full (already full) · needs_stock (still to do). */
+  refillStatus?: 'refilled' | 'full' | 'needs_stock' | null;
   /** Set when two people entered different counts; cleared when someone chooses. */
   conflict?: Conflict | null;
 }
 
 export const EMPTY_ITEM: ItemState = {
   currentQty: null, requestedQty: null, routineChoice: null,
-  collectedMode: null, collectedQty: null, shortfallReason: null, flagged: false, noneOnDisplay: false, conflict: null,
+  collectedMode: null, collectedQty: null, shortfallReason: null, flagged: false, noneOnDisplay: false, refillStatus: null, conflict: null,
 };
 
 /** A section shown inside an area's screen (e.g. "Spirits cupboard" inside Back bench). */
@@ -167,6 +173,8 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
         photoCredit: p.photoCredit ?? null,
         heading: pl.heading?.trim() || null,
         screenAreaId, optional,
+        refillSource: pl.refillSource?.trim() || null,
+        linkedPlacementId: pl.linkedPlacementId && pl.linkedPlacementId !== pl.id ? pl.linkedPlacementId : null,
         prepTaskId: pl.prepTaskId && prepNames.has(pl.prepTaskId) ? pl.prepTaskId : null,
         prepTaskName: pl.prepTaskId ? prepNames.get(pl.prepTaskId) ?? null : null,
         ...defrostFields(pl, p.method),
@@ -181,6 +189,9 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
     return { area, own, sections, placements: [...own, ...sections.flatMap((x) => x.placements)] };
   });
   const placements = areas.flatMap((a) => a.placements);
+  // A link to a row that isn't in this department (or is hidden) is ignored.
+  const known = new Set(placements.map((p) => p.placementId));
+  for (const p of placements) if (p.linkedPlacementId && !known.has(p.linkedPlacementId)) p.linkedPlacementId = null;
   // Upstairs pickup spots, and the screens they're on (an area, or the area a section belongs to).
   const pickupOrder = new Map<string, number>();
   areas.forEach((a, i) => { pickupOrder.set(a.area.id, i * 100); a.sections.forEach((x, j) => pickupOrder.set(x.area.id, i * 100 + j + 1)); });
@@ -224,6 +235,8 @@ export function scopeView(view: DepartmentView, areaId: string | null | undefine
 // ---------------------------------------------------------------------------
 /** Amount to collect, or null while the card hasn't been filled in. */
 export function needOf(p: PlacementView, i: ItemState): number | null {
+  // A refill task or a linked row is never a requirement of its own.
+  if (p.refillSource || p.linkedPlacementId) return null;
   if (p.method === 'par') return p.par === null ? null : requiredForPar(p.par, i.currentQty);
   if (p.method === 'manual') return i.requestedQty;
   return null;
@@ -236,10 +249,12 @@ export function needOf(p: PlacementView, i: ItemState): number | null {
  * "not entered", which is different from 0).
  */
 export function isRequired(p: PlacementView): boolean {
-  return p.method === 'par' && !p.optional;
+  return p.method === 'par' && !p.optional && !p.refillSource && !p.linkedPlacementId;
 }
 
 export function isChecked(p: PlacementView, i: ItemState): boolean {
+  if (p.refillSource) return !!i.refillStatus;
+  if (p.linkedPlacementId) return false; // its requirement is counted on the row it's linked to
   if (i.conflict) return false; // needs a person to choose first
   if (p.method === 'par') return i.currentQty !== null;
   if (p.method === 'manual') return i.requestedQty !== null;
@@ -489,6 +504,11 @@ export const usesRefill = (kind: SessionKind, view: DepartmentView) => kind === 
  */
 export const isPickup = (kind: SessionKind, p: PlacementView) => kind === 'full' && !!p.pickupAreaId;
 
+/** Refills answered "Needs stock": still to do (e.g. once the stock is up from downstairs). Never a shortage by itself. */
+export function pendingRefills(kind: SessionKind, placements: PlacementView[], recordedAreas: Map<string, AreaStatus>, items: Map<string, ItemState>) {
+  return activePlacements(kind, placements, recordedAreas).filter((p) => p.refillSource && items.get(p.placementId)?.refillStatus === 'needs_stock');
+}
+
 /** Made or portioned in morning prep (e.g. cut carrot, vodka sauce): shown for the morning team, never collected. */
 export const isPrepMade = (p: PlacementView) => !!p.prepTaskId;
 
@@ -724,6 +744,8 @@ export function summaryText(args: {
     if (un.length) notChecked.push(un.join(', '));
   }
   if (notChecked.length) { L.push(''); L.push('NOT CHECKED'); L.push(...notChecked.map((s) => `- ${s}`)); }
+  const refills = pendingRefills(args.kind, args.placements, recordedAreas, items);
+  if (refills.length) { L.push(''); L.push('REFILLS STILL TO DO'); L.push(...refills.map((p) => `- ${p.productName} (from ${p.refillSource})`)); }
 
   const collected = lines.flatMap((l) => {
     const got = lineGot(l, items);

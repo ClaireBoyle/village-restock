@@ -17,6 +17,8 @@ export const itemFieldsSchema = z.object({
   flagged: z.boolean().optional(),
   /** Candy Bar: nothing collected and none left on display, so it's out of stock. */
   noneOnDisplay: z.boolean().optional(),
+  /** Kitchen refill task: refilled · full (already full) · needs_stock (still to do). Records the task only. */
+  refillStatus: z.enum(['refilled', 'full', 'needs_stock']).nullable().optional(),
 }).strict();
 
 const base = { opId: z.uuid(), at: z.iso.datetime(), by: name };

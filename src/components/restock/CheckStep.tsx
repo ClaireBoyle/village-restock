@@ -9,6 +9,7 @@ import {
 import { applyStockPrep } from '@/lib/client/prep-store';
 import { defrostRowInfo } from '@/lib/defrost-rows';
 import { AdmitsBox, DefrostRow } from './DefrostParts';
+import { LinkedRow, RefillRow } from './KitchenRows';
 import { Line } from './CollectStep';
 import { round2 } from '@/lib/restock-math';
 import { setAdmits, setArea, setItems, updateLocalSession } from '@/lib/client/restock-store';
@@ -78,7 +79,15 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   const grabAll = phase !== 'all' ? refillLines(session.kind, ctx.placements, recorded, items) : [];
   const downstairs = collectionLines(collectPlacements(session.kind, ctx.placements, recorded), items);
   // Defrost (Kitchen): what's pulled from each freezer, ticked off on the Defrost screen itself.
-  const pullAll = !ctx.refill ? refillLines(session.kind, ctx.placements, recorded, items) : [];
+  // Grouped by freezer (each line's Grab note says exactly where in it).
+  const freezerOf = (id: string | null) => {
+    const a = whole.areas.find((x) => x.area.id === id || x.sections.some((sct) => sct.area.id === id));
+    return a ? { id: a.area.id, name: a.area.name } : null;
+  };
+  const pullAll = !ctx.refill ? refillLines(session.kind, ctx.placements, recorded, items).map((l) => {
+    const f = freezerOf(l.locationId);
+    return f ? { ...l, locationId: f.id, locationName: f.name } : l;
+  }) : [];
   const lines = [...(phase === 'foh' ? grabAll : []), ...pullAll, ...downstairs];
   const onScreen = (l: CollectionLine) => l.parts.every((x) => view.byId.get(x.placementId)?.screenAreaId === cur.area.id);
   const pulls = pullAll.filter(onScreen);
@@ -176,7 +185,9 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   };
   // Check BOH: products with a suggestion (taken for FOH) go to the top of the screen.
   // Kitchen: what was pulled for defrost is suggested for its freezer, at the top of that freezer's screen.
-  const taken = phase === 'boh' || !ctx.refill ? cur.placements.filter((p) => { const s = ctx.suggested.get(p.placementId); return !!s && !s.defrost; }) : [];
+  // (A screen that starts with refills, e.g. Freezer 2, keeps them in place: refill first, then check the spare stock.)
+  const startsWithRefills = cur.placements.some((p) => p.refillSource);
+  const taken = (phase === 'boh' || !ctx.refill) && !startsWithRefills ? cur.placements.filter((p) => { const s = ctx.suggested.get(p.placementId); return !!s && !s.defrost; }) : [];
   const takenIds = new Set(taken.map((p) => p.placementId));
   /** A list without the products shown at the top; a subheading moves to the next product still there. */
   const rest = (list: typeof cur.placements) => {
@@ -192,7 +203,16 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   };
   // A compartment named after its freezer ("Freezer 1 · Upper left") reads as just "Upper left" on that freezer's screen.
   const secName = (n: string) => (n.startsWith(`${cur.area.name} · `) ? n.slice(cur.area.name.length + 3) : n);
-  const renderRow = (p: (typeof cur.placements)[number], showArea = false) => p.defrost && !items.get(p.placementId)?.conflict ? (
+  const photoOf = (p: (typeof cur.placements)[number]) => (p.photoPath ? <ProductThumb src={p.photoPath} name={p.productName} credit={p.photoCredit} className="pphoto" /> : <span className="pphoto ph" aria-hidden="true"><Icon name="box" /></span>);
+  const linkedTo = (p: (typeof cur.placements)[number]) => (p.linkedPlacementId ? whole.byId.get(p.linkedPlacementId) : undefined);
+  const renderRow = (p: (typeof cur.placements)[number], showArea = false) => p.refillSource ? (
+    // A working drawer or tub: Refilled / Already full / Needs stock (the task only, never an amount).
+    <RefillRow key={p.placementId} p={p} item={items.get(p.placementId) ?? EMPTY_ITEM} photo={photoOf(p)} onChange={(fields) => void onItem(p, fields)} />
+  ) : linkedTo(p) ? (
+    // The same requirement as another row (e.g. already planned in Defrost): one total, edited here or there.
+    <LinkedRow key={p.placementId} p={p} target={linkedTo(p)!} item={items.get(p.linkedPlacementId!) ?? EMPTY_ITEM} photo={photoOf(p)}
+      onChange={(fields) => void onItem(linkedTo(p)!, fields)} />
+  ) : p.defrost && !items.get(p.placementId)?.conflict ? (
     // Defrost rows: pull an amount or Not needed, with where it's from and where it goes.
     <DefrostRow key={p.placementId} p={p} item={items.get(p.placementId) ?? EMPTY_ITEM} rawQty={ctx.rawItems.get(p.placementId)?.requestedQty ?? null}
       suggestion={ctx.suggested.get(p.placementId)?.defrost} admits={session.forecastAdmits ?? null}
@@ -390,8 +410,8 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
           {pulls.length ? (
             // Defrost: pull it now, freezer by freezer. What's pulled is suggested on that freezer's screen.
             <section className="grab pull" aria-labelledby="pull-h">
-              <h3 className="sec-title" id="pull-h"><Icon name="up" />Pull now<small>{pulls.filter((l) => ['done', 'short'].includes(lineStateOf(l))).length} of {pulls.length}</small></h3>
-              <p className="grab-hint">Tick each one as you take it out, or use Got fewer if there wasn&rsquo;t enough. What you pull is suggested for that freezer&rsquo;s top-up from downstairs.</p>
+              <h3 className="sec-title" id="pull-h"><Icon name="up" />Pull for defrost<small>{pulls.filter((l) => ['done', 'short'].includes(lineStateOf(l))).length} of {pulls.length}</small></h3>
+              <p className="grab-hint">Tick each one as you take it out, or use Got fewer if there wasn&rsquo;t enough. What you pull is suggested for that freezer&rsquo;s overflow check.</p>
               {pullGroups.map((g) => (
                 <div key={g.lines[0].locationId ?? g.name} className="grab-group">
                   <h4 className="phead">{g.name}</h4>

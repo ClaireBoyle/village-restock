@@ -48,7 +48,9 @@ export async function loadCatalogue(): Promise<Catalogue> {
              (to_jsonb(pl)->>'ready_unit_singular') as ready_unit_singular, (to_jsonb(pl)->>'ready_unit_plural') as ready_unit_plural,
              (to_jsonb(pl)->>'ready_per')::numeric as ready_per, coalesce(to_jsonb(pl)->'ready_targets', '[]'::jsonb) as ready_targets,
              -- Morning prep (migration 017)
-             (to_jsonb(pl)->>'prep_task_id') as prep_task_id
+             (to_jsonb(pl)->>'prep_task_id') as prep_task_id,
+             -- Refill tasks and linked rows (migration 018)
+             (to_jsonb(pl)->>'refill_source') as refill_source, (to_jsonb(pl)->>'linked_placement_id') as linked_placement_id
       from product_placements pl
       join products p on p.id = pl.product_id and p.status = 'active'
       join check_areas a on a.id = pl.check_area_id and a.active

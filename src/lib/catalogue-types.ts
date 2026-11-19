@@ -66,6 +66,10 @@ export interface CatPlacement {
   readyTargets?: ReadyTarget[];
   /** Made or portioned in morning prep (e.g. cut carrot, vodka sauce): not on the downstairs list. */
   prepTaskId?: string | null;
+  /** A working drawer or tub refilled from stock already upstairs (Refilled / Already full / Needs stock). */
+  refillSource?: string | null;
+  /** This row shows and edits another row's requirement (e.g. a dessert already planned in Defrost). */
+  linkedPlacementId?: string | null;
 }
 
 /** A ready-stock target for a range of forecast admits (max null = and above). */

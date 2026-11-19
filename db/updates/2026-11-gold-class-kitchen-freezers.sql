@@ -20,6 +20,8 @@ declare
   dept uuid := (select id from departments where lower(name) = 'gold class kitchen');
   f1 uuid; f2 uuid; chest uuid; defrost uuid; down uuid; f1s uuid; f2s uuid; cat uuid;
   sec uuid; area uuid; p uuid; pl uuid; i int; k int; a uuid;
+  -- Once 2026-11-gold-class-kitchen-refills.sql has set out Freezer 2 as refills + spare stock, leave Freezer 2 alone.
+  f2done boolean;
   norm text;
   -- freezer, compartment, sort, note for staff (shown at the top of the compartment)
   comps text[][] := array[
@@ -116,6 +118,7 @@ begin
   down := (select id from storage_locations where active and regexp_replace(lower(name), '[^a-z0-9]', '', 'g') like 'walkinfreezer%' order by sort_order limit 1);
   if down is null then raise exception 'The downstairs walk-in freezer storeroom (e.g. "Walk in freezer(Downstairs)") must exist first'; end if;
   f1s := (select id from storage_locations where lower(name) = 'freezer 1');
+  f2done := exists (select 1 from check_areas where department_id = dept and lower(name) = lower('Freezer 2 · Refill working drawers and tubs'));
   f2s := (select id from storage_locations where lower(name) = 'freezer 2');
 
   -- 1. Corrections to the draft list.
@@ -133,15 +136,16 @@ begin
   update check_areas set guide_text = 'Add only what needs topping up. It comes up from the downstairs walk-in freezer.'
     where id = chest and trim(coalesce(guide_text, '')) = '';
   k := 0;
-  for a in select x from unnest(array[defrost, f1, f2, chest]) x loop
+  for a in select x from unnest(array[defrost, f2, f1, chest]) x loop
     k := k + 1; update check_areas set sort_order = k where id = a;
   end loop;
-  for a in select id from check_areas where department_id = dept and parent_area_id is null and not (id = any(array[defrost, f1, f2, chest])) order by active desc, sort_order loop
+  for a in select id from check_areas where department_id = dept and parent_area_id is null and not (id = any(array[defrost, f2, f1, chest])) order by active desc, sort_order loop
     k := k + 1; update check_areas set sort_order = k where id = a;
   end loop;
 
   -- 3. The compartments, as sections on each freezer's screen.
   for i in 1 .. array_length(comps, 1) loop
+    if f2done and comps[i][1] = '2' then continue; end if;
     area := case comps[i][1] when '1' then f1 else f2 end;
     sec := (select id from check_areas where department_id = dept and lower(name) = lower(format('Freezer %s · %s', comps[i][1], comps[i][2])) limit 1);
     if sec is null then
@@ -157,6 +161,7 @@ begin
 
   -- 4. Every item, in its compartment (a product can be in several).
   for i in 1 .. array_length(items, 1) loop
+    if f2done and items[i][1] = '2' then continue; end if;
     area := case items[i][1] when 'c' then chest
       else (select id from check_areas where department_id = dept and lower(name) = lower(format('Freezer %s · %s', items[i][1], items[i][2]))) end;
     norm := regexp_replace(lower(items[i][3]), '[^a-z0-9]', '', 'g');
@@ -187,10 +192,11 @@ begin
   end loop;
 
   -- 5. Chicken tenders: the drawer is refilled from the box (what's taken is suggested for the box's top-up).
-  update product_placements x set pickup_area_id = (select id from check_areas where department_id = dept and lower(name) = lower('Freezer 2 · Lower left')),
+  if not f2done then update product_placements x set pickup_area_id = (select id from check_areas where department_id = dept and lower(name) = lower('Freezer 2 · Lower left')),
       pickup_suggest = true
     from products p where p.id = x.product_id and p.department_id = dept and lower(p.name) = 'chicken tenders'
       and x.check_area_id = (select id from check_areas where department_id = dept and lower(name) = lower('Freezer 2 · Upper left'));
+  end if;
 
   -- 6. Defrost: where each one is pulled from, and its replacement in that compartment.
   for i in 1 .. array_length(pulls, 1) loop
@@ -207,7 +213,7 @@ begin
       -- No longer pulled from (or topped up in) Freezer 1.
       delete from product_placements x using product_placements d
         where d.id = pl and x.product_id = d.product_id and x.check_area_id in (f1, f2);
-    else
+    elsif not (f2done and pulls[i][2] = '2') then
       sec := (select id from check_areas where department_id = dept and lower(name) = lower(format('Freezer %s · %s', pulls[i][2], pulls[i][3])));
       update product_placements set pickup_area_id = sec, pickup_suggest = true,
         location_id = case pulls[i][2] when '2' then coalesce(f2s, location_id) else coalesce(f1s, location_id) end,

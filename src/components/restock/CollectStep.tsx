@@ -3,12 +3,13 @@ import { useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
   EMPTY_ITEM, SHORT_REASONS, activePlacements, clearCollectedUpdates, collectPlacements, refillLines, collectionLines, gotAllUpdates, gotFewerUpdates,
-  groupByStoreroom, isChecked, isRequired, lineGot, lineInfo, lineState, type CollectionLine, type ItemState, type ShortReason,
+  groupByStoreroom, isChecked, isRequired, lineGot, lineInfo, lineState, pendingRefills, type CollectionLine, type ItemState, type ShortReason,
 } from '@/lib/restock-logic';
 import { formatQty, round2 } from '@/lib/restock-math';
 import { setItems } from '@/lib/client/restock-store';
 import { ProductThumb } from './ProductCard';
 import { DefrostNotes } from './DefrostParts';
+import { PendingRefills } from './KitchenRows';
 import { Dock, plural } from './shared';
 import type { RestockCtx } from './RestockApp';
 
@@ -28,6 +29,8 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
   // One area (an area restock): every line is for it, so don't repeat its name on each line.
   const oneArea = view.areas.length === 1 ? view.areas[0].area.name : null;
   const write = (ups: { placementId: string; fields: Partial<ItemState> }[]) => void setItems(session.id, ups, who);
+  // Kitchen: drawers answered "Needs stock", to fill once the stock is up.
+  const refills = pendingRefills(session.kind, placements, recorded, items);
 
   return (
     <>
@@ -44,6 +47,7 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
               note={roomNote(g.lines, view.locationNotes)} />)}
           </div>
         )}
+        <PendingRefills list={refills} title="Back upstairs: refill" onRefilled={(p) => write([{ placementId: p.placementId, fields: { refillStatus: 'refilled' } }])} />
       </main>
       <Dock icon={handled === lines.length ? 'check' : 'list'} progress={lines.length ? handled / lines.length : 1}
         title={lines.length ? <>{handled} of {lines.length} resolved{shorts ? <span className="short-tag">{plural(shorts, 'shortage')}</span> : null}</> : 'Nothing to collect'}>

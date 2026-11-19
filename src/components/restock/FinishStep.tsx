@@ -3,14 +3,15 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
   EXCEPTION_REASONS, EMPTY_ITEM, SHORT_REASONS, activePlacements, areaStatus, collectPlacements, collectionLines, exceptions, isChecked, isRequired,
-  lineGot, lineInfo, lineState, prepFromStock, stockOutcomes, type StockOutcome,
+  lineGot, lineInfo, lineState, pendingRefills, prepFromStock, stockOutcomes, type StockOutcome,
 } from '@/lib/restock-logic';
 import { useLive } from '@/lib/client/hooks';
 import { localDb } from '@/lib/client/local-db';
 import { setPrep } from '@/lib/client/prep-store';
 import { MorningPrepPicker, PrepSummary } from './MorningPrep';
+import { PendingRefills } from './KitchenRows';
 import { formatQty, round2 } from '@/lib/restock-math';
-import { finishSession, reopenSession, updateLocalSession } from '@/lib/client/restock-store';
+import { finishSession, reopenSession, setItems, updateLocalSession } from '@/lib/client/restock-store';
 import { useSyncStatus } from '@/lib/client/hooks';
 import { AREA_BADGE, AREA_LABEL, Badge, Dock, plural, timeOf } from './shared';
 import type { RestockCtx } from './RestockApp';
@@ -173,6 +174,9 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
 
             {report}
 
+            {/* Kitchen: drawers still waiting for their refill (not a shortage). */}
+            <PendingRefills list={pendingRefills(session.kind, placements, recorded, items)}
+              onRefilled={(p) => void setItems(session.id, [{ placementId: p.placementId, fields: { refillStatus: 'refilled' } }], who)} />
             {prepOn ? <MorningPrepPicker tasks={ctx.prepTasks} handover={handover} hints={prepHints}
               onSave={(st, list) => void setPrep(session, st, list, who)} /> : null}
 
