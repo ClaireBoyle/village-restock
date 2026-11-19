@@ -27,7 +27,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   const [k] = await sql`select id from departments where name = 'Gold Class Kitchen'`;
   await sql`delete from check_areas where department_id = ${k.id}`;
   await sql`insert into storage_locations (name, sort_order) values ('Walk in freezer(Downstairs)', 3), ('Walk in fridge(Downstairs)', 2) on conflict do nothing`;
-  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
+  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
 
   const b = await chromium.launch(); const errs = [];
   const P = await (await b.newContext({ ...devices['iPhone 13'] })).newPage(); P.on('pageerror', (e) => errs.push(e.message));
@@ -38,55 +38,73 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   await addTwo(P, row('Pulled Beef (Bao)'), 'Pulled Beef (Bao)');
   await P.click(`.pull ${line('Pulled Beef (Bao)')} button.l-all`);
 
-  // 1. The walk-in fridge, by location.
+  // 1. The walk-in fridge, on its confirmed shelves.
   await P.click('.area-btn:has-text("Walk in fridge")'); await P.waitForSelector('.area-btn.cur:has-text("Walk in fridge")');
   const secs = await P.locator('.psec-t b').allInnerTexts();
-  ok(secs.join('|') === 'Cheeseboard tub|Bottom cheese shelf|Prep tubs|Spare produce|Dessert shelf|Sauces', `walk-in sections: ${secs.join(', ')}`);
-  ok(await sees(P, '.psec:has(.psec-t b:text-is("Cheeseboard tub")) .psec-hint', 'Back wall, second shelf from the bottom: the white cheeseboard tub'), 'cheeseboard tub: where it is');
-  ok(await P.locator(sec('Cheeseboard tub', 'Brie')).count() === 1 && await P.locator(sec('Bottom cheese shelf', 'Portioned Napoli Cheese')).count() === 1, 'cheeses in their places');
-  ok(await P.locator(sec('Dessert shelf', 'Sticky Date')).count() === 1 && await P.locator(sec('Dessert shelf', 'Brownie')).count() === 1, 'desserts on the right-hand dessert shelf');
-  const [dup] = await sql`select count(*)::int as n from products where department_id = ${k.id} and name = 'Sticky Date'`;
-  ok(dup.n === 1, 'desserts reuse the Defrost products (no duplicates)');
-  ok(await P.locator(sec('Prep tubs', 'Cut Radish')).count() === 1 && await P.locator(sec('Spare produce', 'Radishes')).count() === 1, 'prep tubs and the spare produce underneath');
-  const sauces = await P.locator('.psec:has(.psec-t b:text-is("Sauces")) article.prow h3').allInnerTexts();
-  ok(sauces.length === 10 && sauces.includes('Vodka Sauce') && sauces.includes('BBQ Sauce') && !sauces.some((s) => /green goddess/i.test(s)), `10 sauces, no Green Goddess (${sauces.join(', ')})`);
+  ok(secs.join('|') === 'Top sauce shelf|Second sauce shelf|Cheeseboard tub|Bottom cheese shelf|Right rack top shelf|Prep tubs|Spare produce|Left rack lower shelves|Dessert shelf|Sauces (shelf to confirm)',
+    `walk-in shelves: ${secs.join(', ')}`);
+  // (case-insensitive: the test data's own "Tomato sauce" is reused)
+  const names = async (c) => (await P.locator(`.psec:has(.psec-t b:text-is("${c}")) article.prow h3`).allInnerTexts()).map((n) => n.toLowerCase());
+  ok((await names('Top sauce shelf')).join('|') === 'tomato sauce|garlic sauce / aioli|tzatziki|chipotle|vegan aioli|hollandaise dressing|sriracha|buttermilk ranch', 'top sauce shelf');
+  ok((await names('Second sauce shelf')).join('|') === 'sweet chilli sauce|burger sauce|xo sauce|sesame mayo|sriracha mayo|tartare|bbq sauce|soy sauce'
+    && await sees(P, `${sec('Second sauce shelf', 'Soy Sauce')} .pnote`, 'Far right of the shelf'), 'second sauce shelf, soy sauce at the far right');
+  ok((await names('Sauces (shelf to confirm)')).join('|') === 'vodka sauce|maple aioli', 'vodka sauce and maple aioli: shelf to confirm');
+  ok(await sees(P, '.psec:has(.psec-t b:text-is("Cheeseboard tub")) .psec-hint', 'the white cheeseboard tub, with the strawberries beside it') && await P.locator(sec('Cheeseboard tub', 'Strawberries')).count() === 1, 'cheeseboard tub, strawberries beside it');
+  ok(await P.locator(sec('Bottom cheese shelf', 'Portioned Napoli Cheese')).count() === 1 && await P.locator(sec('Right rack top shelf', 'Buns (Portioned Tubs)')).count() === 1, 'cheeses; burger buns in tubs on the right rack');
+  ok(await P.locator(sec('Spare produce', 'Tomatoes')).count() === 1 && await P.locator('.psec:has(.psec-t b:text-is("Left rack lower shelves")) article.prow h3').filter({ hasText: 'Hellmann' }).count() === 1, 'tomatoes; pickles and mayonnaise on the left rack');
+  ok(await P.locator(sec('Dessert shelf', 'Sticky Date')).count() === 1 && await P.locator(row('Green Goddess')).count() === 0, 'desserts on their shelf; no Green Goddess');
+  const [dup] = await sql`select count(*)::int as n from products where department_id = ${k.id} and name in ('Sticky Date', 'Buns (Portioned Tubs)', 'Vodka Sauce')`;
+  ok(dup.n === 3, 'existing products reused (no duplicates)');
+  const [vs] = await sql`select coalesce(x.location_id, q.default_location_id) as loc from product_placements x join products q on q.id = x.product_id where q.name = 'Vodka Sauce'`;
+  ok(vs.loc === null, 'prepared sauces: no assumed collection source');
+  // A prepared sauce: entering how much to make adds its prep task, with that amount.
+  await addTwo(P, sec('Sauces (shelf to confirm)', 'Vodka Sauce'), 'Vodka Sauce');
+  ok(await sees(P, `${sec('Sauces (shelf to confirm)', 'Vodka Sauce')} .ps`, '2 tubs for morning prep'), 'vodka sauce: "2 tubs for morning prep"');
+  await P.click(`${sec('Sauces (shelf to confirm)', 'Vodka Sauce')} button[aria-label="One more Vodka Sauce"]`);
   await addTwo(P, sec('Prep tubs', 'Cut Carrot'), 'Cut Carrot');
-  ok(await sees(P, `${sec('Prep tubs', 'Cut Carrot')} .ps`, '2 tubs for morning prep'), 'cut carrot: "2 tubs for morning prep"');
+  // Entered then cleared: the task goes again.
+  await P.click(`${sec('Prep tubs', 'Cut Radish')} button.padd`); await P.waitForTimeout(400);
+  await P.click(`${sec('Prep tubs', 'Cut Radish')} button[aria-label="One less Cut Radish"]`); await P.waitForTimeout(300);
+  await P.click(`${sec('Prep tubs', 'Cut Radish')} button[aria-label="Clear Cut Radish"]`);
   await P.click(`${sec('Cheeseboard tub', 'Brie')} button.padd`);
+  await P.click(`${sec('Second sauce shelf', 'Soy Sauce')} button.padd`);
   await P.screenshot({ path: `${OUT}/p19-walk-in.png`, fullPage: true });
 
-  // 2. Collect: brie from downstairs; cut carrot is for the morning team, not collected.
+  // 2. Collect: brie and soy sauce (bottles, storeroom still to set); not the prepared sauce or cut carrot.
   await P.click('.rbar .stage:has-text("Collect")'); await P.waitForSelector('.line');
-  ok(await P.locator(line('Brie')).count() === 1 && await P.locator(line('Cut Carrot')).count() === 0, 'collection list: brie, not the cut carrot');
+  ok(await P.locator(line('Brie')).count() === 1 && await P.locator(line('Cut Carrot')).count() === 0 && await P.locator(line('Vodka Sauce')).count() === 0, 'collection list: brie, not the prepared sauce or cut carrot');
+  ok(await sees(P, `.room:has(h3:text-is("No storeroom set")) ${line('Soy Sauce')}`, 'bottle'), 'soy sauce: 1 bottle, under "No storeroom set" until its storeroom is confirmed');
   ok(await P.locator(line('Pulled Beef (Bao)')).count() === 1, 'the 2 bags pulled for defrost are replaced from downstairs');
-  for (const n of ['Brie', 'Pulled Beef (Bao)']) await P.click(`${line(n)} button.l-all`);
+  for (const n of ['Brie', 'Pulled Beef (Bao)', 'Soy Sauce']) await P.click(`${line(n)} button.l-all`);
   const [{ n: itemsBefore }] = await sql`select count(*)::int as n from session_items`;
 
-  // 3. Finish: Morning prep needed, answered before finishing.
+  // 3. Finish: Morning prep needed.
   await P.click('.dock .dock-acts button:has-text("Review")'); await P.waitForSelector('#morning-prep');
-  ok(await P.locator('.dock button.good').isDisabled() && await sees(P, '.prep-sum', 'Not answered yet'), 'not answered yet: Finish waits');
   const groups = await P.locator('.prep-group legend').allTextContents();
   ok(groups.join('|') === 'Vegetables|Proteins|Sauces|Other', `grouped: ${groups.join(', ')}`);
   ok((await P.locator('.prep-row').count()) === 15, '15 tasks on the checklist');
-  ok(await sees(P, task('Cut carrots for Harvest Hommus'), 'Stock check: 2 tubs') && await sees(P, task('Portion defrosted pulled beef'), 'Stock check: 2 bags'), 'stock entered tonight is shown beside its task');
-  await P.check(`${task('Cut carrots for Harvest Hommus')} input[type=checkbox]`);
-  ok(await P.inputValue(`${task('Cut carrots for Harvest Hommus')} .prep-qty`) === '2 tubs', 'ticking it fills in the amount (can be changed)');
+  // Entered to prepare: already ticked, with the amount. Cleared again: not there.
+  ok(await P.isChecked(`${task('Make vodka sauce')} input[type=checkbox]`) && await P.inputValue(`${task('Make vodka sauce')} .prep-qty`) === '3 tubs', 'vodka sauce: ticked with "3 tubs" (followed the change from 2 to 3)');
+  ok(await P.isChecked(`${task('Cut carrots for Harvest Hommus')} input[type=checkbox]`) && await P.inputValue(`${task('Cut carrots for Harvest Hommus')} .prep-qty`) === '2 tubs', 'cut carrots: ticked with "2 tubs"');
+  ok(!(await P.isChecked(`${task('Cut radish for Harvest Hommus')} input[type=checkbox]`)), 'cut radish: entered then cleared, so not ticked');
+  // Context only: shown beside the task, never filled in.
+  ok(await sees(P, task('Portion defrosted pulled beef'), '2 bags pulled for defrost'), 'pulled beef: "2 bags pulled for defrost" shown as context');
   await P.check(`${task('Portion defrosted pulled beef')} input[type=checkbox]`);
-  await P.check(`${task('Make vodka sauce')} input[type=checkbox]`);
-  await P.fill(`${task('Make vodka sauce')} .prep-qty`, '1 batch'); await P.fill(`${task('Make vodka sauce')} .prep-note`, 'Double the chilli'); await P.keyboard.press('Enter');
+  ok(await P.inputValue(`${task('Portion defrosted pulled beef')} .prep-qty`) === '', 'ticking it leaves the amount blank (nothing entered to prepare)');
+  await P.fill(`${task('Make vodka sauce')} .prep-note`, 'Double the chilli'); await P.keyboard.press('Enter');
   await P.fill('#prep-other', 'Clean the slicer'); await P.click('.prep-add button');
   ok(await sees(P, '.prep-sum', 'Cut carrots for Harvest Hommus') && await sees(P, '.prep-sum', 'Double the chilli') && await sees(P, '.prep-sum-g h5', 'Other'), 'handover summary, grouped, with amounts and notes');
   ok(await P.waitForSelector('.dock button.good:not([disabled])', { timeout: 6000 }).then(() => true, () => false), 'answered: Finish is available');
-  // "No morning prep needed" is its own answer (and clears the ticks).
+  // "No morning prep needed" is its own answer (and clears the ticks); tapped again, not answered.
   await P.click('.prep-none'); ok(await sees(P, '.prep-sum', 'No morning prep needed') && (await P.locator('.prep-row.on').count()) === 0, '"No morning prep needed" clears the tasks');
-  await P.click('.prep-none'); ok(await sees(P, '.prep-sum', 'Not answered yet'), 'tapped again: not answered');
+  await P.click('.prep-none'); ok(await sees(P, '.prep-sum', 'Not answered yet') && await P.waitForSelector('.dock button.good[disabled]', { timeout: 6000 }).then(() => true, () => false), 'not answered: Finish waits');
   for (const t of ['Cut carrots for Harvest Hommus', 'Portion defrosted pulled beef', 'Make vodka sauce']) await P.check(`${task(t)} input[type=checkbox]`);
   await P.fill(`${task('Make vodka sauce')} .prep-note`, 'Double the chilli'); await P.keyboard.press('Enter');
   await P.fill('#prep-other', 'Clean the slicer'); await P.click('.prep-add button');
   await P.screenshot({ path: `${OUT}/p19-finish-prep.png`, fullPage: true });
   const [{ n: itemsAfter }] = await sql`select count(*)::int as n from session_items`;
   ok(itemsAfter === itemsBefore, 'choosing prep tasks only changes the handover (no restock items)');
-  await P.click('.dock button.good'); await P.waitForSelector('.finish-hero');
+  await P.waitForSelector('.dock button.good:not([disabled])'); await P.click('.dock button.good'); await P.waitForSelector('.finish-hero');
   ok(await sees(P, '.prep.done-view', 'Clean the slicer'), 'finished: the handover is shown');
   const [h] = await waitDb(() => sql`select h.status, s.status as restock from prep_handovers h join restock_sessions s on s.id = h.session_id`, (r) => r[0]?.restock === 'finished');
   const its = await waitDb(() => sql`select name, qty, note, task_id, done_at from prep_handover_items order by sort_order`, (r) => r.length === 4);

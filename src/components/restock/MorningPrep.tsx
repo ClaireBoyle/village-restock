@@ -8,13 +8,12 @@ import { PREP_GROUPS, prepGroupLabel, sortedItems, type PrepGroup, type PrepItem
 import { localDb, type LocalPrep } from '@/lib/client/local-db';
 import { useLive } from '@/lib/client/hooks';
 import { importRemotePrep, setPrepDone } from '@/lib/client/prep-store';
-import { round2 } from '@/lib/restock-math';
+import { prepNeedText, type PrepHint } from '@/lib/restock-logic';
 import { timeOf } from './shared';
 
-/** Stock entered tonight that's made in morning prep, by task (e.g. Cut carrots → 2 tubs of cut carrot). */
-export type PrepHints = Map<string, { productName: string; qty: number; unitSingular: string; unitPlural: string }[]>;
-const hintText = (h: PrepHints extends Map<string, infer V> ? V : never) =>
-  h.map((x) => `${round2(x.qty)} ${x.qty === 1 ? x.unitSingular : x.unitPlural}${h.length > 1 ? ` ${x.productName.toLowerCase()}` : ''}`).join(', ');
+/** What tonight's stock check says about each task: an amount entered to prepare, or context (on hand, pulled for defrost). */
+export type PrepHints = Map<string, PrepHint[]>;
+const contextText = (h: PrepHint[]) => h.filter((x) => x.kind === 'context').map((x) => `${x.productName}: ${x.text}`).join(' · ');
 
 /** A text box that keeps what's typed and saves when staff leave it (or press Enter). */
 function SaveText({ value, onSave, ...rest }: { value: string; onSave: (v: string) => void } & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
@@ -53,8 +52,8 @@ export function MorningPrepPicker({ tasks, handover, hints, onSave }: {
   const toggle = (t: PrepTask) => {
     const cur = byTask.get(t.id);
     if (cur) { save(items.filter((i) => i.id !== cur.id)); return; }
-    const h = hints.get(t.id);
-    save([...items, { id: crypto.randomUUID(), taskId: t.id, group: t.group, name: t.name, qty: h ? hintText(h) : null, note: null, doneAt: null, doneBy: null }]);
+    // The amount is filled in only from what staff entered to prepare (not from stock on hand).
+    save([...items, { id: crypto.randomUUID(), taskId: t.id, group: t.group, name: t.name, qty: prepNeedText(hints.get(t.id)), note: null, doneAt: null, doneBy: null }]);
   };
   const edit = (id: string, fields: Partial<PrepItem>) => save(items.map((i) => (i.id === id ? { ...i, ...fields } : i)));
   const addOther = () => {
@@ -82,12 +81,13 @@ export function MorningPrepPicker({ tasks, handover, hints, onSave }: {
         <fieldset key={g} className="prep-group">
           <legend>{label}</legend>
           {ts.map((t) => {
-            const it = byTask.get(t.id), h = hints.get(t.id);
+            const it = byTask.get(t.id), h = hints.get(t.id) ?? [];
+            const need = prepNeedText(h), ctxText = contextText(h);
             return (
               <div key={t.id} className={`prep-row ${it ? 'on' : ''}`} data-task={t.name}>
                 <label className="prep-pick">
                   <input type="checkbox" checked={!!it} onChange={() => toggle(t)} />
-                  <span><b>{t.name}</b>{h ? <small>Stock check: {hintText(h)}</small> : null}</span>
+                  <span><b>{t.name}</b>{need ? <small className="prep-need">Entered to prepare: {need}</small> : null}{ctxText ? <small>{ctxText}</small> : null}</span>
                   {it ? <em className="prep-tag">Needs prep</em> : null}
                 </label>
                 {it ? extra(it) : null}

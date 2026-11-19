@@ -4,8 +4,9 @@ import Link from 'next/link';
 import { Icon } from '@/components/Icon';
 import {
   EMPTY_ITEM, SKIP_REASONS, type ItemState, activePlacements, areaNotes, areaStatus, collectPlacements, collectionLines, isChecked, isRequired, needOf,
-  phaseAreas, refillLines, groupByStoreroom, lineState, usesAdmits, type CollectionLine,
+  phaseAreas, refillLines, groupByStoreroom, lineState, usesAdmits, prepFromStock, prepNeedText, type CollectionLine,
 } from '@/lib/restock-logic';
+import { applyStockPrep } from '@/lib/client/prep-store';
 import { defrostRowInfo } from '@/lib/defrost-rows';
 import { AdmitsBox, DefrostRow } from './DefrostParts';
 import { Line } from './CollectStep';
@@ -126,9 +127,18 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
     // taps in a row can't each miss the other and leave a fully checked area open.
     const fresh = async () => new Map((await localDb().items.where('sessionId').equals(session.id).toArray()).map((r) => [r.placementId, { ...EMPTY_ITEM, ...r }]));
     const allChecked = (m: Map<string, ItemState>) => cur.placements.every((x) => isChecked(x, m.get(x.placementId) ?? EMPTY_ITEM));
-    const before = allChecked(await fresh());
+    const beforeMap = await fresh();
+    const before = allChecked(beforeMap);
     await setItems(session.id, [{ placementId: p.placementId, fields }], who, resolve);
-    const after = allChecked(await fresh());
+    const afterMap = await fresh();
+    const after = allChecked(afterMap);
+    // Made or portioned in morning prep (e.g. vodka sauce): the amount entered adds its prep task to the handover.
+    const task = p.prepTaskId && !p.defrost && session.kind === 'full' ? ctx.prepTasks.find((t) => t.id === p.prepTaskId) : undefined;
+    if (task) {
+      const was = prepNeedText(prepFromStock(session.kind, ctx.placements, recorded, beforeMap).get(task.id));
+      const now = prepNeedText(prepFromStock(session.kind, ctx.placements, recorded, afterMap).get(task.id));
+      if (was !== now) await applyStockPrep(session, task, now, was, who);
+    }
     const rec = await localDb().areas.get([session.id, cur.area.id]);
     const closed = rec?.status === 'complete' || rec?.status === 'skipped';
     if (!before && after && !closed) { pin(); await setArea(session.id, cur.area.id, 'complete', null, who); }

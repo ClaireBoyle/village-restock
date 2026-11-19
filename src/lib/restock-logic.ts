@@ -497,16 +497,33 @@ export function collectPlacements(kind: SessionKind, placements: PlacementView[]
   return activePlacements(kind, placements, recordedAreas).filter((p) => !isPickup(kind, p) && !isPrepMade(p));
 }
 
-/** Stock entered for morning prep tonight, by checklist task (e.g. Cut carrots → 2 tubs of cut carrot). */
+/**
+ * What tonight's stock check says about each morning prep task:
+ *   need     staff entered how much needs preparing on a prep-made row ("2 tubs for morning prep"):
+ *            the task is added with that amount;
+ *   context  shown beside the task only: stock on hand (a count) or what was pulled for defrost.
+ */
+export interface PrepHint { kind: 'need' | 'context'; text: string; productName: string }
 export function prepFromStock(kind: SessionKind, placements: PlacementView[], recordedAreas: Map<string, AreaStatus>, items: Map<string, ItemState>) {
-  const out = new Map<string, { productName: string; qty: number; unitSingular: string; unitPlural: string; areaName: string }[]>();
+  const out = new Map<string, PrepHint[]>();
+  const add = (id: string, h: PrepHint) => out.set(id, [...(out.get(id) ?? []), h]);
   for (const p of activePlacements(kind, placements, recordedAreas)) {
     if (!p.prepTaskId) continue;
-    const need = needOf(p, items.get(p.placementId) ?? EMPTY_ITEM) ?? 0;
+    const i = items.get(p.placementId) ?? EMPTY_ITEM;
+    const q = (n: number) => formatQty(n, p.unitSingular, p.unitPlural);
+    if (p.method === 'par') { if (i.currentQty !== null) add(p.prepTaskId, { kind: 'context', text: `${q(i.currentQty)} on hand`, productName: p.productName }); continue; }
+    const need = needOf(p, i) ?? 0;
     if (need <= 0) continue;
-    out.set(p.prepTaskId, [...(out.get(p.prepTaskId) ?? []), { productName: p.productName, qty: need, unitSingular: p.unitSingular, unitPlural: p.unitPlural, areaName: p.areaName }]);
+    add(p.prepTaskId, p.defrost ? { kind: 'context', text: `${q(need)} pulled for defrost`, productName: p.productName } : { kind: 'need', text: q(need), productName: p.productName });
   }
   return out;
+}
+
+/** The amount to prepare for a task, from what staff entered for it (null = nothing entered). */
+export function prepNeedText(hints: PrepHint[] | undefined): string | null {
+  const need = (hints ?? []).filter((h) => h.kind === 'need');
+  if (!need.length) return null;
+  return need.length === 1 ? need[0].text : need.map((h) => `${h.text} ${h.productName.toLowerCase()}`).join(', ');
 }
 
 /** The areas (screens) for one part of the flow: front of house first, then upstairs back of house. */

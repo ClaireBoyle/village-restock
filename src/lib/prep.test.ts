@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Catalogue } from './catalogue-types';
-import { collectPlacements, collectionLines, departmentView, exceptions, prepFromStock, EMPTY_ITEM, type ItemState } from './restock-logic';
+import { collectPlacements, collectionLines, departmentView, exceptions, prepFromStock, prepNeedText, EMPTY_ITEM, type ItemState } from './restock-logic';
 import { prepLines, sortedItems, type PrepItem } from './prep';
 
 // Kitchen walk-in: cut carrot (made in morning prep) next to brie (collected from downstairs).
@@ -34,10 +34,18 @@ describe('stock made in morning prep', () => {
     const ex = exceptions({ kind: 'full', view, placements: view.placements, recordedAreas: none, items: items({ 'p-carrot': { requestedQty: 2 } }) });
     expect(ex).toEqual([]);
   });
-  it('is offered to the morning team as its task, with the amount entered', () => {
+  it('an amount entered to prepare is the amount for its task', () => {
     const hints = prepFromStock('full', view.placements, none, it2);
-    expect(hints.get('t-carrot')).toEqual([expect.objectContaining({ productName: 'Cut Carrot', qty: 2, unitPlural: 'tubs' })]);
+    expect(hints.get('t-carrot')).toEqual([{ kind: 'need', text: '2 tubs', productName: 'Cut Carrot' }]);
+    expect(prepNeedText(hints.get('t-carrot'))).toBe('2 tubs');
     expect(prepFromStock('full', view.placements, none, items({})).size).toBe(0);
+  });
+  it('stock on hand (a count) is context only: never an amount to prepare', () => {
+    const counted = departmentView({ ...cat, products: cat.products.map((p) => (p.id === 'carrot' ? { ...p, method: 'par' as const } : p)),
+      placements: cat.placements.map((pl) => (pl.id === 'p-carrot' ? { ...pl, parLevel: 4 } : pl)) }, 'k')!;
+    const hints = prepFromStock('full', counted.placements, none, items({ 'p-carrot': { currentQty: 1 } }));
+    expect(hints.get('t-carrot')).toEqual([{ kind: 'context', text: '1 tub on hand', productName: 'Cut Carrot' }]);
+    expect(prepNeedText(hints.get('t-carrot'))).toBeNull();
   });
   it('a link to a task that is gone is ignored (collected as usual)', () => {
     const v = departmentView({ ...cat, prepTasks: [] }, 'k')!;

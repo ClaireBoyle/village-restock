@@ -111,6 +111,13 @@ begin
   -- 2. Green Goddess sauce: off the stock lists.
   update products set status = 'archived' where department_id = dept and status = 'active' and regexp_replace(lower(name), '[^a-z0-9]', '', 'g') like 'greengoddess%';
 
+  -- Once 2026-11-gold-class-kitchen-walk-in-shelves.sql has set out the confirmed shelves, this script
+  -- only keeps the checklist up to date (it never moves stock back to the earlier layout).
+  if exists (select 1 from check_areas where department_id = dept and lower(name) = lower('Walk in fridge · Sauces (shelf to confirm)')) then
+    raise notice 'Walk in fridge already on its confirmed shelves: morning prep checklist % tasks', (select count(*) from prep_tasks where department_id = dept and active);
+    return;
+  end if;
+
   -- 3. The walk-in fridge sections.
   for i in 1 .. array_length(secs, 1) loop
     sec := (select id from check_areas where department_id = dept and lower(name) = lower('Walk in fridge · ' || secs[i][1]) limit 1);

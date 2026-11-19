@@ -2,7 +2,7 @@
 // Morning prep handover: saved on the device first and queued for upload in the same local
 // transaction (like restock changes), so it works with no connection. Tracked apart from the
 // restock: nothing here touches the restock's products, areas or status.
-import type { PrepItem } from '@/lib/prep';
+import type { PrepItem, PrepTask } from '@/lib/prep';
 import type { PrepHandoverResponse } from '@/app/api/prep/route';
 import { localDb, type LocalPrep } from './local-db';
 import { queue } from './restock-store';
@@ -66,4 +66,25 @@ export async function importRemotePrep(departmentId: string, since: string) {
       await db.prep.put({ ...h, items: h.items.map((i) => (pendingDone.has(i.id) && mine.get(i.id) ? { ...i, doneAt: mine.get(i.id)!.doneAt, doneBy: mine.get(i.id)!.doneBy } : i)) } satisfies LocalPrep);
     }
   });
+}
+
+/**
+ * A prep-made row on the stock check (e.g. vodka sauce "2 tubs for morning prep"): its task is added
+ * to the handover with that amount. Changing or clearing the amount follows along, unless staff
+ * have since changed the task's amount themselves (then theirs stays).
+ */
+export async function applyStockPrep(session: { id: string; departmentId: string; tradingDate: string }, task: PrepTask, now: string | null, was: string | null, who: string) {
+  const cur = await localDb().prep.get(session.id);
+  let items = cur?.status === 'needed' ? cur.items : [];
+  const it = items.find((i) => i.taskId === task.id);
+  if (now) {
+    if (it) {
+      if (it.qty && it.qty !== was) return; // staff wrote their own amount
+      items = items.map((i) => (i === it ? { ...i, qty: now } : i));
+    } else items = [...items, { id: crypto.randomUUID(), taskId: task.id, group: task.group, name: task.name, qty: now, note: null, doneAt: null, doneBy: null }];
+    await setPrep(session, 'needed', items, who);
+  } else if (it && it.qty === was && !it.note) {
+    items = items.filter((i) => i !== it);
+    await setPrep(session, items.length ? 'needed' : null, items, who);
+  }
 }
