@@ -11,8 +11,8 @@
 --       Vegetarian spring rolls, prawn twisters    spare boxes in Freezer 2, lower left
 --       Arancini, nuggets, carrot pieces, lasagna croquettes, beef dumplings, fish
 --                                                  their spare stock in Freezer 2, lower right
---       Portioned lamb, cauliflower popcorn        overflow in Freezer 1, lower right
---       Fisherman's Basket portions                made up from potato cakes, calamari, onion rings (Freezer 1)
+--       (Portioned lamb, cauliflower popcorn and Fisherman's Baskets are portioned in morning prep:
+--        see 2026-11-gold-class-kitchen-portion-prep.sql)
 --       Fries tub                                  source to be confirmed
 --   Check remaining spare stock       after refilling: enter the total needed from downstairs
 --       Lower left, Lower right, and the upper items with no spare upstairs (grilled chicken, LG buns, wedges)
@@ -35,9 +35,6 @@ declare
     ['Lasagna Croquettes', 'Spare lasagna bites in Freezer 2, lower right', ''],
     ['Beef Dumplings', 'Boxed dumplings in Freezer 2, lower right', ''],
     ['Fish', 'Spare battered fish in Freezer 2, lower right', ''],
-    ['Portioned Lamb', 'Overflow in Freezer 1, lower right', ''],
-    ['Cauliflower Popcorn', 'Overflow in Freezer 1, lower right', ''],
-    ['Fisherman''s Basket', 'Make up portions with potato cakes, calamari and onion rings from Freezer 1', 'Prepared portions'],
     ['Fries', 'Source to be confirmed', 'The refillable fries tub']
   ];
   -- Spare stock check: product, heading (starts a group), from which old compartment ('ll', 'lr', 'ur')

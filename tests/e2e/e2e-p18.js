@@ -19,7 +19,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   // As on the live site: the Kitchen starts with no areas, and the downstairs walk-in freezer is a storeroom.
   await sql`delete from check_areas where department_id = (select id from departments where name = 'Gold Class Kitchen')`;
   await sql`insert into storage_locations (name, sort_order) values ('Walk in freezer(Downstairs)', 3), ('Walk in fridge(Downstairs)', 2) on conflict do nothing`;
-  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'defrost-pulls', 'freezers', 'refills']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
+  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep', 'defrost-pulls', 'freezers', 'refills', 'portion-prep']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
   // Targets on two items (the rest have none: manual entry). Beef: 8 portions a 1 kg bag.
   await sql`update product_placements x set ready_targets = '[{"min":0,"max":150,"qty":24},{"min":151,"qty":36}]'::jsonb
     from products p, check_areas a where p.id = x.product_id and a.id = x.check_area_id and a.name = 'Defrost' and p.name = '9" Pizza Bases'`;
@@ -118,11 +118,14 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   ok(await P.locator('.taken-h').count() === 0 && await sees(P, `${sec('Check remaining spare stock', 'Grilled Chicken')} .ps`, '4 portions'), 'grilled chicken: the 4 actually pulled, suggested in place in the spare stock check (after the refills)');
   // 5b. Refills: one tap, the source shown in full under each.
   const R = (n) => sec('Refill working drawers and tubs', n), S = (n) => sec('Check remaining spare stock', n);
-  ok(await P.locator('.psec:has(.psec-t b:text-is("Refill working drawers and tubs")) article.prow').count() === 13, '13 working drawers and tubs');
+  ok(await P.locator('.psec:has(.psec-t b:text-is("Refill working drawers and tubs")) article.prow').count() === 10, '10 working drawers and tubs');
   ok(await sees(P, `${R('Chicken tenders')} .rr-src`, 'Tender box in Freezer 2, lower left') && await sees(P, `${R('Prawn Twisters')} .rr-src`, 'Spare boxes in Freezer 2, lower left')
-    && await sees(P, `${R('Beef Dumplings')} .rr-src`, 'Freezer 2, lower right') && await sees(P, `${R('Cauliflower Popcorn')} .rr-src`, 'Overflow in Freezer 1, lower right')
-    && await sees(P, `${R('Fries')} .rr-src`, 'Source to be confirmed'), 'each refill shows its source');
-  ok(await sees(P, '.psec:has(.psec-t b:text-is("Refill working drawers and tubs")) .rr-src', 'Make up portions with potato cakes, calamari and onion rings from Freezer 1'), "Fisherman's Basket: made up from Freezer 1");
+    && await sees(P, `${R('Beef Dumplings')} .rr-src`, 'Freezer 2, lower right') && await sees(P, `${R('Fries')} .rr-src`, 'Source to be confirmed'), 'each refill shows its source');
+  // Portioned in morning prep, not refilled: lamb, cauliflower popcorn, Fisherman's Baskets.
+  ok(await P.locator(R('Portioned Lamb')).count() === 0 && await P.locator(R('Cauliflower Popcorn')).count() === 0, 'lamb and cauliflower popcorn: not refills');
+  ok(await sees(P, '.psec:has(.psec-t b:text-is("Check remaining spare stock")) .phead', 'Portioned in morning prep') && await P.locator(S('Portioned Lamb')).count() === 1, 'portioned in morning prep: in the spare stock check');
+  await P.click(`${S('Cauliflower Popcorn')} button.padd`);
+  ok(await sees(P, `${S('Cauliflower Popcorn')} .ps`, 'for morning prep'), 'cauliflower popcorn: "1 portion for morning prep"');
   ok(await P.locator(`${R('Arancini')} button.padd`).count() === 0 && (await P.locator(`${R('Arancini')} .rr-b`).allInnerTexts()).join('|') === 'Refilled|Already full|Needs stock', 'refill: Refilled · Already full · Needs stock (no Add)');
   await P.click(`${R('Arancini')} .rr-b.k-refilled`); await P.click(`${R('Nuggets')} .rr-b.k-full`); await P.click(`${R('Chicken tenders')} .rr-b.k-needs_stock`);
   ok(await sees(P, `${R('Arancini')} .ps`, 'Refilled') && await sees(P, `${R('Nuggets')} .ps`, 'Already full') && await sees(P, `${R('Chicken tenders')} .ps`, 'Refill still to do'), 'one tap each');
@@ -156,7 +159,9 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   await P.click('.rr-pending [data-refill="Chicken tenders"] button');
   const [rf] = await waitDb(() => sql`select refill_status from session_items i join product_placements x on x.id = i.placement_id join products q on q.id = x.product_id where q.name = 'Chicken tenders' and i.refill_status is not null`, (r) => r[0]?.refillStatus === 'refilled');
   ok(rf?.refillStatus === 'refilled', 'refilled: saved (the task only)');
-  await P.click('.prep-none');
+  ok(await P.isChecked('.prep-row[data-task="Portion cauliflower popcorn"] input[type=checkbox]') && await P.inputValue('.prep-row[data-task="Portion cauliflower popcorn"] .prep-qty') === '1 portion',
+    'Morning prep: "Portion cauliflower popcorn", 1 portion');
+  ok(await P.locator(line('Cauliflower Popcorn')).count() === 0, 'not collected');
   await P.waitForSelector('.dock button.good:not([disabled])'); await P.click('.dock button.good'); await P.waitForSelector('.finish-hero');
   const [f] = await waitDb(() => sql`select status from restock_sessions where kind = 'full'`, (r) => r[0]?.status === 'finished');
   ok(f?.status === 'finished', 'finished');

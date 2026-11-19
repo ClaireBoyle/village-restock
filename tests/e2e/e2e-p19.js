@@ -27,7 +27,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   const [k] = await sql`select id from departments where name = 'Gold Class Kitchen'`;
   await sql`delete from check_areas where department_id = ${k.id}`;
   await sql`insert into storage_locations (name, sort_order) values ('Walk in freezer(Downstairs)', 3), ('Walk in fridge(Downstairs)', 2) on conflict do nothing`;
-  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
+  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
 
   const b = await chromium.launch(); const errs = [];
   const P = await (await b.newContext({ ...devices['iPhone 13'] })).newPage(); P.on('pageerror', (e) => errs.push(e.message));
@@ -82,7 +82,9 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   await P.click('.dock .dock-acts button:has-text("Review")'); await P.waitForSelector('#morning-prep');
   const groups = await P.locator('.prep-group legend').allTextContents();
   ok(groups.join('|') === 'Vegetables|Proteins|Sauces|Other', `grouped: ${groups.join(', ')}`);
-  ok((await P.locator('.prep-row').count()) === 15, '15 tasks on the checklist');
+  ok((await P.locator('.prep-row').count()) === 18, '18 tasks on the checklist');
+  ok(await sees(P, '.prep-group:has(legend:text-is("Proteins"))', 'Portion lamb') && await sees(P, '.prep-group:has(legend:text-is("Proteins"))', "Portion Fisherman's Baskets")
+    && await sees(P, '.prep-group:has(legend:text-is("Vegetables"))', 'Portion cauliflower popcorn'), 'portion tasks: lamb and Fisherman\'s Baskets (proteins), cauliflower popcorn (vegetables)');
   // Entered to prepare: already ticked, with the amount. Cleared again: not there.
   ok(await P.isChecked(`${task('Make vodka sauce')} input[type=checkbox]`) && await P.inputValue(`${task('Make vodka sauce')} .prep-qty`) === '3 tubs', 'vodka sauce: ticked with "3 tubs" (followed the change from 2 to 3)');
   ok(await P.isChecked(`${task('Cut carrots for Harvest Hommus')} input[type=checkbox]`) && await P.inputValue(`${task('Cut carrots for Harvest Hommus')} .prep-qty`) === '2 tubs', 'cut carrots: ticked with "2 tubs"');
