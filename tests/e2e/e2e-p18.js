@@ -19,7 +19,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   // As on the live site: the Kitchen starts with no areas, and the downstairs walk-in freezer is a storeroom.
   await sql`delete from check_areas where department_id = (select id from departments where name = 'Gold Class Kitchen')`;
   await sql`insert into storage_locations (name, sort_order) values ('Walk in freezer(Downstairs)', 3) on conflict do nothing`;
-  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'defrost-pulls']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
+  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'defrost-pulls', 'freezers']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
   // Targets on two items (the rest have none: manual entry). Beef: 8 portions a 1 kg bag.
   await sql`update product_placements x set ready_targets = '[{"min":0,"max":150,"qty":24},{"min":151,"qty":36}]'::jsonb
     from products p, check_areas a where p.id = x.product_id and a.id = x.check_area_id and a.name = 'Defrost' and p.name = '9" Pizza Bases'`;
@@ -36,13 +36,15 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   await P.click('.dcard2:has-text("Kitchen") >> nth=0'); await P.click('.type-full button.btn.primary'); await P.waitForSelector('article.prow');
 
   // 1. Defrost is the first section, every item its own row.
-  ok(await sees(P, '.area-btn.cur', 'Defrost') && (await P.locator('.area-btn b').allInnerTexts()).join(' → ') === 'Defrost → Freezer 1 → Freezer 2 → Walk in fridge → Dry stock',
-    'opens on Defrost, then Freezer 1 → Freezer 2 → Walk in fridge → Dry stock');
+  ok(await sees(P, '.area-btn.cur', 'Defrost') && (await P.locator('.area-btn b').allInnerTexts()).join(' → ') === 'Defrost → Freezer 1 → Freezer 2 → Chest freezer → Walk in fridge → Dry stock',
+    'opens on Defrost, then Freezer 1 → Freezer 2 → Chest freezer → Walk in fridge → Dry stock');
   const names = await P.locator('article.prow h3').allInnerTexts();
   ok(names.length === 16 && names.includes('Bao Buns') && names.includes('Buns (Portioned Tubs)') && names.includes('Sticky Date'), `16 rows, bao buns and portioned buns separate (${names.length})`);
   ok(await sees(P, `${row('Beef Patties')} .dn-grab`, 'Freezer 1') && await sees(P, `${row('Beef Patties')} .dn-fall`, 'downstairs walk-in freezer')
     && await sees(P, `${row('Beef Patties')} .dn-put`, 'Right side of the under-salad-bar bench fridge'), 'row shows Grab, If empty and Put');
   ok(await P.locator(`${row('Bao Buns')} .dn-fall`).count() === 0, 'no "If empty" where none is confirmed (Bao buns)');
+  ok(await sees(P, `${row('9" Pizza Bases')} .dn-grab`, 'Freezer 1 lower left') && await sees(P, `${row('Grilled Chicken')} .dn-grab`, 'Freezer 2 upper right, above the arancini drawer'), 'pick-up directions name the compartment');
+  ok(await sees(P, `${row('Sticky Date')} .dn-grab`, 'Downstairs walk-in freezer') && await sees(P, `${row('Sticky Date')} .dn-put`, 'Upstairs walk-in fridge'), 'desserts: downstairs walk-in freezer → upstairs walk-in fridge');
   ok(await sees(P, '.admits', 'Gold Class admits'), 'admits box (targets exist)');
   await P.screenshot({ path: `${OUT}/p18-defrost-rows.png` });
 
@@ -51,6 +53,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   await P.click(`${row('Bao Buns')} button[aria-label="One more Bao Buns"]`);
   ok(await sees(P, `${row('Bao Buns')} .ps`, 'Pull 2 buns'), 'Bao buns: Pull 2 buns');
   await P.click(`${row('Brownie')} button.pnn`);
+  await P.click(`${row('Sticky Date')} button.padd`); await P.click(`${row('Sticky Date')} button[aria-label="One more Sticky Date"]`);
   ok(await sees(P, `${row('Brownie')} .ps`, 'Not needed'), 'Brownie: Not needed');
   await P.click(`${row('Grilled Chicken')} button.padd`);
   await P.fill(`${row('Grilled Chicken')} #q-${await P.getAttribute(row('Grilled Chicken'), 'data-placement')}`, '6'); await P.keyboard.press('Tab');
@@ -81,8 +84,9 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   // 4. Pull now, on the Defrost screen, freezer by freezer, with where it goes.
   ok(await sees(P, '.pull .sec-title', 'Pull now'), 'Pull now list on the Defrost screen');
   const freezers = await P.locator('.pull .grab-group h4').allInnerTexts();
-  ok(freezers.join('|') === 'Freezer 1|Freezer 2', `grouped by freezer: ${freezers.join(', ')}`);
-  ok(await sees(P, `.pull .grab-group:has(h4:text-is("Freezer 2")) ${line('Grilled Chicken')}`, '6'), 'Freezer 2: grilled chicken 6');
+  ok(freezers.join('|') === 'Freezer 1 · Lower left|Freezer 1 · Lower right|Freezer 2 · Upper right', `grouped by freezer compartment: ${freezers.join(', ')}`);
+  ok(await sees(P, `.pull .grab-group:has(h4:text-is("Freezer 2 · Upper right")) ${line('Grilled Chicken')}`, '6'), 'Freezer 2 upper right: grilled chicken 6');
+  ok(await P.locator(`.pull ${line('Sticky Date')}`).count() === 0, 'desserts are not pulled upstairs (they come from downstairs)');
   ok(await sees(P, `.pull ${line('Pulled Beef (Bao)')} .dn-put`, 'for the morning team to portion') && await sees(P, `.pull ${line('Pulled Beef (Bao)')}`, '4'), 'beef: 4 bags, with its Put note');
   ok(await P.locator(`.pull ${line('Brownie')}`).count() === 0, 'Not needed items are not on it');
   for (const n of ['Bao Buns', 'Pulled Beef (Bao)', '9" Pizza Bases']) await P.click(`.pull ${line(n)} button.l-all`);
@@ -99,20 +103,42 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
     'Freezer 1: 26 bases, 4 bags of beef, 2 bao buns suggested');
   ok(await P.locator(`${row('Brownie')}.suggested`).count() === 0, 'Freezer 1: nothing suggested for what wasn\'t needed');
   ok(await P.locator('.admits, .drow').count() === 0 && await sees(P, `${row('Beef Patties')} button.padd`, 'Add'), 'Freezer 1 is a normal top-up screen (+ Add), not Defrost rows');
+  const comps1 = await P.locator('.psec-t b').allInnerTexts();
+  ok(comps1.join('|') === "Upper left|Upper right|Lower left|Lower right|Fisherman's Basket spares", `Freezer 1 compartments: ${comps1.join(', ')}`);
+  ok(await sees(P, `.psec:has(.psec-t b:text-is("Lower left")) ${row('Pulled Beef (Bao)')}`, 'Bottom shelf, beneath the pizza bases') || await sees(P, `${row('Pulled Beef (Bao)')} .parea`, 'Lower left'),
+    'beef: compartment shown (Lower left)');
+  ok(await sees(P, `.psec:has(.psec-t b:text-is("Lower right")) ${row('Naan Bread')} .pnote`, 'Lower-left tub'), 'naan: "Lower-left tub" beside it');
+  ok(await P.locator(row('Brownie')).count() === 0 && await P.locator(row('Potato Coins')).count() === 0, 'no desserts or potato coins in Freezer 1');
   await P.screenshot({ path: `${OUT}/p18-freezer1.png`, fullPage: true });
   // Staff change one: 2 bao buns → 0 (removed).
   await P.click(`${row('Bao Buns')} button[aria-label="One less Bao Buns"]`); await P.click(`${row('Bao Buns')} button[aria-label="One less Bao Buns"]`);
   await P.click('.area-btn:has-text("Freezer 2")'); await P.waitForSelector('.area-btn.cur:has-text("Freezer 2")');
   ok(await sees(P, `${row('Grilled Chicken')} .ps`, '4 portions'), 'Freezer 2: the 4 chicken actually pulled (not 6)');
+  ok(await sees(P, `${row('Grilled Chicken')} .parea`, 'Upper right'), 'suggested row says its compartment (Upper right)');
+  // Chicken tenders: the drawer (upper left) is refilled from the box (lower left).
+  const sec = (c, n) => `.psec:has(.psec-t b:text-is("${c}")) ${row(n)}`;
+  ok(await sees(P, `${sec('Upper left', 'Chicken tenders')} .pnote`, 'Southern Fried Chicken'), 'tenders drawer: "Southern Fried Chicken" label noted');
+  await P.click(`${sec('Upper left', 'Chicken tenders')} button.padd`); await P.click(`${sec('Upper left', 'Chicken tenders')} button[aria-label="One more Chicken tenders"]`);
+  ok(await sees(P, `.pull .grab-group:has(h4:text-is("Freezer 2 · Lower left")) ${line('Chicken tenders')}`, '2'), 'tenders: 2 on Pull now, from the box in the lower left');
+  ok(await sees(P, `${sec('Upper left', 'Chicken tenders')} .pnote`, 'Refill it from the box in the lower left'), 'drawer row still says where it\'s refilled from');
+  await P.click(`.pull ${line('Chicken tenders')} button.l-all`);
+  ok(await sees(P, `.taken-h`, 'Replace what you pulled') && await sees(P, `${row('Chicken tenders')}.suggested .ps`, '2'), 'what was taken from the box is suggested for its top-up');
+  // The same product in two compartments: one line, both amounts.
+  await P.click(`${sec('Upper left', 'Vegetarian Spring Rolls')} button.padd`);
+  await P.click(`${sec('Lower left', 'Vegetarian Spring Rolls')} button.padd`);
+  await P.screenshot({ path: `${OUT}/p18-freezer2.png`, fullPage: true });
 
   // 6. The collection list is the downstairs run.
   await P.click('.rbar .stage:has-text("Collect")'); await P.waitForSelector('.line');
   const rooms = await P.locator('.room-h h3').allInnerTexts();
   ok(rooms.join('|') === 'Walk in freezer(Downstairs)', `collection list: downstairs only (${rooms.join(', ')})`);
   ok(await sees(P, line('9" Pizza Bases'), '26') && await sees(P, line('Grilled Chicken'), '4') && await sees(P, line('Pulled Beef (Bao)'), '4'), 'pizza 26, chicken 4, beef 4 from downstairs');
+  ok(await sees(P, line('Sticky Date'), '2') && await sees(P, `${line('Sticky Date')} .dn-put`, 'Upstairs walk-in fridge'), 'dessert from downstairs, with where it goes');
+  ok(await sees(P, line('Chicken tenders'), '2'), 'tenders box top-up from downstairs: 2');
+  ok(await sees(P, line('Vegetarian Spring Rolls'), 'Upper left 1 · Freezer 2 · Lower left 1') || await sees(P, line('Vegetarian Spring Rolls'), 'Lower left 1'), 'spring rolls: one line for both compartments');
   ok(await P.locator(line('Bao Buns')).count() === 0, 'bao buns removed on Freezer 1: not on the list');
   await P.screenshot({ path: `${OUT}/p18-defrost-collect.png`, fullPage: true });
-  for (const n of ['Grilled Chicken', 'Pulled Beef (Bao)', '9" Pizza Bases']) await P.click(`${line(n)} button.l-all`);
+  for (const n of ['Grilled Chicken', 'Pulled Beef (Bao)', '9" Pizza Bases', 'Sticky Date', 'Chicken tenders', 'Vegetarian Spring Rolls']) await P.click(`${line(n)} button.l-all`);
   await P.click('.dock .dock-acts button:has-text("Review")'); await P.waitForSelector('.finish-title');
   await P.click('.dock button.good'); await P.waitForSelector('.finish-hero');
   const [f] = await waitDb(() => sql`select status from restock_sessions where kind = 'full'`, (r) => r[0]?.status === 'finished');
@@ -126,7 +152,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
     join check_areas a on a.id = x.check_area_id and a.name = 'Defrost' where p.name = '9" Pizza Bases'`;
   await A.goto(`${B}/admin/products/${pz.id}`);
   const tgt = `#tgt_${pz.checkAreaId}`;
-  ok(await A.inputValue(tgt) === '0-150: 24\n151+: 36' && await A.inputValue(`#grab_${pz.checkAreaId}`) === 'Freezer 1, lower-left door: the labelled 9" Pizza Bases drawer', 'admin: defrost details shown for the area');
+  ok(await A.inputValue(tgt) === '0-150: 24\n151+: 36' && await A.inputValue(`#grab_${pz.checkAreaId}`) === 'Freezer 1 lower left: the labelled 9" Pizza Bases drawer', 'admin: defrost details shown for the area');
   await A.fill(tgt, '0-100: 20\n101-200: 30\n201+: 40'); await A.click('button.btn.primary:has-text("Save changes")'); await A.waitForURL(/saved=/);
   const [pz2] = await sql`select ready_targets, pickup_suggest from product_placements where product_id = ${pz.id} and check_area_id = ${pz.checkAreaId}`;
   ok(pz2.pickupSuggest, 'admin save keeps the freezer top-up suggestion');

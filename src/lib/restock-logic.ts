@@ -178,11 +178,11 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
   // Upstairs pickup spots, and the screens they're on (an area, or the area a section belongs to).
   const pickupOrder = new Map<string, number>();
   areas.forEach((a, i) => { pickupOrder.set(a.area.id, i * 100); a.sections.forEach((x, j) => pickupOrder.set(x.area.id, i * 100 + j + 1)); });
-  // (Defrost pulls from a freezer area are pulled on the Defrost screen itself: no Upstairs step.)
-  const bohScreenIds = new Set(placements.filter((p) => p.pickupAreaId && !p.defrost).map((p) => {
-    const a = byArea.get(p.pickupAreaId!)!;
-    return parentOf(a) ?? a.id;
-  }));
+  // Not an Upstairs step: defrost pulls (pulled on the Defrost screen) and refills from the same screen
+  // (e.g. the chicken tenders drawer, refilled from the box in another compartment of the same freezer).
+  const screenOf = (id: string) => { const a = byArea.get(id)!; return parentOf(a) ?? a.id; };
+  const bohScreenIds = new Set(placements.filter((p) => p.pickupAreaId && !p.defrost && screenOf(p.pickupAreaId) !== p.screenAreaId)
+    .map((p) => screenOf(p.pickupAreaId!)));
   return {
     department, areas, placements, bohScreenIds, pickupOrder,
     byId: new Map(placements.map((p) => [p.placementId, p])),

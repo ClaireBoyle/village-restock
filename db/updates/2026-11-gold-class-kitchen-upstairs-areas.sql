@@ -44,6 +44,12 @@ begin
     update check_areas set active = true, parent_area_id = null, sort_order = k where id = a;
     update check_areas set guide_text = list[i][3] where id = a and trim(coalesce(guide_text, '')) = '';
     done := done || a;
+    -- The chest freezer (2026-11-gold-class-kitchen-freezers.sql) stays straight after Freezer 2.
+    if list[i][2] = 'freezer2' then
+      for a in select id from check_areas where department_id = dept and parent_area_id is null and regexp_replace(lower(name), '[^a-z0-9]', '', 'g') = 'chestfreezer' limit 1 loop
+        k := k + 1; update check_areas set sort_order = k where id = a; done := done || a;
+      end loop;
+    end if;
   end loop;
 
   -- Everything else after, in its existing order.

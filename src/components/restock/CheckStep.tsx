@@ -145,10 +145,11 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
       return raw === null ? `Suggested: ${taken}. Change it if more is needed, or remove it.` : raw === sug.qty ? taken : `${taken} (suggested ${round2(sug.qty)})`;
     }
     if (!p.optional && p.areaId === p.screenAreaId) return null;
-    // Grabbed upstairs (e.g. the FOH bar fridge inside the Back bench stop): it says where to grab it instead.
-    if (ctx.refill && p.pickupAreaId) return null;
+    // Grabbed upstairs (e.g. the FOH bar fridge inside the Back bench stop), or refilled from another
+    // compartment (e.g. the chicken tenders drawer, from the box): it says where it comes from instead.
+    if (p.pickupAreaId) return null;
     // Pickups grabbed upstairs aren't on the downstairs list, so they don't count here.
-    const others = view.placements.filter((x) => x.productId === p.productId && x.placementId !== p.placementId && !(ctx.refill && x.pickupAreaId))
+    const others = view.placements.filter((x) => x.productId === p.productId && x.placementId !== p.placementId && !(session.kind === 'full' && x.pickupAreaId))
       .map((x) => ({ x, need: needOf(x, items.get(x.placementId) ?? EMPTY_ITEM) })).filter((o) => (o.need ?? 0) > 0);
     return others.length ? `Already ${others.map((o) => `${Math.round(o.need! * 100) / 100} for ${o.x.areaName}`).join(', ')}` : null;
   };
@@ -179,6 +180,8 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
     }
     return out;
   };
+  // A compartment named after its freezer ("Freezer 1 · Upper left") reads as just "Upper left" on that freezer's screen.
+  const secName = (n: string) => (n.startsWith(`${cur.area.name} · `) ? n.slice(cur.area.name.length + 3) : n);
   const renderRow = (p: (typeof cur.placements)[number], showArea = false) => p.defrost && !items.get(p.placementId)?.conflict ? (
     // Defrost rows: pull an amount or Not needed, with where it's from and where it goes.
     <DefrostRow key={p.placementId} p={p} item={items.get(p.placementId) ?? EMPTY_ITEM} rawQty={ctx.rawItems.get(p.placementId)?.requestedQty ?? null}
@@ -345,13 +348,34 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
               // A row stays here even after it's changed or removed, so it never jumps away mid-tap.
               <>
                 <h3 className="phead taken-h"><span>{ctx.refill ? 'Replace what you grabbed' : 'Replace what you pulled'}</span><small>{taken.length} suggested</small></h3>
-                {taken.map((p) => renderRow(p, p.areaId !== cur.area.id))}
+                {taken.map((p) => renderRow({ ...p, areaName: secName(p.areaName) }, p.areaId !== cur.area.id))}
                 {/* The rest starts with its own subheading if it has one; otherwise a plain divider. */}
                 {rest(cur.own).length && !rest(cur.own).some((x) => x.heading) ? <h3 className="phead">Everything else</h3> : null}
               </>
             ) : null}
             {renderList(rest(cur.own))}
           </div>
+
+          {cur.sections.map((sec) => {
+            const enteredHere = sec.placements.filter(chk).length;
+            const open = openSecs[sec.area.id] ?? (sec.mode === 'open' || enteredHere > 0);
+            return (
+              <section key={sec.area.id} className={`psec ${sec.mode} ${open ? 'open' : ''}`}>
+                <button type="button" className="psec-h" onClick={() => setOpenSecs((o) => ({ ...o, [sec.area.id]: !open }))} aria-expanded={open}>
+                  <span className="psec-t"><b>{secName(sec.area.name)}</b>{sec.mode === 'optional' ? <span className="psec-tag">Optional</span> : null}</span>
+                  <small>{enteredHere ? `${enteredHere} entered` : `${sec.placements.length} product${sec.placements.length === 1 ? '' : 's'}`}</small>
+                  <Icon name={open ? 'up' : 'down'} />
+                </button>
+                {open ? (
+                  <>
+                    {sec.mode === 'optional' ? <p className="psec-hint"><Icon name="info" /><span>{ctx.refill ? <>What was taken for front of house is already suggested. Add anything else that looks low.</> : <>Only add <b>extra</b> stock this needs from downstairs. Anything already entered above is already on the collection list.</>}</span></p>
+                      : sec.area.guideText ? <p className="psec-hint"><Icon name="info" /><span>{sec.area.guideText}</span></p> : null}
+                    <div className="prows">{renderList(rest(sec.placements))}{taken.length && !rest(sec.placements).length ? <p className="meta">All suggested above (Replace what you {ctx.refill ? 'grabbed' : 'pulled'}).</p> : null}</div>
+                  </>
+                ) : null}
+              </section>
+            );
+          })}
 
           {pulls.length ? (
             // Defrost: pull it now, freezer by freezer. What's pulled is suggested on that freezer's screen.
@@ -366,27 +390,6 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
               ))}
             </section>
           ) : null}
-
-          {cur.sections.map((sec) => {
-            const enteredHere = sec.placements.filter(chk).length;
-            const open = openSecs[sec.area.id] ?? (sec.mode === 'open' || enteredHere > 0);
-            return (
-              <section key={sec.area.id} className={`psec ${sec.mode} ${open ? 'open' : ''}`}>
-                <button type="button" className="psec-h" onClick={() => setOpenSecs((o) => ({ ...o, [sec.area.id]: !open }))} aria-expanded={open}>
-                  <span className="psec-t"><b>{sec.area.name}</b>{sec.mode === 'optional' ? <span className="psec-tag">Optional</span> : null}</span>
-                  <small>{enteredHere ? `${enteredHere} entered` : `${sec.placements.length} product${sec.placements.length === 1 ? '' : 's'}`}</small>
-                  <Icon name={open ? 'up' : 'down'} />
-                </button>
-                {open ? (
-                  <>
-                    {sec.mode === 'optional' ? <p className="psec-hint"><Icon name="info" /><span>{ctx.refill ? <>What was taken for front of house is already suggested. Add anything else that looks low.</> : <>Only add <b>extra</b> stock this needs from downstairs. Anything already entered above is already on the collection list.</>}</span></p>
-                      : sec.area.guideText ? <p className="psec-hint"><Icon name="info" /><span>{sec.area.guideText}</span></p> : null}
-                    <div className="prows">{renderList(rest(sec.placements))}{taken.length && !rest(sec.placements).length ? <p className="meta">All suggested above (Replace what you grabbed).</p> : null}</div>
-                  </>
-                ) : null}
-              </section>
-            );
-          })}
 
           {st === 'skipped' ? (
             <div className="banner s-skip area-end"><Icon name="skip" /><div><b>{cur.area.name} skipped</b><p>{rec?.skipReason}{rec?.updatedBy ? ` · ${rec.updatedBy}` : ''} {timeOf(rec?.updatedAt)}</p></div>
