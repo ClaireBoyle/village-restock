@@ -108,6 +108,12 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   ok(await sees(P, `.psec:has(.psec-t b:text-is("Lower left")) ${row('Pulled Beef (Bao)')}`, 'Bottom shelf, beneath the pizza bases') || await sees(P, `${row('Pulled Beef (Bao)')} .parea`, 'Lower left'),
     'beef: compartment shown (Lower left)');
   ok(await sees(P, `.psec:has(.psec-t b:text-is("Lower right")) ${row('Naan Bread')} .pnote`, 'Lower-left tub'), 'naan: "Lower-left tub" beside it');
+  // Freezer 1 stock portioned in morning prep: an amount entered goes to the morning team.
+  const f1 = (c, n) => `.psec:has(.psec-t b:text-is("${c}")) ${row(n)}`;
+  ok(await P.locator(f1('Lower right', 'Portioned Lamb')).count() === 1
+    && await P.locator('.psec:has(.psec-t b:text-is("Fisherman\'s Basket spares")) article.prow h3').filter({ hasText: "Fisherman's Basket" }).count() === 1, 'lamb (lower right) and Fisherman\'s Baskets (with their spares) are Freezer 1 stock');
+  await P.click(`${f1('Lower right', 'Cauliflower Popcorn')} button.padd`);
+  ok(await sees(P, `${f1('Lower right', 'Cauliflower Popcorn')} .ps`, 'for morning prep'), 'cauliflower popcorn: "1 portion for morning prep"');
   ok(await P.locator(row('Brownie')).count() === 0 && await P.locator(row('Potato Coins')).count() === 0, 'no desserts or potato coins in Freezer 1');
   await P.screenshot({ path: `${OUT}/p18-freezer1.png`, fullPage: true });
   // Staff change one: 2 bao buns → 0 (removed).
@@ -121,11 +127,9 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   ok(await P.locator('.psec:has(.psec-t b:text-is("Refill working drawers and tubs")) article.prow').count() === 10, '10 working drawers and tubs');
   ok(await sees(P, `${R('Chicken tenders')} .rr-src`, 'Tender box in Freezer 2, lower left') && await sees(P, `${R('Prawn Twisters')} .rr-src`, 'Spare boxes in Freezer 2, lower left')
     && await sees(P, `${R('Beef Dumplings')} .rr-src`, 'Freezer 2, lower right') && await sees(P, `${R('Fries')} .rr-src`, 'Source to be confirmed'), 'each refill shows its source');
-  // Portioned in morning prep, not refilled: lamb, cauliflower popcorn, Fisherman's Baskets.
-  ok(await P.locator(R('Portioned Lamb')).count() === 0 && await P.locator(R('Cauliflower Popcorn')).count() === 0, 'lamb and cauliflower popcorn: not refills');
-  ok(await sees(P, '.psec:has(.psec-t b:text-is("Check remaining spare stock")) .phead', 'Portioned in morning prep') && await P.locator(S('Portioned Lamb')).count() === 1, 'portioned in morning prep: in the spare stock check');
-  await P.click(`${S('Cauliflower Popcorn')} button.padd`);
-  ok(await sees(P, `${S('Cauliflower Popcorn')} .ps`, 'for morning prep'), 'cauliflower popcorn: "1 portion for morning prep"');
+  // Lamb, cauliflower popcorn and Fisherman's Baskets aren't Freezer 2 stock at all (they're Freezer 1's, portioned in prep).
+  ok(await P.locator(`${row('Portioned Lamb')}, ${row('Cauliflower Popcorn')}`).count() === 0
+    && await P.locator('article.prow h3').filter({ hasText: "Fisherman's Basket" }).count() === 0, 'lamb, cauliflower popcorn, Fisherman\'s Baskets: not in Freezer 2');
   ok(await P.locator(`${R('Arancini')} button.padd`).count() === 0 && (await P.locator(`${R('Arancini')} .rr-b`).allInnerTexts()).join('|') === 'Refilled|Already full|Needs stock', 'refill: Refilled · Already full · Needs stock (no Add)');
   await P.click(`${R('Arancini')} .rr-b.k-refilled`); await P.click(`${R('Nuggets')} .rr-b.k-full`); await P.click(`${R('Chicken tenders')} .rr-b.k-needs_stock`);
   ok(await sees(P, `${R('Arancini')} .ps`, 'Refilled') && await sees(P, `${R('Nuggets')} .ps`, 'Already full') && await sees(P, `${R('Chicken tenders')} .ps`, 'Refill still to do'), 'one tap each');
