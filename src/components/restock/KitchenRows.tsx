@@ -86,3 +86,22 @@ export function PendingRefills({ list, onRefilled, title = 'Refills still to do'
     </section>
   );
 }
+
+/**
+ * A portioning check while refilling (e.g. portioned lamb in Freezer 2): one tick, "Needs portioning",
+ * puts its task on tomorrow's morning prep handover. It changes nothing in the restock.
+ */
+export function PortionCheckRow({ p, taskName, on, onToggle, photo }: { p: PlacementView; taskName: string; on: boolean; onToggle: () => void; photo: React.ReactNode }) {
+  return (
+    <article className={`prow card pcrow s-${on ? 'warn' : 'none'} ${on ? '' : 'quiet'}`} data-placement={p.placementId}>
+      {photo}
+      <div className="pt"><h3>{p.productName}</h3>
+        <p className="ps" id={`s-${p.placementId}`}>{on ? <><Icon name="clock" />On tomorrow&rsquo;s prep list: {taskName}</> : <span className="sr-only">Not ticked</span>}</p></div>
+      <div className="pc">
+        <button type="button" className={`pnn pc-tick ${on ? 'on' : ''}`} aria-pressed={on} onClick={onToggle}
+          aria-label={`${p.productName}: needs portioning`}>{on ? <Icon name="check" /> : null}Needs portioning</button>
+      </div>
+      {p.refillSource ? <p className="pwide rr-src pc-src"><Icon name="clock" /><span>{p.refillSource}</span></p> : null}
+    </article>
+  );
+}

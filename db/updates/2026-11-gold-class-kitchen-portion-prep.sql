@@ -1,22 +1,24 @@
 -- Gold Class Kitchen: portioned lamb, cauliflower popcorn and Fisherman's Baskets are Freezer 1 stock,
--- portioned in morning prep. Safe to run more than once. Run AFTER 2026-11-gold-class-kitchen-refills.sql.
--- Only touches Gold Class Kitchen.
+-- and portioning them is a morning prep task. Safe to run more than once. Run AFTER
+-- 2026-11-gold-class-kitchen-refills.sql. Only touches Gold Class Kitchen.
 --
--- * Off Freezer 2 altogether (no refill row, no spare stock row).
--- * In Freezer 1: lamb and cauliflower popcorn in the lower right (their existing rows), Fisherman's
---   Baskets with their spares (potato cakes, calamari, onion rings). An amount entered for one adds
---   its portion task to the morning prep handover; it's never put on the collection list.
+-- * Freezer 2: no refill or spare stock row. Instead, at the end of "Refill working drawers and tubs",
+--   under "Check the portioning": while refilling, staff tick "Needs portioning" and the portion task
+--   goes on the next morning's prep handover (nothing is added to the restock).
+-- * In Freezer 1 (lamb and cauliflower popcorn in the lower right, Fisherman's Baskets with their spares):
+--   staff check the stock level there and enter what's needed from downstairs, as usual (collected
+--   from the downstairs walk-in freezer).
 -- * Morning prep checklist: Portion cauliflower popcorn (Vegetables), Portion lamb and Portion
---   Fisherman's Baskets (Proteins).
+--   Fisherman's Baskets (Proteins), chosen by staff when needed (a stock amount doesn't add them).
 do $$
 declare
   dept uuid := (select id from departments where lower(name) = 'gold class kitchen');
-  f1 uuid; f2 uuid; area uuid; p uuid; pl uuid; t uuid; i int; norm text;
+  f1 uuid; f2 uuid; area uuid; p uuid; pl uuid; t uuid; i int; norm text; down uuid; refill uuid; chk uuid;
   -- product, Freezer 1 section, task, group, note beside it
   list text[][] := array[
-    ['Portioned Lamb', 'Freezer 1 · Lower right', 'Portion lamb', 'proteins', 'Portioned in morning prep'],
-    ['Cauliflower Popcorn', 'Freezer 1 · Lower right', 'Portion cauliflower popcorn', 'vegetables', 'Portioned in morning prep'],
-    ['Fisherman''s Basket', 'Freezer 1 · Fisherman''s Basket spares', 'Portion Fisherman''s Baskets', 'proteins', 'Portioned in morning prep, from the spares below']
+    ['Portioned Lamb', 'Freezer 1 · Lower right', 'Portion lamb', 'proteins', 'Overflow'],
+    ['Cauliflower Popcorn', 'Freezer 1 · Lower right', 'Portion cauliflower popcorn', 'vegetables', 'Overflow'],
+    ['Fisherman''s Basket', 'Freezer 1 · Fisherman''s Basket spares', 'Portion Fisherman''s Baskets', 'proteins', 'Prepared portions']
   ];
 begin
   if dept is null then raise notice 'Gold Class Kitchen not found: nothing changed'; return; end if;
@@ -24,6 +26,9 @@ begin
   f1 := (select id from check_areas where department_id = dept and active and parent_area_id is null and regexp_replace(lower(name), '[^a-z0-9]', '', 'g') = 'freezer1' limit 1);
   f2 := (select id from check_areas where department_id = dept and active and parent_area_id is null and regexp_replace(lower(name), '[^a-z0-9]', '', 'g') = 'freezer2' limit 1);
   if f1 is null or f2 is null then raise exception 'Run the earlier Gold Class Kitchen scripts first (…-freezers, …-refills)'; end if;
+  refill := (select id from check_areas where department_id = dept and lower(name) = lower('Freezer 2 · Refill working drawers and tubs'));
+  if refill is null then raise exception 'Run 2026-11-gold-class-kitchen-refills.sql first'; end if;
+  down := (select id from storage_locations where active and regexp_replace(lower(name), '[^a-z0-9]', '', 'g') like 'walkinfreezer%' order by sort_order limit 1);
 
   for i in 1 .. array_length(list, 1) loop
     -- The portion task (after the others).
@@ -48,12 +53,21 @@ begin
       if pl is not null then update product_placements set check_area_id = area, sort_order = 0 where id = pl;
       else insert into product_placements (product_id, check_area_id, sort_order) values (p, area, 0) returning id into pl; end if;
     end if;
-    -- Off Freezer 2 altogether.
-    delete from product_placements x using check_areas c where c.id = x.check_area_id and x.product_id = p and x.id <> pl and (c.id = f2 or c.parent_area_id = f2);
-    -- Portioned in prep: no refill, no collection source; the amount entered goes to the morning team.
-    update product_placements set refill_source = null, pickup_area_id = null, pickup_suggest = false, par_level = null, location_id = null,
-      prep_task_id = t, heading = null,
-      instructions = case when coalesce(trim(instructions), '') in ('', 'Overflow', 'Prepared portions', 'Prepared portions. Make more from the spare potato cakes, calamari and onion rings in Freezer 1.') then list[i][5] else instructions end
+    -- Freezer 2: one portioning check in the refill section (the old refill or spare row is reused), nothing else.
+    chk := (select x.id from product_placements x join check_areas c on c.id = x.check_area_id
+            where x.product_id = p and x.id <> pl and (c.id = f2 or c.parent_area_id = f2) order by (c.id = refill) desc limit 1);
+    if chk is null then insert into product_placements (product_id, check_area_id, sort_order) values (p, refill, 100 + i) returning id into chk;
+    else update product_placements set check_area_id = refill where id = chk; end if;
+    delete from product_placements x using check_areas c where c.id = x.check_area_id and x.product_id = p and x.id not in (pl, chk) and (c.id = f2 or c.parent_area_id = f2);
+    update product_placements set sort_order = 100 + i, heading = case when i = 1 then 'Check the portioning' else null end, par_level = null,
+      refill_source = 'Tick if more needs portioning tomorrow (from the Freezer 1 stock)', prep_task_id = t,
+      pickup_area_id = null, pickup_suggest = false, location_id = null, instructions = null
+      where id = chk;
+    -- Ordinary Freezer 1 stock: check the level, enter what's needed from the downstairs walk-in freezer.
+    update product_placements set refill_source = null, pickup_area_id = null, pickup_suggest = false, par_level = null,
+      location_id = coalesce(location_id, down), prep_task_id = null, heading = null,
+      instructions = case when coalesce(trim(instructions), '') in ('', 'Overflow', 'Prepared portions', 'Portioned in morning prep', 'Portioned in morning prep, from the spares below',
+                                                               'Prepared portions. Make more from the spare potato cakes, calamari and onion rings in Freezer 1.') then list[i][5] else instructions end
       where id = pl;
   end loop;
 
@@ -62,10 +76,11 @@ begin
     and lower(c.name) in (lower('Freezer 2 · Upper left'), lower('Freezer 2 · Upper right'), lower('Freezer 2 · Lower left'), lower('Freezer 2 · Lower right'))
     and not exists (select 1 from product_placements x where x.check_area_id = c.id);
 
-  raise notice 'Portioned in morning prep, in Freezer 1: %; Freezer 2: % refills, % spare stock checks; morning prep checklist: % tasks',
+  raise notice 'Freezer 1 stock (from downstairs): %; Freezer 2: % refills (incl. % portioning checks), % spare stock checks; morning prep checklist: % tasks',
     (select string_agg(q.name, ', ' order by c.sort_order, x.sort_order) from product_placements x join products q on q.id = x.product_id join check_areas c on c.id = x.check_area_id
-       where c.parent_area_id = f1 and x.prep_task_id is not null),
+       where c.parent_area_id = f1 and regexp_replace(lower(q.name), '[^a-z0-9]', '', 'g') in ('portionedlamb', 'cauliflowerpopcorn', 'fishermansbasket')),
     (select count(*) from product_placements x join check_areas c on c.id = x.check_area_id where c.parent_area_id = f2 and x.refill_source is not null),
+    (select count(*) from product_placements where check_area_id = refill and prep_task_id is not null),
     (select count(*) from product_placements x join check_areas c on c.id = x.check_area_id where lower(c.name) = lower('Freezer 2 · Check remaining spare stock')),
     (select count(*) from prep_tasks where department_id = dept and active);
 end $$;

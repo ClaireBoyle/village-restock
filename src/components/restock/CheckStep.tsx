@@ -6,10 +6,11 @@ import {
   EMPTY_ITEM, SKIP_REASONS, type ItemState, activePlacements, areaNotes, areaStatus, collectPlacements, collectionLines, isChecked, isRequired, needOf,
   phaseAreas, refillLines, groupByStoreroom, lineState, usesAdmits, prepFromStock, prepNeedText, type CollectionLine,
 } from '@/lib/restock-logic';
-import { applyStockPrep } from '@/lib/client/prep-store';
+import { applyStockPrep, tickPrep } from '@/lib/client/prep-store';
 import { defrostRowInfo } from '@/lib/defrost-rows';
 import { AdmitsBox, DefrostRow } from './DefrostParts';
-import { LinkedRow, RefillRow } from './KitchenRows';
+import { LinkedRow, PortionCheckRow, RefillRow } from './KitchenRows';
+import { useLive } from '@/lib/client/hooks';
 import { Line } from './CollectStep';
 import { round2 } from '@/lib/restock-math';
 import { setAdmits, setArea, setItems, updateLocalSession } from '@/lib/client/restock-store';
@@ -59,6 +60,8 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   const curId = view.areas.some((a) => a.area.id === session.curAreaId) ? session.curAreaId! : firstOpen ?? view.areas[0]?.area.id;
   const cur = view.areas.find((a) => a.area.id === curId);
   const [guideOpen, setGuideOpen] = useGuideOpen(cur?.area.id ?? 'none');
+  // Morning prep handover (Kitchen): portioning checks while refilling tick their task on it.
+  const handover = useLive(async () => (ctx.prepTasks.length ? localDb().prep.get(session.id) : undefined), [session.id, ctx.prepTasks.length], undefined);
 
   const goArea = (id: string) => { setSkipOpen(false); void updateLocalSession(session.id, { curAreaId: id }); window.scrollTo({ top: 0 }); };
   if (!cur) return <main className="wrap restock-main">{ctx.header}<div className="banner s-none"><Icon name="info" /><div><b>This department has no areas yet</b><p>An admin can add them in Admin.</p></div></div></main>;
@@ -205,7 +208,13 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   const secName = (n: string) => (n.startsWith(`${cur.area.name} · `) ? n.slice(cur.area.name.length + 3) : n);
   const photoOf = (p: (typeof cur.placements)[number]) => (p.photoPath ? <ProductThumb src={p.photoPath} name={p.productName} credit={p.photoCredit} className="pphoto" /> : <span className="pphoto ph" aria-hidden="true"><Icon name="box" /></span>);
   const linkedTo = (p: (typeof cur.placements)[number]) => (p.linkedPlacementId ? whole.byId.get(p.linkedPlacementId) : undefined);
-  const renderRow = (p: (typeof cur.placements)[number], showArea = false) => p.refillSource ? (
+  const portionTask = (p: (typeof cur.placements)[number]) => (p.refillSource && p.prepTaskId && session.kind === 'full' ? ctx.prepTasks.find((t) => t.id === p.prepTaskId) : undefined);
+  const renderRow = (p: (typeof cur.placements)[number], showArea = false) => portionTask(p) ? (
+    // Portioning check while refilling: one tick puts its task on tomorrow's morning prep (nothing in the restock).
+    <PortionCheckRow key={p.placementId} p={p} taskName={portionTask(p)!.name} photo={photoOf(p)}
+      on={handover?.status === 'needed' && handover.items.some((i) => i.taskId === p.prepTaskId)}
+      onToggle={() => void tickPrep(session, portionTask(p)!, !(handover?.status === 'needed' && handover.items.some((i) => i.taskId === p.prepTaskId)), who)} />
+  ) : p.refillSource ? (
     // A working drawer or tub: Refilled / Already full / Needs stock (the task only, never an amount).
     <RefillRow key={p.placementId} p={p} item={items.get(p.placementId) ?? EMPTY_ITEM} photo={photoOf(p)} onChange={(fields) => void onItem(p, fields)} />
   ) : linkedTo(p) ? (

@@ -88,3 +88,21 @@ export async function applyStockPrep(session: { id: string; departmentId: string
     await setPrep(session, items.length ? 'needed' : null, items, who);
   }
 }
+
+/**
+ * A portioning check while refilling (e.g. Freezer 2's portioned lamb): ticking it puts the task on the
+ * morning prep handover; unticking takes it off again (unless staff have since added an amount or note).
+ */
+export async function tickPrep(session: { id: string; departmentId: string; tradingDate: string }, task: PrepTask, on: boolean, who: string) {
+  const cur = await localDb().prep.get(session.id);
+  let items = cur?.status === 'needed' ? cur.items : [];
+  const it = items.find((i) => i.taskId === task.id);
+  if (on) {
+    if (it) return;
+    items = [...items, { id: crypto.randomUUID(), taskId: task.id, group: task.group, name: task.name, qty: null, note: null, doneAt: null, doneBy: null }];
+    await setPrep(session, 'needed', items, who);
+  } else if (it && !it.qty && !it.note) {
+    items = items.filter((i) => i !== it);
+    await setPrep(session, items.length ? 'needed' : null, items, who);
+  }
+}
