@@ -8,12 +8,9 @@ import { PREP_GROUPS, prepGroupLabel, sortedItems, type PrepGroup, type PrepItem
 import { localDb, type LocalPrep } from '@/lib/client/local-db';
 import { useLive } from '@/lib/client/hooks';
 import { importRemotePrep, setPrepDone } from '@/lib/client/prep-store';
-import { prepNeedText, type PrepHint } from '@/lib/restock-logic';
+
 import { timeOf } from './shared';
 
-/** What tonight's stock check says about each task: an amount entered to prepare, or context (on hand, pulled for defrost). */
-export type PrepHints = Map<string, PrepHint[]>;
-const contextText = (h: PrepHint[]) => h.filter((x) => x.kind === 'context').map((x) => `${x.productName}: ${x.text}`).join(' · ');
 
 /** A text box that keeps what's typed and saves when staff leave it (or press Enter). */
 function SaveText({ value, onSave, ...rest }: { value: string; onSave: (v: string) => void } & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
@@ -26,8 +23,8 @@ function SaveText({ value, onSave, ...rest }: { value: string; onSave: (v: strin
     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(); e.currentTarget.blur(); } }} />;
 }
 
-export function MorningPrepPicker({ tasks, handover, hints, onSave }: {
-  tasks: PrepTask[]; handover: LocalPrep | undefined; hints: PrepHints;
+export function MorningPrepPicker({ tasks, handover, onSave }: {
+  tasks: PrepTask[]; handover: LocalPrep | undefined;
   onSave: (status: 'needed' | 'none' | null, items: PrepItem[]) => void;
 }) {
   // Shown straight away (a tick never waits for the device's database), then saved.
@@ -52,8 +49,7 @@ export function MorningPrepPicker({ tasks, handover, hints, onSave }: {
   const toggle = (t: PrepTask) => {
     const cur = byTask.get(t.id);
     if (cur) { save(items.filter((i) => i.id !== cur.id)); return; }
-    // The amount is filled in only from what staff entered to prepare (not from stock on hand).
-    save([...items, { id: crypto.randomUUID(), taskId: t.id, group: t.group, name: t.name, qty: prepNeedText(hints.get(t.id)), note: null, doneAt: null, doneBy: null }]);
+    save([...items, { id: crypto.randomUUID(), taskId: t.id, group: t.group, name: t.name, qty: null, note: null, doneAt: null, doneBy: null }]);
   };
   const edit = (id: string, fields: Partial<PrepItem>) => save(items.map((i) => (i.id === id ? { ...i, ...fields } : i)));
   const addOther = () => {
@@ -64,7 +60,6 @@ export function MorningPrepPicker({ tasks, handover, hints, onSave }: {
   };
   const extra = (i: PrepItem) => (
     <div className="prep-extra">
-      <SaveText className="prep-qty" aria-label={`${i.name}: amount (optional)`} placeholder="Amount (optional)" maxLength={30} value={i.qty ?? ''} onSave={(v) => edit(i.id, { qty: v || null })} />
       <SaveText className="prep-note" aria-label={`${i.name}: note (optional)`} placeholder="Note (optional)" maxLength={200} value={i.note ?? ''} onSave={(v) => edit(i.id, { note: v || null })} />
     </div>
   );
@@ -73,7 +68,7 @@ export function MorningPrepPicker({ tasks, handover, hints, onSave }: {
   return (
     <section className={`prep ${status ? '' : 'unanswered'}`} aria-labelledby="prep-h" id="morning-prep">
       <h3 id="prep-h"><Icon name="clock" />Morning prep needed</h3>
-      <p className="prep-hint">Tick everything the morning team needs to prep. Amounts and notes are optional. Choosing tasks only updates this handover, not the restock.</p>
+      <p className="prep-hint">Tick everything the morning team needs to prep. Add a note if needed. Choosing tasks only updates this handover, not the restock.</p>
       <button type="button" className={`prep-none ${status === 'none' ? 'on' : ''}`} aria-pressed={status === 'none'}
         onClick={() => onSaveNow(status === 'none' ? null : 'none', [])}>
         <Icon name={status === 'none' ? 'check' : 'circle'} />No morning prep needed</button>
@@ -81,13 +76,12 @@ export function MorningPrepPicker({ tasks, handover, hints, onSave }: {
         <fieldset key={g} className="prep-group">
           <legend>{label}</legend>
           {ts.map((t) => {
-            const it = byTask.get(t.id), h = hints.get(t.id) ?? [];
-            const need = prepNeedText(h), ctxText = contextText(h);
+            const it = byTask.get(t.id);
             return (
               <div key={t.id} className={`prep-row ${it ? 'on' : ''}`} data-task={t.name}>
                 <label className="prep-pick">
                   <input type="checkbox" checked={!!it} onChange={() => toggle(t)} />
-                  <span><b>{t.name}</b>{need ? <small className="prep-need">Entered to prepare: {need}</small> : null}{ctxText ? <small>{ctxText}</small> : null}</span>
+                  <span><b>{t.name}</b></span>
                   {it ? <em className="prep-tag">Needs prep</em> : null}
                 </label>
                 {it ? extra(it) : null}
@@ -137,7 +131,7 @@ function GroupedList({ items, render }: { items: PrepItem[]; render?: (i: PrepIt
     <>{groups.map((g) => (
       <div key={g} className="prep-sum-g"><h5>{prepGroupLabel(g)}</h5>
         <ul>{list.filter((i) => i.group === g).map((i) => (
-          <li key={i.id} data-prep={i.name}>{render ? render(i) : <span><b>{i.name}</b>{i.qty ? <> &middot; {i.qty}</> : null}{i.note ? <small>{i.note}</small> : null}</span>}</li>
+          <li key={i.id} data-prep={i.name}>{render ? render(i) : <span><b>{i.name}</b>{i.note ? <small>{i.note}</small> : null}</span>}</li>
         ))}</ul>
       </div>
     ))}</>
@@ -156,7 +150,7 @@ export function MorningPrepCard({ handover, dateLabel, onDone }: { handover: Loc
       <p className="pc-sub">From the {dateLabel} close{handover.updatedBy ? ` · ${handover.updatedBy}` : ''}</p>
       <GroupedList items={handover.items} render={(i) => (
         <div className={`pc-row ${i.doneAt ? 'done' : ''}`}>
-          <span className="pc-t"><b>{i.name}</b>{i.qty ? <span className="pc-q">{i.qty}</span> : null}{i.note ? <small>{i.note}</small> : null}
+          <span className="pc-t"><b>{i.name}</b>{i.note ? <small>{i.note}</small> : null}
             {i.doneAt ? <small className="pc-by">Done{i.doneBy ? ` · ${i.doneBy}` : ''} {timeOf(i.doneAt)}</small> : null}</span>
           {i.doneAt
             ? <button type="button" className="btn small pc-undo" onClick={() => onDone(i.id, false)} aria-label={`Undo done: ${i.name}`}>Undo</button>

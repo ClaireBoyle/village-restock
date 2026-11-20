@@ -59,9 +59,9 @@ describe('the handover', () => {
     const list = [mk('Make tartare', 'sauces'), mk('Wipe the slicer', 'other'), mk('Cut radish for Harvest Hommus', 'vegetables'), mk('Portion defrosted pulled beef', 'proteins'), mk('Cut carrots for Harvest Hommus', 'vegetables')];
     expect(sortedItems(list).map((i) => i.name)).toEqual(['Cut radish for Harvest Hommus', 'Cut carrots for Harvest Hommus', 'Portion defrosted pulled beef', 'Make tartare', 'Wipe the slicer']);
   });
-  it('one line per task with its amount and note; "No morning prep needed" when none', () => {
+  it('one line per task with its note, never an amount; "No morning prep needed" when none', () => {
     expect(prepLines({ status: 'needed', items: [mk('Make tartare', 'sauces', { qty: '2 tubs', note: 'Use the new recipe' }), mk('Make burger sauce', 'sauces', { doneAt: 'x' })] }))
-      .toEqual(['Make tartare · 2 tubs · Use the new recipe', 'Make burger sauce (done)']);
+      .toEqual(['Make tartare · Use the new recipe', 'Make burger sauce (done)']);
     expect(prepLines({ status: 'none', items: [] })).toEqual(['No morning prep needed']);
     expect(prepLines(null)).toEqual([]);
   });

@@ -37,9 +37,9 @@ export function sortedItems(items: PrepItem[]): PrepItem[] {
   return items.map((it, i) => ({ it, i })).sort((a, b) => rank(a.it.group) - rank(b.it.group) || a.i - b.i).map((x) => x.it);
 }
 
-/** One line per task, for the summary and the manager email ("Cut carrots for Harvest Hommus · 2 tubs · note"). */
+/** One line per task, for the summary and the manager email ("Cut carrots for Harvest Hommus · note"). No amounts. */
 export function prepLines(h: Pick<PrepHandover, 'status' | 'items'> | null): string[] {
   if (!h) return [];
   if (h.status === 'none') return ['No morning prep needed'];
-  return sortedItems(h.items).map((it) => [it.name, it.qty, it.note].filter(Boolean).join(' · ') + (it.doneAt ? ' (done)' : ''));
+  return sortedItems(h.items).map((it) => [it.name, it.note].filter(Boolean).join(' · ') + (it.doneAt ? ' (done)' : ''));
 }

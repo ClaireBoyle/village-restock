@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
   EXCEPTION_REASONS, EMPTY_ITEM, SHORT_REASONS, activePlacements, areaStatus, collectPlacements, collectionLines, exceptions, isChecked, isRequired,
-  lineGot, lineInfo, lineState, pendingRefills, prepFromStock, stockOutcomes, type StockOutcome,
+  lineGot, lineInfo, lineState, pendingRefills, stockOutcomes, type StockOutcome,
 } from '@/lib/restock-logic';
 import { useLive } from '@/lib/client/hooks';
 import { localDb } from '@/lib/client/local-db';
@@ -64,7 +64,6 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
   const prepOn = ctx.prepTasks.length > 0 && session.kind === 'full';
   const handover = useLive(async () => (prepOn ? localDb().prep.get(session.id) : undefined), [session.id, prepOn], undefined);
   const prepMissing = prepOn && !handover && !finished;
-  const prepHints = prepOn ? prepFromStock(session.kind, placements, recorded, items) : new Map();
   const goPrep = () => document.getElementById('morning-prep')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   const ex = finished ? [] : exceptions({ kind: session.kind, view, placements, recordedAreas: recorded, items });
   // Area restocks (e.g. Candy Bar's confection stand) are named after their area.
@@ -177,7 +176,7 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
             {/* Kitchen: drawers still waiting for their refill (not a shortage). */}
             <PendingRefills list={pendingRefills(session.kind, placements, recorded, items)}
               onRefilled={(p) => void setItems(session.id, [{ placementId: p.placementId, fields: { refillStatus: 'refilled' } }], who)} />
-            {prepOn ? <MorningPrepPicker tasks={ctx.prepTasks} handover={handover} hints={prepHints}
+            {prepOn ? <MorningPrepPicker tasks={ctx.prepTasks} handover={handover}
               onSave={(st, list) => void setPrep(session, st, list, who)} /> : null}
 
             {/* Always shown (also when there are no shortages): who is signing this restock off. */}

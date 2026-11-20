@@ -69,24 +69,11 @@ export async function importRemotePrep(departmentId: string, since: string) {
 }
 
 /**
- * A prep-made row on the stock check (e.g. vodka sauce "2 tubs for morning prep"): its task is added
- * to the handover with that amount. Changing or clearing the amount follows along, unless staff
- * have since changed the task's amount themselves (then theirs stays).
+ * A prep-made row on the stock check (e.g. vodka sauce "2 tubs for morning prep"): its task is selected
+ * on the handover (no amount). Clearing the row takes the task off again, unless staff added a note.
  */
-export async function applyStockPrep(session: { id: string; departmentId: string; tradingDate: string }, task: PrepTask, now: string | null, was: string | null, who: string) {
-  const cur = await localDb().prep.get(session.id);
-  let items = cur?.status === 'needed' ? cur.items : [];
-  const it = items.find((i) => i.taskId === task.id);
-  if (now) {
-    if (it) {
-      if (it.qty && it.qty !== was) return; // staff wrote their own amount
-      items = items.map((i) => (i === it ? { ...i, qty: now } : i));
-    } else items = [...items, { id: crypto.randomUUID(), taskId: task.id, group: task.group, name: task.name, qty: now, note: null, doneAt: null, doneBy: null }];
-    await setPrep(session, 'needed', items, who);
-  } else if (it && it.qty === was && !it.note) {
-    items = items.filter((i) => i !== it);
-    await setPrep(session, items.length ? 'needed' : null, items, who);
-  }
+export async function applyStockPrep(session: { id: string; departmentId: string; tradingDate: string }, task: PrepTask, needed: boolean, who: string) {
+  await tickPrep(session, task, needed, who);
 }
 
 /**
@@ -101,7 +88,7 @@ export async function tickPrep(session: { id: string; departmentId: string; trad
     if (it) return;
     items = [...items, { id: crypto.randomUUID(), taskId: task.id, group: task.group, name: task.name, qty: null, note: null, doneAt: null, doneBy: null }];
     await setPrep(session, 'needed', items, who);
-  } else if (it && !it.qty && !it.note) {
+  } else if (it && !it.note) {
     items = items.filter((i) => i !== it);
     await setPrep(session, items.length ? 'needed' : null, items, who);
   }

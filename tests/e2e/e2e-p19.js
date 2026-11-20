@@ -86,13 +86,11 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   ok(await sees(P, '.prep-group:has(legend:text-is("Proteins"))', 'Portion lamb') && await sees(P, '.prep-group:has(legend:text-is("Proteins"))', "Portion Fisherman's Baskets")
     && await sees(P, '.prep-group:has(legend:text-is("Vegetables"))', 'Portion cauliflower popcorn'), 'portion tasks: lamb and Fisherman\'s Baskets (proteins), cauliflower popcorn (vegetables)');
   // Entered to prepare: already ticked, with the amount. Cleared again: not there.
-  ok(await P.isChecked(`${task('Make vodka sauce')} input[type=checkbox]`) && await P.inputValue(`${task('Make vodka sauce')} .prep-qty`) === '3 tubs', 'vodka sauce: ticked with "3 tubs" (followed the change from 2 to 3)');
-  ok(await P.isChecked(`${task('Cut carrots for Harvest Hommus')} input[type=checkbox]`) && await P.inputValue(`${task('Cut carrots for Harvest Hommus')} .prep-qty`) === '2 tubs', 'cut carrots: ticked with "2 tubs"');
+  ok(await P.isChecked(`${task('Make vodka sauce')} input[type=checkbox]`) && await P.isChecked(`${task('Cut carrots for Harvest Hommus')} input[type=checkbox]`), 'vodka sauce and cut carrots: ticked from the stock check');
+  ok(await P.locator('.prep-qty').count() === 0 && !(await P.textContent('#morning-prep')).includes('tubs'), 'no amount fields, no amounts filled in');
   ok(!(await P.isChecked(`${task('Cut radish for Harvest Hommus')} input[type=checkbox]`)), 'cut radish: entered then cleared, so not ticked');
-  // Context only: shown beside the task, never filled in.
-  ok(await sees(P, task('Portion defrosted pulled beef'), '2 bags pulled for defrost'), 'pulled beef: "2 bags pulled for defrost" shown as context');
   await P.check(`${task('Portion defrosted pulled beef')} input[type=checkbox]`);
-  ok(await P.inputValue(`${task('Portion defrosted pulled beef')} .prep-qty`) === '', 'ticking it leaves the amount blank (nothing entered to prepare)');
+  ok(await P.locator(`${task('Portion defrosted pulled beef')} .prep-note`).count() === 1, 'ticked: just an optional note');
   await P.fill(`${task('Make vodka sauce')} .prep-note`, 'Double the chilli'); await P.keyboard.press('Enter');
   await P.fill('#prep-other', 'Clean the slicer'); await P.click('.prep-add button');
   ok(await sees(P, '.prep-sum', 'Cut carrots for Harvest Hommus') && await sees(P, '.prep-sum', 'Double the chilli') && await sees(P, '.prep-sum-g h5', 'Other'), 'handover summary, grouped, with amounts and notes');
@@ -112,6 +110,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   const its = await waitDb(() => sql`select name, qty, note, task_id, done_at from prep_handover_items order by sort_order`, (r) => r.length === 4);
   ok(h?.status === 'needed' && h.restock === 'finished' && its.length === 4, `saved: 4 tasks, restock finished (${its.map((i) => i.name).join(', ')})`);
   ok(its.find((i) => i.name === 'Make vodka sauce')?.note === 'Double the chilli' && its.find((i) => i.name === 'Clean the slicer')?.taskId === null, 'note kept; typed task saved');
+  ok(its.every((i) => i.qty === null), 'no amounts saved');
 
   // 4. The morning team, on another device: the Kitchen screen, each task marked Done.
   const M = await (await b.newContext({ ...devices['iPad (gen 7)'] })).newPage(); M.on('pageerror', (e) => errs.push(e.message));

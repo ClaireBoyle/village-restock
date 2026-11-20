@@ -1238,7 +1238,6 @@ button.pnote.open span{display:block}
 .theme-navy .prep-tag{color:#f2b451}
 .prep-extra{display:flex;gap:8px;padding:0 0 10px 34px;flex-wrap:wrap}
 .prep-extra input,.prep-add input{height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:0 10px;font-size:15px}
-.prep-qty{flex:0 1 150px;min-width:110px}
 .prep-note{flex:1 1 200px}
 .prep-add{display:flex;gap:8px}
 .prep-add input{flex:1;min-width:0;height:46px}
@@ -1271,7 +1270,6 @@ button.pnote.open span{display:block}
 .pc-row.done .pc-t b{text-decoration:line-through;color:var(--ink-2)}
 .pc-t{display:flex;flex-direction:column;min-width:0}
 .pc-t b{font-weight:600}
-.pc-q{font-size:13.5px;color:var(--ink)}
 .pc-t small{font-size:12.5px;color:var(--ink-2)}
 .pc-by{color:var(--ok) !important}
 .pc-done,.pc-undo{flex:none;min-height:40px}

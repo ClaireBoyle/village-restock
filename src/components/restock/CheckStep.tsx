@@ -144,12 +144,12 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
     await setItems(session.id, [{ placementId: p.placementId, fields }], who, resolve);
     const afterMap = await fresh();
     const after = allChecked(afterMap);
-    // Made or portioned in morning prep (e.g. vodka sauce): the amount entered adds its prep task to the handover.
+    // Made or portioned in morning prep (e.g. vodka sauce): entering an amount selects its prep task on the handover.
     const task = p.prepTaskId && !p.defrost && session.kind === 'full' ? ctx.prepTasks.find((t) => t.id === p.prepTaskId) : undefined;
     if (task) {
-      const was = prepNeedText(prepFromStock(session.kind, ctx.placements, recorded, beforeMap).get(task.id));
-      const now = prepNeedText(prepFromStock(session.kind, ctx.placements, recorded, afterMap).get(task.id));
-      if (was !== now) await applyStockPrep(session, task, now, was, who);
+      const was = prepNeedText(prepFromStock(session.kind, ctx.placements, recorded, beforeMap).get(task.id)) !== null;
+      const now = prepNeedText(prepFromStock(session.kind, ctx.placements, recorded, afterMap).get(task.id)) !== null;
+      if (was !== now) await applyStockPrep(session, task, now, who);
     }
     const rec = await localDb().areas.get([session.id, cur.area.id]);
     const closed = rec?.status === 'complete' || rec?.status === 'skipped';
