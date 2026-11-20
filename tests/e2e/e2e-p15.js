@@ -27,9 +27,11 @@ const waitCur = async (P, name) => { await P.waitForSelector(`.area-btn.cur:has-
   await sql.file('db/updates/2026-11-gold-class-bar-foh-lap.sql');
   await sql.file('db/updates/2026-11-gold-class-bar-coffee-cupboard.sql');
   await sql.file('db/updates/2026-11-gold-class-bar-coffee-cupboard.sql');
-  await sql.file('db/updates/2026-11-gold-class-bar-bench-fridge-stop.sql');
-  await sql.file('db/updates/2026-11-gold-class-bar-refill-foh.sql'); // re-running an earlier script keeps the fridge in the bench stop
-  await sql.file('db/updates/2026-11-gold-class-bar-bench-fridge-stop.sql');
+  await sql.file('db/updates/2026-11-gold-class-bar-bench-fridge-stop.sql'); // superseded: changes nothing
+  await sql.file('db/updates/2026-11-gold-class-bar-beer-fridge-area.sql');
+  await sql.file('db/updates/2026-11-gold-class-bar-refill-foh.sql'); // re-running earlier scripts keeps the fridge where it is
+  await sql.file('db/updates/2026-11-gold-class-bar-foh-lap.sql');
+  await sql.file('db/updates/2026-11-gold-class-bar-beer-fridge-area.sql');
   const b = await chromium.launch(); const errs = [];
   const c = await b.newContext({ ...devices['iPhone 13'] }); const P = await c.newPage(); P.on('pageerror', (e) => errs.push(e.message));
   await P.goto(B + '/'); await P.waitForSelector('.dcard2');
@@ -37,7 +39,7 @@ const waitCur = async (P, name) => { await P.waitForSelector(`.area-btn.cur:has-
   await P.click('.dcard2:has-text("Bar") >> nth=0'); await P.click('.type-full button.btn.primary'); await P.waitForSelector('article.prow');
 
   const foh = await rail(P);
-  ok(JSON.stringify(foh) === JSON.stringify(['FOH freezer', 'Confection', 'Popcorn boxes', 'Back bench', 'Back shelves', 'Milkshake station', 'Cups, Lids & Straws storage', 'Coffee cupboard']),
+  ok(JSON.stringify(foh) === JSON.stringify(['FOH freezer', 'Confection', 'Popcorn boxes', 'Back bench', 'Back shelves', 'Milkshake station', 'Cups, Lids & Straws storage', 'Coffee cupboard', 'FOH beer fridge']),
     'Check FOH follows the lap of the bar: ' + foh.join(' › '));
   // One primary next action: in the bottom bar only, and Done works with nothing entered.
   ok(await primary(P).count() === 1 && await P.locator('main .btn.primary').count() === 0, 'one primary action (bottom bar), none repeated in the area');
@@ -64,9 +66,7 @@ const waitCur = async (P, name) => { await P.waitForSelector(`.area-btn.cur:has-
     'left to right from the sink, as on the bench: ' + items.slice(0, 6).join(', ') + ' …');
   ok(items.indexOf('Alexander Hill Shiraz') + 5 === items.indexOf('Mt Yengo Chilled Shiraz') && items.indexOf('42 Below') < items.indexOf('Bombay Sapphire'), 'red wines and spirits left to right too');
   const secs = await P.$$eval('.area .psec .psec-t b', (e) => e.map((x) => x.textContent));
-  ok(JSON.stringify(secs) === JSON.stringify(['FOH beer fridge']) && await P.locator('.psec:has-text("FOH beer fridge") article.prow').count() === 23,
-    'the FOH bar fridge is part of the bench stop, straight after the spirits and red wine');
-  ok(await P.locator('.psec:has-text("FOH beer fridge") article.prow:has(h3:text-is("Heineken")) .pnote').count() === 0, 'fridge rows: no "Already … for" notes');
+  ok(secs.length === 0, 'the FOH beer fridge is no longer part of the bench stop');
   ok(items[items.length - 1] === 'Mt Yengo Chilled Shiraz' && !items.includes('Cadbury Flake container') && !items.includes('Vanilla Syrup') && !items.includes('Sugar container'),
     'the bench ends with the red wine; milkshake syrups, Flake and sugar are at their own stops');
   ok(!items.includes('Grey Goose') && !items.includes('Patron Silver'), 'glass-shelf bottles stay on Back shelves');
@@ -131,6 +131,9 @@ const waitCur = async (P, name) => { await P.waitForSelector(`.area-btn.cur:has-
   ok(await sees(P, `${row('Sugar container')} .ps`, 'To grab upstairs'), '...then "To grab upstairs"');
   await P.click(`${row('Coffee Beans')} button.padd`);
   ok(await sees(P, `${row('Coffee Beans')} .ps`, '1 bag'), 'stock keeps + Add and quantity controls');
+  ok(await primaryText(P) === 'Done → FOH beer fridge', 'then the FOH beer fridge, the last stop before upstairs: "Done → FOH beer fridge"');
+  await primary(P).click(); await waitCur(P, 'FOH beer fridge');
+  ok(await P.locator('.area > .prows article.prow').count() === 23 && await P.locator('article.prow:has(h3:text-is("Heineken")) .pnote').count() === 0, 'FOH beer fridge: its own stop, 23 products, no "Already … for" notes');
   ok(await primaryText(P) === 'Done → Popcorn boxes', 'an area still open earlier in the lap comes next: "Done → Popcorn boxes"');
   await primary(P).click(); await waitCur(P, 'Popcorn boxes');
   ok(await primaryText(P) === 'Done → Upstairs', 'last open area: "Done → Upstairs"');

@@ -7,10 +7,10 @@
 --   3 Popcorn boxes
 --   4 Back bench                from the sink: liqueurs & vermouth, cocktail syrups & mixers, spirits & red wine
 --   5 Back shelves              the glass shelves above the bench
---   6 FOH beer fridge           aisle-facing
---   7 Milkshake station         NEW: the milkshake syrups and the Flake container, moved from the Back bench
---   8 Cups, Lids & Straws       cups & lids, then the straw drawer
---   9 Coffee cupboard           Coffee supplies (beans, hot chocolate, cordial), then Coffee machine (sugar container)
+--   6 Milkshake station         NEW: the milkshake syrups and the Flake container, moved from the Back bench
+--   7 Cups, Lids & Straws       cups & lids, then the straw drawer
+--   8 Coffee cupboard           Coffee supplies (beans, hot chocolate, cordial), then Coffee machine (sugar container)
+--   9 FOH beer fridge           last, straight before the BOH bar fridge its beers are grabbed from
 -- Then Check BOH: BOH bar fridge, Walk in fridge, Upstairs cupboards.
 --
 -- * Products are moved, not copied: same records, units, photos and pickups (the Flake container is
@@ -21,8 +21,8 @@ declare
   dept uuid := (select id from departments where lower(name) = 'gold class bar');
   bench uuid; shake uuid; coffee uuid; a uuid; r record; k int := 0; i int; s int;
   -- the lap: area name pattern (like), in order
-  lap text[] := array['foh freezer', 'confection%', 'popcorn%', 'back bench', 'back shelves', 'foh beer fridge', 'milkshake station',
-                      'cups%lids%', 'coffee cupboard', 'boh bar fridge', 'walk in fridge%', 'upstairs cupboards'];
+  lap text[] := array['foh freezer', 'confection%', 'popcorn%', 'back bench', 'back shelves', 'milkshake station',
+                      'cups%lids%', 'coffee cupboard', 'foh beer fridge', 'boh bar fridge', 'walk in fridge%', 'upstairs cupboards'];
   shakes text[] := array['vanilla syrup', 'caramel syrup', 'mint syrup', 'strawberry syrup', 'chocolate syrup', 'banana syrup',
                          'cherry syrup', 'orange syrup', 'cadbury flake container'];
   done uuid[] := '{}';
