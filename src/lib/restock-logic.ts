@@ -81,6 +81,11 @@ export interface PlacementView {
   refillSource?: string | null;
   /** Shows and edits another row's requirement (e.g. "Already planned in Defrost"): never a requirement of its own. */
   linkedPlacementId?: string | null;
+  /** Where the product comes from when the usual spot is empty (its storeroom), if not the same as this row's. */
+  fallbackLocationId?: string | null;
+  fallbackLocationName?: string | null;
+  /** (On the collection list only) a defrost pull: only what upstairs didn't have is collected. */
+  pullRemainder?: boolean;
 }
 
 /** What staff have recorded for one placement during a restock. Blank = not yet. */
@@ -96,13 +101,15 @@ export interface ItemState {
   noneOnDisplay?: boolean;
   /** Kitchen refill task: refilled · full (already full) · needs_stock (still to do). */
   refillStatus?: 'refilled' | 'full' | 'needs_stock' | null;
+  /** Defrost: pulled from the upstairs freezer (null = not yet). Less than needed: the rest comes from downstairs. */
+  upstairsQty?: number | null;
   /** Set when two people entered different counts; cleared when someone chooses. */
   conflict?: Conflict | null;
 }
 
 export const EMPTY_ITEM: ItemState = {
   currentQty: null, requestedQty: null, routineChoice: null,
-  collectedMode: null, collectedQty: null, shortfallReason: null, flagged: false, noneOnDisplay: false, refillStatus: null, conflict: null,
+  collectedMode: null, collectedQty: null, shortfallReason: null, flagged: false, noneOnDisplay: false, refillStatus: null, upstairsQty: null, conflict: null,
 };
 
 /** A section shown inside an area's screen (e.g. "Spirits cupboard" inside Back bench). */
@@ -174,6 +181,8 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
         heading: pl.heading?.trim() || null,
         screenAreaId, optional,
         refillSource: pl.refillSource?.trim() || null,
+        fallbackLocationId: p.defaultLocationId && p.defaultLocationId !== locId ? p.defaultLocationId : null,
+        fallbackLocationName: p.defaultLocationId && p.defaultLocationId !== locId ? locations.get(p.defaultLocationId)?.name ?? null : null,
         linkedPlacementId: pl.linkedPlacementId && pl.linkedPlacementId !== pl.id ? pl.linkedPlacementId : null,
         prepTaskId: pl.prepTaskId && prepNames.has(pl.prepTaskId) ? pl.prepTaskId : null,
         prepTaskName: pl.prepTaskId ? prepNames.get(pl.prepTaskId) ?? null : null,
@@ -347,6 +356,20 @@ export function collectionLines(placements: PlacementView[], items: Map<string, 
       });
       continue;
     }
+    if (p.pullRemainder) {
+      // Defrost pull: only what upstairs didn't have, from the downstairs storeroom.
+      const ps = pullState(p, i);
+      if (ps.state !== 'short') continue;
+      const locId = p.fallbackLocationId ?? p.locationId;
+      const key = `rest:${p.placementId}`;
+      map.set(key, {
+        key, kind: 'qty', productName: p.productName, unitSingular: p.unitSingular, unitPlural: p.unitPlural,
+        locationId: locId, locationName: p.fallbackLocationName ?? p.locationName ?? 'No storeroom set', total: ps.rest, instructions: '',
+        photoPath: p.photoPath ?? null, photoCredit: p.photoCredit ?? null, grabNote: p.fallbackNote ?? null, fallbackNote: null, putNote: p.putNote ?? null,
+        parts: [{ placementId: p.placementId, areaName: p.areaName, need: ps.rest }],
+      });
+      continue;
+    }
     const need = needOf(p, i);
     if (!need) continue;
     // Same product, same storeroom, same unit (packs for the fridge never merge with single bottles).
@@ -476,7 +499,7 @@ export function exceptions(args: {
   if (clashes.length) out.push({ kind: 'unchecked', status: 'not_started', text: `${clashes.length} product${clashes.length === 1 ? ' needs' : 's need'} a decision`, detail: `Two different counts: ${clashes.map((p) => p.productName).join(', ')}`, areaId: clashes[0].areaId });
   // Outstanding = nobody has recorded what happened yet. A confirmed result (all, fewer with
   // "not enough in storeroom", or a reason such as "couldn't access stock") is resolved.
-  const outstanding = collectionLines(covered.filter((p) => !isPickup(kind, p) && !isPrepMade(p)), items).filter((l) => {
+  const outstanding = collectionLines(collectPlacements(kind, placements, recordedAreas), items).filter((l) => {
     const st = lineState(l, items);
     return st === 'todo' || st === 'part';
   });
@@ -512,9 +535,38 @@ export function pendingRefills(kind: SessionKind, placements: PlacementView[], r
 /** Made or portioned in morning prep (e.g. cut carrot, vodka sauce): shown for the morning team, never collected. */
 export const isPrepMade = (p: PlacementView) => !!p.prepTaskId;
 
-/** What the downstairs collection list covers: skipped areas, upstairs pickups and prep-made stock left out. */
-export function collectPlacements(kind: SessionKind, placements: PlacementView[], recordedAreas: Map<string, AreaStatus>) {
-  return activePlacements(kind, placements, recordedAreas).filter((p) => !isPickup(kind, p) && !isPrepMade(p));
+/**
+ * What the downstairs collection list covers: skipped areas, upstairs pickups and prep-made stock left out.
+ * A defrost pull stays in, marked: only what upstairs didn't have ("Not enough upstairs") is collected.
+ */
+export function collectPlacements(kind: SessionKind, placements: PlacementView[], recordedAreas: Map<string, AreaStatus>): PlacementView[] {
+  return activePlacements(kind, placements, recordedAreas).flatMap((p) => (isPickup(kind, p) ? (p.defrost ? [{ ...p, pullRemainder: true }] : []) : isPrepMade(p) ? [] : [p]));
+}
+
+/** Defrost pull state: todo (not pulled yet) · pulled (all of it) · short (not enough upstairs: the rest is on the collection list). */
+export function pullState(p: PlacementView, i: ItemState): { need: number; pulled: number | null; rest: number; state: 'todo' | 'pulled' | 'short' } {
+  const need = needOf(p, i) ?? 0;
+  const pulled = i.upstairsQty ?? null;
+  if (pulled === null) return { need, pulled, rest: need, state: 'todo' };
+  const rest = Math.max(0, round2(need - pulled));
+  return { need, pulled, rest, state: rest > 0 ? 'short' : 'pulled' };
+}
+
+/** "Walk in freezer(Downstairs)" → "Downstairs walk-in freezer"; other names unchanged. */
+export function storeLabel(name: string | null | undefined): string {
+  if (!name) return 'No storeroom set';
+  const m = name.match(/^(.*?)\s*\(\s*(.+?)\s*\)$/);
+  const s = m ? `${m[2]} ${m[1].charAt(0).toLowerCase()}${m[1].slice(1)}` : name;
+  return s.replace(/\bwalk in\b/i, 'walk-in');
+}
+
+/** Where a defrost item is grabbed: its freezer spot ("Freezer 1 · Lower left") or its storeroom. */
+export function defrostSource(p: PlacementView): string {
+  if (p.pickupAreaName) {
+    const [freezer, spot] = p.pickupAreaName.split(' · ');
+    return spot && !/^(Check|Refill) /.test(spot) ? `${freezer} · ${spot}` : freezer;
+  }
+  return storeLabel(p.locationName);
 }
 
 /**
@@ -590,7 +642,9 @@ export function suggestions(kind: SessionKind, view: DepartmentView, items: Map<
     const ds = out.get(p.placementId);
     const i = raw.requestedQty === null && ds?.defrost ? { ...raw, requestedQty: ds.qty } : raw;
     const want = needOf(p, i) ?? 0;
-    const need = i.collectedMode === 'all' ? want : i.collectedMode === 'partial' ? Math.min(want, i.collectedQty ?? 0) : 0;
+    // Defrost: what was actually pulled from upstairs. Elsewhere (Bar): what was collected upstairs.
+    const need = p.defrost ? Math.min(want, i.upstairsQty ?? 0)
+      : i.collectedMode === 'all' ? want : i.collectedMode === 'partial' ? Math.min(want, i.collectedQty ?? 0) : 0;
     if (need <= 0) continue;
     // The same product in the pickup spot, counted in the same unit and entered by staff.
     const t = view.placements.find((x) => x.areaId === p.pickupAreaId && x.productId === p.productId && x.method === 'manual' && x.unitPlural === p.unitPlural);

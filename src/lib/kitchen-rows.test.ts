@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Catalogue } from './catalogue-types';
-import { collectPlacements, collectionLines, departmentView, exceptions, isChecked, pendingRefills, summaryText, EMPTY_ITEM, type ItemState } from './restock-logic';
+import { collectPlacements, collectionLines, defrostSource, departmentView, exceptions, isChecked, pendingRefills, stockOutcomes, storeLabel, summaryText, withSuggestions, EMPTY_ITEM, type ItemState } from './restock-logic';
 
 // Freezer 2's arancini drawer (a refill) and its spare stock; a dessert on Defrost and on the walk-in's shelf.
 const cat: Catalogue = {
@@ -59,5 +59,39 @@ describe('a row linked to Defrost', () => {
   it('a link to a row that isn\'t there is ignored', () => {
     const v = departmentView({ ...cat, placements: cat.placements.filter((p) => p.id !== 'b-def') }, 'k')!;
     expect(v.byId.get('b-walk')!.linkedPlacementId).toBeNull();
+  });
+});
+
+describe('defrost pulls', () => {
+  const dcat: Catalogue = {
+    ...cat,
+    areas: [...cat.areas, { id: 'f1', departmentId: 'k', name: 'Freezer 1', guideText: '', guidePhotoPath: null, sortOrder: 0 },
+      { id: 'f1ll', departmentId: 'k', name: 'Freezer 1 · Lower left', guideText: '', guidePhotoPath: null, sortOrder: 1, parentAreaId: 'f1' }],
+    locations: [...cat.locations, { id: 'f1s', name: 'Freezer 1', sortOrder: 2 }],
+    products: [...cat.products, { id: 'base', departmentId: 'k', categoryId: null, name: '9" Pizza Bases', unitSingular: 'base', unitPlural: 'bases', method: 'manual', allowDecimal: false, instructions: '', defaultLocationId: 'down', sortOrder: 3, affects: [], photoPath: null }],
+    placements: [...cat.placements,
+      { id: 'pz-def', productId: 'base', checkAreaId: 'def', parLevel: null, locationId: 'f1s', instructions: null, sortOrder: 2, putNote: 'Upstairs walk-in fridge', pickupAreaId: 'f1ll', pickupSuggest: true },
+      { id: 'pz-f1', productId: 'base', checkAreaId: 'f1ll', parLevel: null, locationId: null, instructions: null, sortOrder: 1 }],
+  };
+  const v = departmentView(dcat, 'k')!;
+  // As the app counts them: with suggestions (what was pulled is suggested for the freezer's top-up).
+  const lines = (m: Map<string, ItemState>) => collectionLines(collectPlacements('full', v.placements, none), withSuggestions('full', v, m, none)).map((l) => `${l.productName} ${l.total} ${l.locationName}`);
+  it('setting an amount is planning: nothing is collected until it\'s pulled (or upstairs runs short)', () => {
+    expect(lines(items({ 'pz-def': { requestedQty: 5 } }))).toEqual([]);
+    expect(lines(items({ 'pz-def': { requestedQty: 5, upstairsQty: 5 } }))).toEqual(['9" Pizza Bases 5 Walk in freezer(Downstairs)']); // the freezer top-up, suggested from what was pulled
+  });
+  it('not enough upstairs: the rest is collected from downstairs, and only what was pulled is replaced', () => {
+    const m = items({ 'pz-def': { requestedQty: 5, upstairsQty: 2 } });
+    expect(lines(m).sort()).toEqual(['9" Pizza Bases 2 Walk in freezer(Downstairs)', '9" Pizza Bases 3 Walk in freezer(Downstairs)']);
+  });
+  it('an empty upstairs compartment is not a shortage; only collecting less downstairs is', () => {
+    const empty = items({ 'pz-def': { requestedQty: 5, upstairsQty: 0 } });
+    expect(stockOutcomes(collectionLines(collectPlacements('full', v.placements, none), empty), empty, v.byId).filter((o) => o.status !== 'not_topped_up')).toEqual([]);
+    const short = items({ 'pz-def': { requestedQty: 5, upstairsQty: 0, collectedMode: 'partial', collectedQty: 1, shortfallReason: 'insufficient' } });
+    expect(stockOutcomes(collectionLines(collectPlacements('full', v.placements, none), short), short, v.byId).map((o) => `${o.status} ${o.short}`)).toEqual(['low 4']);
+  });
+  it('labels: freezer spot, or a tidy storeroom name', () => {
+    expect(defrostSource(v.byId.get('pz-def')!)).toBe('Freezer 1 · Lower left');
+    expect(storeLabel('Walk in freezer(Downstairs)')).toBe('Downstairs walk-in freezer');
   });
 });

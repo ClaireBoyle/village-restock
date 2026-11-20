@@ -19,6 +19,8 @@ export const itemFieldsSchema = z.object({
   noneOnDisplay: z.boolean().optional(),
   /** Kitchen refill task: refilled · full (already full) · needs_stock (still to do). Records the task only. */
   refillStatus: z.enum(['refilled', 'full', 'needs_stock']).nullable().optional(),
+  /** Defrost: pulled from the upstairs freezer (null = not yet). Less than needed: the rest comes from downstairs. */
+  upstairsQty: qty.optional(),
 }).strict();
 
 const base = { opId: z.uuid(), at: z.iso.datetime(), by: name };

@@ -4,11 +4,11 @@ import Link from 'next/link';
 import { Icon } from '@/components/Icon';
 import {
   EMPTY_ITEM, SKIP_REASONS, type ItemState, activePlacements, areaNotes, areaStatus, collectPlacements, collectionLines, isChecked, isRequired, needOf,
-  phaseAreas, refillLines, groupByStoreroom, lineState, usesAdmits, prepFromStock, prepNeedText, type CollectionLine,
+  phaseAreas, refillLines, groupByStoreroom, lineState, usesAdmits, prepFromStock, prepNeedText, pullState, type CollectionLine,
 } from '@/lib/restock-logic';
 import { applyStockPrep, tickPrep } from '@/lib/client/prep-store';
 import { defrostRowInfo } from '@/lib/defrost-rows';
-import { AdmitsBox, DefrostRow } from './DefrostParts';
+import { AdmitsBox, DefrostPullList, DefrostRow } from './DefrostParts';
 import { LinkedRow, PortionCheckRow, RefillRow } from './KitchenRows';
 import { useLive } from '@/lib/client/hooks';
 import { Line } from './CollectStep';
@@ -39,6 +39,8 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   const [skipOpen, setSkipOpen] = useState(false);
   const [zoom, setZoom] = useState(false);
   const [review, setReview] = useState(false);
+  // Defrost: the rows "Mark remaining items not needed" marked, so they can be undone.
+  const [bulk, setBulk] = useState<string[] | null>(null);
   const [openSecs, setOpenSecs] = useState<Record<string, boolean>>({});
   // Long subheading groups can be folded away (open by default; remembered on this device).
   const [shut, setShut] = useState<Record<string, boolean>>({});
@@ -81,26 +83,28 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   // What's on the lists so far: the downstairs run, plus (on Check the bar) what's to grab upstairs.
   const grabAll = phase !== 'all' ? refillLines(session.kind, ctx.placements, recorded, items) : [];
   const downstairs = collectionLines(collectPlacements(session.kind, ctx.placements, recorded), items);
-  // Defrost (Kitchen): what's pulled from each freezer, ticked off on the Defrost screen itself.
-  // Grouped by freezer (each line's Grab note says exactly where in it).
-  const freezerOf = (id: string | null) => {
-    const a = whole.areas.find((x) => x.area.id === id || x.sections.some((sct) => sct.area.id === id));
-    return a ? { id: a.area.id, name: a.area.name } : null;
-  };
-  const pullAll = !ctx.refill ? refillLines(session.kind, ctx.placements, recorded, items).map((l) => {
-    const f = freezerOf(l.locationId);
-    return f ? { ...l, locationId: f.id, locationName: f.name } : l;
-  }) : [];
-  const lines = [...(phase === 'foh' ? grabAll : []), ...pullAll, ...downstairs];
-  const onScreen = (l: CollectionLine) => l.parts.every((x) => view.byId.get(x.placementId)?.screenAreaId === cur.area.id);
-  const pulls = pullAll.filter(onScreen);
-  const pullGroups = groupByStoreroom(pulls, view.pickupOrder);
+  const lines = [...(phase === 'foh' ? grabAll : []), ...downstairs];
+  // Defrost (Kitchen): its own page. Amounts set here; Pulled once moved, on "Pull for defrost" below.
+  const defrostRows = cur.placements.filter((p) => p.defrost);
+  const isDefrost = defrostRows.length > 0 && !ctx.refill;
+  const pickupOf = (p: (typeof cur.placements)[number]) => session.kind === 'full' && !!p.pickupAreaId;
+  const dItem = (p: (typeof cur.placements)[number]) => items.get(p.placementId) ?? EMPTY_ITEM;
+  const reviewed = defrostRows.filter((p) => dItem(p).requestedQty !== null).length;
+  const toPull = defrostRows.filter((p) => (needOf(p, dItem(p)) ?? 0) > 0 && (pickupOf(p) ? pullState(p, dItem(p)).state === 'todo' : !dItem(p).collectedMode)).length;
+  const untouched = defrostRows.filter((p) => dItem(p).requestedQty === null && !dItem(p).conflict);
   // Upstairs, at this location: what to grab for the bar (from this spot or its cupboards).
   const spotIds = new Set([cur.area.id, ...cur.sections.map((x) => x.area.id)]);
   const grab = phase === 'boh' ? grabAll.filter((l) => l.locationId && spotIds.has(l.locationId)) : [];
   const grabGroups = groupByStoreroom(grab, view.pickupOrder);
   const lineStateOf = (l: CollectionLine) => lineState(l, items);
   const writeItems = (ups: { placementId: string; fields: Partial<ItemState> }[]) => void setItems(session.id, ups, who);
+  // "Mark remaining items not needed" (untouched rows only), with an undo for the ones still at 0.
+  const markRest = () => { const ids = untouched.map((p) => p.placementId); setBulk(ids); writeItems(ids.map((id) => ({ placementId: id, fields: { requestedQty: 0 } }))); };
+  const undoRest = () => {
+    if (!bulk) return;
+    writeItems(bulk.filter((id) => ctx.rawItems.get(id)?.requestedQty === 0).map((id) => ({ placementId: id, fields: { requestedQty: null } })));
+    setBulk(null);
+  };
   // After the bar: upstairs. After upstairs: the downstairs list, or straight to sign-off when it's empty.
   const nextStep = phase === 'foh' ? 'boh' as const : !downstairs.length && phase === 'boh' ? 'finish' as const : 'collect' as const;
   // Refill FOH flow: one next action. "Done → <next area>" marks this area done (nothing entered is fine)
@@ -222,10 +226,10 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
     <LinkedRow key={p.placementId} p={p} target={linkedTo(p)!} item={items.get(p.linkedPlacementId!) ?? EMPTY_ITEM} photo={photoOf(p)}
       onChange={(fields) => void onItem(linkedTo(p)!, fields)} />
   ) : p.defrost && !items.get(p.placementId)?.conflict ? (
-    // Defrost rows: pull an amount or Not needed, with where it's from and where it goes.
+    // Defrost rows: set an amount or Not needed, with where it's from and where it goes (no photo placeholder).
     <DefrostRow key={p.placementId} p={p} item={items.get(p.placementId) ?? EMPTY_ITEM} rawQty={ctx.rawItems.get(p.placementId)?.requestedQty ?? null}
-      suggestion={ctx.suggested.get(p.placementId)?.defrost} admits={session.forecastAdmits ?? null}
-      photo={p.photoPath ? <ProductThumb src={p.photoPath} name={p.productName} credit={p.photoCredit} className="pphoto" /> : <span className="pphoto ph" aria-hidden="true"><Icon name="box" /></span>}
+      suggestion={ctx.suggested.get(p.placementId)?.defrost} admits={session.forecastAdmits ?? null} pickup={pickupOf(p)}
+      photo={p.photoPath ? <ProductThumb src={p.photoPath} name={p.productName} credit={p.photoCredit} className="pphoto" /> : null}
       onChange={(fields, resolve) => void onItem(p, fields, resolve)} />
   ) : (
     <ProductRow key={p.placementId} p={p} showArea={showArea} item={items.get(p.placementId) ?? EMPTY_ITEM} note={alsoEntered(p) ?? fromCupboard(p) ?? notes.own.get(p.placementId)}
@@ -279,7 +283,8 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
     row.querySelector<HTMLElement>('input.qty-input, .pseg button')?.focus({ preventScroll: true });
   };
 
-  const nextBtn = flow ? null : next
+  // (Defrost: the footer's "Continue →" is the one way on, so no second button here.)
+  const nextBtn = flow || isDefrost ? null : next
     ? <button className="btn primary" onClick={() => goArea(next.area.id)}>Next: {next.area.name}<Icon name="next" /></button>
     : <button className="btn primary" onClick={() => ctx.go(byArea && !lines.length ? 'finish' : 'collect')}>{byArea && !lines.length ? 'Finish' : 'Collection list'}<Icon name="next" /></button>;
 
@@ -379,7 +384,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
           ) : null}
           {phase === 'boh' ? <h3 className="sec-title bring-h"><Icon name="down" />Bring up from downstairs<small>Add only what looks low</small></h3> : null}
 
-          <div className="prows">
+          <div className={`prows ${isDefrost ? 'drows' : ''}`}>
             {cur.placements.length === 0 ? <p className="meta">No products in this area yet.</p> : null}
             {/* Optional subheadings (e.g. "Mixers, Water & Milk") in the same list */}
             {taken.length ? (
@@ -416,18 +421,15 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
             );
           })}
 
-          {pulls.length ? (
-            // Defrost: pull it now, freezer by freezer. What's pulled is suggested on that freezer's screen.
-            <section className="grab pull" aria-labelledby="pull-h">
-              <h3 className="sec-title" id="pull-h"><Icon name="up" />Pull for defrost<small>{pulls.filter((l) => ['done', 'short'].includes(lineStateOf(l))).length} of {pulls.length}</small></h3>
-              <p className="grab-hint">Tick each one as you take it out, or use Got fewer if there wasn&rsquo;t enough. What you pull is suggested for that freezer&rsquo;s overflow check.</p>
-              {pullGroups.map((g) => (
-                <div key={g.lines[0].locationId ?? g.name} className="grab-group">
-                  <h4 className="phead">{g.name}</h4>
-                  <div className="room-lines">{g.lines.map((l) => <Line key={l.key} line={l} items={items} write={writeItems} oneArea={cur.area.name} tickOnly verb="Pulled" />)}</div>
-                </div>
-              ))}
-            </section>
+          {isDefrost ? (
+            <div className="dr-rest">
+              {bulk ? <p><Icon name="check" />{bulk.length} marked not needed <button type="button" className="linkbtn" onClick={undoRest}>Undo</button></p>
+                : untouched.length && reviewed ? <button type="button" className="btn dr-rest-b" onClick={markRest}>Mark the remaining {untouched.length} not needed</button> : null}
+            </div>
+          ) : null}
+          {isDefrost ? (
+            <DefrostPullList rows={defrostRows.map((p) => ({ p, item: dItem(p), pickup: pickupOf(p) }))}
+              freezerOrder={whole.areas.map((a) => a.area.name)} onChange={(p, fields) => void onItem(p, fields)} />
           ) : null}
 
           {st === 'skipped' ? (
@@ -472,12 +474,21 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
             ))}</ul>
           </div>
         ) : null}
-        title={<>{all.req ? <>{`${all.counted} of ${all.req} counted`}<span className="dock-sep"> &middot; </span></> : null}
+        title={isDefrost ? <span className="dr-progress"><b>{reviewed} of {defrostRows.length}</b> reviewed &middot; <b>{toPull}</b> {toPull === 1 ? 'item' : 'items'} to pull</span> : <>{all.req ? <>{`${all.counted} of ${all.req} counted`}<span className="dock-sep"> &middot; </span></> : null}
           <button type="button" className="dock-2 dock-review" onClick={() => setReview(!review)} disabled={!lines.length} aria-expanded={review} aria-controls="entered-list">
             {lines.length ? `${lines.length} to collect` : 'Nothing added to the collection list'}{lines.length ? <Icon name={review ? 'down' : 'up'} /> : null}</button></>}
         sub={flow ? undefined : next && st === 'complete' ? `Next area: ${next.area.name}` : byArea && !lines.length ? 'Tap + Add on anything that needs topping up' : undefined}>
         <button className="btn save-exit" onClick={ctx.saveAndExit} aria-label="Save and exit"><Icon name="save" /><span className="lg">Save and exit</span><span className="sm">Save &amp; exit</span></button>
-        {flow ? (
+        {isDefrost && !flow ? (
+          // Defrost: carry on to the next area; the collection list is there but secondary.
+          <>
+            <button className="btn dr-list" onClick={() => ctx.go('collect')}><span className="lg">Collection list</span><span className="sm">List</span></button>
+            {view.areas[curIdx + 1]
+              ? <button className="btn primary big flow-next" onClick={() => goArea(view.areas[curIdx + 1].area.id)}>
+                  <span className="fn-l">Continue</span><span className="fn-to" aria-hidden="true">&rarr;</span><span className="fn-n">{view.areas[curIdx + 1].area.name}</span><Icon name="next" /></button>
+              : <button className="btn primary big" onClick={() => ctx.go('collect')}>Collection list<Icon name="next" /></button>}
+          </>
+        ) : flow ? (
           // One primary next action, the same on phone, iPad and laptop.
           reqLeft > 0 && !['complete', 'skipped'].includes(st)
             ? <button className="btn primary big" onClick={firstUnchecked}><span>Count {reqLeft} left</span><Icon name="down" /></button>

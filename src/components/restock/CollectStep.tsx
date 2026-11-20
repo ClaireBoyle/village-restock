@@ -3,13 +3,13 @@ import { useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
   EMPTY_ITEM, SHORT_REASONS, activePlacements, clearCollectedUpdates, collectPlacements, refillLines, collectionLines, gotAllUpdates, gotFewerUpdates,
-  groupByStoreroom, isChecked, isRequired, lineGot, lineInfo, lineState, pendingRefills, type CollectionLine, type ItemState, type ShortReason,
+  groupByStoreroom, isChecked, isRequired, lineGot, lineInfo, lineState, pendingRefills, storeLabel, type CollectionLine, type ItemState, type ShortReason,
 } from '@/lib/restock-logic';
 import { formatQty, round2 } from '@/lib/restock-math';
 import { setItems } from '@/lib/client/restock-store';
 import { ProductThumb } from './ProductCard';
-import { DefrostNotes } from './DefrostParts';
 import { PendingRefills } from './KitchenRows';
+import { sameText } from './DefrostParts';
 import { Dock, plural } from './shared';
 import type { RestockCtx } from './RestockApp';
 
@@ -198,8 +198,13 @@ export function Line({ line, items, write, oneArea, tickOnly = false, displayRul
         </div>
         {act}
       </div>
-      {st !== 'done' && (line.grabNote || line.putNote || line.fallbackNote)
-        ? <DefrostNotes grab={line.grabNote} fallback={line.fallbackNote} put={line.putNote} className="l-dnotes" /> : null}
+      {st !== 'done' && (line.grabNote || line.putNote || line.fallbackNote) ? (
+        // Defrost: from → to in one line, then any detail (e.g. the downstairs route when upstairs ran short).
+        <div className="l-dnotes">
+          <p className="dr-route"><span className="dr-src">{storeLabel(line.locationName)}</span>{line.putNote ? <><span className="dr-arrow" aria-label="to">&rarr;</span><span className="dr-dest">{line.putNote}</span></> : null}</p>
+          {line.key.startsWith('rest:') ? <p className="dr-detail">Not enough upstairs{line.grabNote && !sameText(line.grabNote, storeLabel(line.locationName)) ? `: ${line.grabNote}` : ''}</p> : line.grabNote ? <p className="dr-detail">{line.grabNote}</p> : null}
+        </div>
+      ) : null}
       {askNone ? (
         // Nothing collected: is there really none left out front? Then it's out of stock.
         <div className="l-none-row">

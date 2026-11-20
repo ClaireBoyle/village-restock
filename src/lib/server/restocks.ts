@@ -86,6 +86,7 @@ export async function restockDetail(id: string) {
     routineChoice: r.routineChoice as ItemState['routineChoice'], collectedMode: r.collectedMode as ItemState['collectedMode'],
     collectedQty: r.collectedQty as number | null, shortfallReason: r.shortfallReason as ItemState['shortfallReason'],
     flagged: Boolean(r.flagged), noneOnDisplay: Boolean(r.noneOnDisplay), refillStatus: (r.refillStatus as ItemState['refillStatus']) ?? null,
+    upstairsQty: r.upstairsQty === null || r.upstairsQty === undefined ? null : Number(r.upstairsQty),
     conflict: (r.conflict as Conflict | null) ?? null,
   }]));
   const recorded = new Map<string, AreaStatus>(areas.map((a) => [String(a.checkAreaId), a.status as AreaStatus]));

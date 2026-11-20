@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { formatQty, parseQuantity, round2 } from '@/lib/restock-math';
 import { defrostRowInfo, type DefrostSuggestion } from '@/lib/defrost-rows';
-import type { ItemState, PlacementView } from '@/lib/restock-logic';
+import { defrostSource, needOf, pullState, storeLabel, type ItemState, type PlacementView } from '@/lib/restock-logic';
 
 const fmt = (n: number | null | undefined) => (n === null || n === undefined ? '' : String(round2(n)));
 
@@ -81,37 +81,58 @@ export function AdmitsBox({ admits, onSave, missing }: { admits: number | null; 
   );
 }
 
+/** "Downstairs walk-in freezer" and "Downstairs walk in freezer" are the same place. */
+export const sameText = (a: string, b: string) => a.toLowerCase().replace(/[^a-z0-9]/g, '') === b.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/** Source → destination in one line (e.g. "Freezer 1 · Lower left → Upstairs walk-in fridge"), then any detail. */
+export function DefrostRoute({ p, from }: { p: PlacementView; from?: string }) {
+  const src = from ?? defrostSource(p);
+  const check = p.grabNote && /^check\b/i.test(p.grabNote);
+  return (
+    <>
+      <p className="dr-route"><span className="dr-src">{src}</span>{p.putNote ? <><span className="dr-arrow" aria-label="to">&rarr;</span><span className="dr-dest">{p.putNote}</span></> : null}</p>
+      {p.grabNote ? <p className={`dr-detail ${check ? 'dr-check' : ''}`}>{check ? <Icon name="warn" /> : null}{p.grabNote}</p> : null}
+    </>
+  );
+}
+
 /**
- * One defrost item: how many to pull, or Not needed. Where to grab it, where to look if that's empty,
- * and where it goes are always on the row. With admits targets, staff also count what's already
- * ready or defrosting, and the amount to pull is suggested (they can change it).
+ * One defrost item, compact: name, the amount (with its unit) or Not needed, and where it goes.
+ * Setting an amount means it needs defrosting; it's marked Pulled only once it's been moved
+ * (on "Pull for defrost" below). With admits targets, what's already ready gives a suggestion.
  */
-export function DefrostRow({ p, item, rawQty, suggestion, admits, onChange, photo }: {
+export function DefrostRow({ p, item, rawQty, suggestion, admits, onChange, photo, pickup }: {
   p: PlacementView; item: ItemState;
   /** What staff entered themselves (null = untouched, so a suggestion stands). */
   rawQty: number | null;
   suggestion?: DefrostSuggestion;
   admits: number | null;
   onChange: (fields: Partial<ItemState>, resolve?: boolean) => void;
+  /** The product photo, if there is one (no placeholder). */
   photo: React.ReactNode;
+  /** Pulled from an upstairs freezer (vs collected from downstairs with the collection list). */
+  pickup: boolean;
 }) {
   const info = defrostRowInfo(p);
   const v = item.requestedQty;
   const q = (n: number) => formatQty(n, p.unitSingular, p.unitPlural);
   const rq = (n: number) => formatQty(n, info.readySingular, info.readyPlural);
   const c = item.conflict;
-  const st = c ? 'bad' : v === null ? 'none' : v > 0 ? 'warn' : 'ok';
+  const ps = pullState(p, item);
+  const st = c ? 'bad' : v === null ? 'none' : v > 0 ? (pickup && ps.state === 'pulled' ? 'ok' : 'warn') : 'ok';
   const set = (n: number | null) => onChange({ requestedQty: n });
   const step = p.allowDecimal ? 0.5 : 1;
   const changed = suggestion && rawQty !== null && rawQty !== suggestion.qty;
 
   let status: React.ReactNode;
   if (c) status = <><Icon name="warn" />Two different amounts: choose below</>;
-  else if (v === null) status = info.canSuggest && admits === null ? <>Enter tomorrow&rsquo;s admits above for a suggestion</>
+  else if (v === null) status = info.canSuggest && admits === null ? <>Enter tomorrow&rsquo;s admits for a suggestion</>
     : info.canSuggest && item.currentQty === null ? <>Count what&rsquo;s ready for a suggestion</>
-    : <span className="sr-only">Not entered</span>;
-  else if (v > 0) status = <><Icon name="up" /><b>Pull {q(v)}</b>{suggestion && rawQty === null ? <span>&nbsp;· suggested</span> : null}</>;
-  else status = <><Icon name="check" />{suggestion && rawQty === null ? 'Nothing to pull: enough is ready' : 'Not needed'}</>;
+    : <span className="sr-only">Not reviewed</span>;
+  else if (v > 0 && pickup && ps.state === 'pulled') status = <><Icon name="check" />Pulled {q(v)}</>;
+  else if (v > 0 && pickup && ps.state === 'short') status = <><Icon name="warn" />Pulled {round2(ps.pulled!)} of {q(v)} &middot; {round2(ps.rest)} from downstairs</>;
+  else if (v > 0) status = <><b>{q(v)}</b><span>&nbsp;to {pickup ? 'pull' : 'collect'}{suggestion && rawQty === null ? ' · suggested' : ''}</span></>;
+  else status = <><Icon name="check" />{suggestion && rawQty === null ? 'Not needed: enough is ready' : 'Not needed'}</>;
 
   // How the suggestion was worked out, in one line (e.g. "Target 24 for 81–160 admits − 10 ready = 14").
   let working: string | null = null;
@@ -123,54 +144,148 @@ export function DefrostRow({ p, item, rawQty, suggestion, admits, onChange, phot
       + (suggestion.per !== 1 ? ` → ${q(suggestion.qty)} (${round2(suggestion.per)} ${info.readyPlural} each)` : '')
       + (changed ? ` · suggested ${round2(suggestion.qty)}` : '');
   } else if (info.canSuggest && admits !== null && item.currentQty !== null) {
-    working = `No target set for ${admits} admits: enter the amount to pull.`;
+    working = `No target set for ${admits} admits: set the amount.`;
   }
 
-  let controls: React.ReactNode;
+  let controls: React.ReactNode = null;
   if (c) controls = null;
   else if (v === null) {
     controls = (
-      <div className="dr-pick">
-        <button type="button" className="padd" onClick={() => set(1)} aria-label={`Pull ${p.productName}`}><Icon name="plus" />Pull</button>
-        <button type="button" className="pnn" onClick={() => set(0)} aria-label={`${p.productName}: not needed`}>Not needed</button>
+      <div className="dr-acts">
+        <button type="button" className="dr-b dr-set" onClick={() => set(1)} aria-label={`Set amount: ${p.productName}`}>Set amount</button>
+        <button type="button" className="dr-b dr-nn" onClick={() => set(0)} aria-label={`${p.productName}: not needed`}>Not needed</button>
+      </div>
+    );
+  } else if (v === 0) {
+    controls = (
+      <div className="dr-acts">
+        <button type="button" className="dr-b dr-set" onClick={() => set(1)} aria-label={`Set amount: ${p.productName}`}>Set amount</button>
+        <button type="button" className="dr-b dr-nn on" aria-pressed="true" onClick={() => set(null)} aria-label={`${p.productName}: not needed (tap to undo)`}><Icon name="check" />Not needed</button>
       </div>
     );
   } else {
     controls = (
-      <div className="dr-pick">
-        <div className="pstep">
-          {v === 0 && rawQty !== null
-            ? <button type="button" className="pclear" onClick={() => set(null)} aria-label={suggestion ? `Back to the suggested ${round2(suggestion.qty)} ${p.productName}` : `Clear ${p.productName}`}><Icon name={suggestion ? 'reset' : 'x'} /></button>
-            : <button type="button" onClick={() => set(Math.max(0, round2(v - step)))} disabled={v === 0} aria-label={`One less ${p.productName}`}><Icon name="minus" /></button>}
-          <NumberBox id={`q-${p.placementId}`} value={v} onCommit={set} label={`${p.productName}: how many to pull`} allowDecimal={p.allowDecimal} unitPlural={p.unitPlural} />
+      <div className="dr-acts">
+        <div className="pstep dr-step">
+          <button type="button" onClick={() => set(Math.max(0, round2(v - step)))} aria-label={`One less ${p.productName}`}><Icon name="minus" /></button>
+          <span className="dr-qty"><NumberBox id={`q-${p.placementId}`} value={v} onCommit={set} label={`${p.productName}: amount to defrost`} allowDecimal={p.allowDecimal} unitPlural={p.unitPlural} />
+            <small>{v === 1 ? p.unitSingular : p.unitPlural}</small></span>
           <button type="button" onClick={() => set(round2(v + step))} aria-label={`One more ${p.productName}`}><Icon name="plus" /></button>
         </div>
-        {v > 0 ? <button type="button" className="pnn small" onClick={() => set(0)} aria-label={`${p.productName}: not needed`}>Not needed</button> : null}
+        <button type="button" className="dr-b dr-nn" onClick={() => set(0)} aria-label={`${p.productName}: not needed`}>Not needed</button>
         {changed ? <button type="button" className="linkbtn dr-back" onClick={() => set(null)}>Use suggested {round2(suggestion!.qty)}</button> : null}
       </div>
     );
   }
 
   return (
-    <article className={`prow card drow s-${st} m-manual ${v === null && !c ? 'quiet' : ''} ${suggestion ? 'suggested' : ''}`} data-placement={p.placementId}>
-      {photo}
-      <div className="pt">
-        <h3>{p.productName}</h3>
-        <p className="ps" id={`s-${p.placementId}`}>{status}</p>
+    <article className={`drow2 s-${st} ${v === null && !c ? 'quiet' : ''} ${suggestion ? 'suggested' : ''}`} data-placement={p.placementId}>
+      <div className="dr-head">
+        {photo}
+        <div className="dr-t">
+          <h3>{p.productName}</h3>
+          <p className="ps" id={`s-${p.placementId}`}>{status}</p>
+        </div>
       </div>
-      <div className="pc">{controls}</div>
-      <div className="pwide dr-body">
-        <DefrostNotes grab={p.grabNote} fallback={p.fallbackNote} put={p.putNote} />
-        {info.canSuggest ? (
-          <div className="dr-ready">
-            <label htmlFor={`r-${p.placementId}`}>Already ready or defrosting for tomorrow</label>
-            <span className="dr-rbox"><NumberBox id={`r-${p.placementId}`} value={item.currentQty} onCommit={(n) => onChange({ currentQty: n })}
-              label={`${p.productName}: ${info.readyPlural} already ready or defrosting`} allowDecimal={p.allowDecimal} unitPlural={info.readyPlural} wait={500} />
-              <small>{info.readyPlural}</small></span>
-          </div>
-        ) : null}
-        {working ? <p className="dr-work">{working}</p> : null}
-      </div>
+      <div className="dr-info"><DefrostRoute p={p} /></div>
+      {controls}
+      {info.canSuggest ? (
+        <div className="dr-ready">
+          <label htmlFor={`r-${p.placementId}`}>Already ready or defrosting for tomorrow</label>
+          <span className="dr-rbox"><NumberBox id={`r-${p.placementId}`} value={item.currentQty} onCommit={(n) => onChange({ currentQty: n })}
+            label={`${p.productName}: ${info.readyPlural} already ready or defrosting`} allowDecimal={p.allowDecimal} unitPlural={info.readyPlural} wait={500} />
+            <small>{info.readyPlural}</small></span>
+        </div>
+      ) : null}
+      {working ? <p className="dr-work">{working}</p> : null}
     </article>
   );
 }
+
+/**
+ * Pull for defrost: everything with an amount, grouped by where it's collected (Freezer 1, then
+ * Freezer 2, then what comes from downstairs with the collection list). Each item keeps its
+ * destination. Pulled = moved. Not enough upstairs = what was there; the rest goes on the collection
+ * list from downstairs (an empty compartment is never a shortage by itself).
+ */
+export function DefrostPullList({ rows, freezerOrder, onChange }: {
+  rows: { p: PlacementView; item: ItemState; pickup: boolean }[];
+  /** Freezer names in walking order. */
+  freezerOrder: string[];
+  onChange: (p: PlacementView, f: Partial<ItemState>) => void;
+}) {
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
+  const list = rows.filter((r) => (needOf(r.p, r.item) ?? 0) > 0);
+  if (!list.length) return null;
+  const groupOf = (r: (typeof list)[number]) => (r.pickup ? defrostSource(r.p).split(' · ')[0] : storeLabel(r.p.locationName));
+  const names = [...new Set(list.map(groupOf))].sort((a, b) => {
+    const ia = freezerOrder.indexOf(a), ib = freezerOrder.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  const pickups = list.filter((r) => r.pickup);
+  const done = pickups.filter((r) => pullState(r.p, r.item).state !== 'todo').length;
+  const confirm = (r: (typeof list)[number]) => {
+    const n = draft.trim() === '' ? NaN : Number(draft.replace(',', '.'));
+    if (!Number.isFinite(n) || n < 0) return;
+    const need = needOf(r.p, r.item) ?? 0;
+    onChange(r.p, { upstairsQty: Math.min(round2(n), need) });
+    setEditing(null);
+  };
+  return (
+    <section className="grab pull dpull" aria-labelledby="pull-h">
+      <h3 className="sec-title" id="pull-h"><Icon name="up" />Pull for defrost{pickups.length ? <small>{done} of {pickups.length} pulled</small> : null}</h3>
+      <p className="grab-hint">Tap Pulled once it&rsquo;s moved. If the freezer runs short, tap Not enough upstairs: the rest goes on the collection list.</p>
+      {names.map((g) => {
+        const gl = list.filter((r) => groupOf(r) === g);
+        const down = !gl[0].pickup;
+        return (
+          <div key={g} className="grab-group">
+            <h4 className="phead">{g}{down ? <small>&nbsp;· on the collection list</small> : null}</h4>
+            <ul className="dp-lines">{gl.map((r) => {
+              const ps = pullState(r.p, r.item);
+              const q = (n: number) => formatQty(n, r.p.unitSingular, r.p.unitPlural);
+              const spot = r.pickup ? defrostSource(r.p).split(' · ')[1] : null;
+              return (
+                <li key={r.p.placementId} className={`dp-line s-${!r.pickup ? (r.item.collectedMode ? 'ok' : 'none') : ps.state === 'pulled' ? 'ok' : ps.state === 'short' ? 'warn' : 'none'}`} data-line={r.p.productName}>
+                  <div className="dp-main">
+                    <span className="dp-amt"><b>{round2(ps.need)}</b><small>{ps.need === 1 ? r.p.unitSingular : r.p.unitPlural}</small></span>
+                    <span className="dp-t"><b>{r.p.productName}</b>
+                      <small>{spot ? <>{spot} </> : null}&rarr; {r.p.putNote ?? 'its destination'}</small></span>
+                  </div>
+                  {!r.pickup ? (
+                    <p className="dp-state">{r.item.collectedMode ? <><Icon name="check" />Collected</> : 'Collect it from the collection list'}</p>
+                  ) : editing === r.p.placementId ? (
+                    <div className="dp-edit">
+                      <label htmlFor={`up-${r.p.placementId}`}>How many were upstairs?</label>
+                      <input id={`up-${r.p.placementId}`} className="nbox" inputMode="decimal" value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus
+                        onKeyDown={(e) => { if (e.key === 'Enter') confirm(r); }} aria-label={`${r.p.productName}: how many were upstairs, of ${round2(ps.need)}`} />
+                      <button type="button" className="btn" onClick={() => setEditing(null)}>Cancel</button>
+                      <button type="button" className="btn primary" onClick={() => confirm(r)} disabled={draft.trim() === ''}>Confirm</button>
+                    </div>
+                  ) : ps.state === 'todo' ? (
+                    <div className="dp-acts">
+                      <button type="button" className="dr-b dp-few" onClick={() => { setEditing(r.p.placementId); setDraft(''); }} aria-label={`Not enough upstairs: ${r.p.productName}`}>Not enough upstairs</button>
+                      <button type="button" className="dr-b dp-ok" onClick={() => onChange(r.p, { upstairsQty: ps.need })} aria-label={`Pulled ${round2(ps.need)} ${r.p.productName}`}><Icon name="check" />Pulled</button>
+                    </div>
+                  ) : (
+                    <div className="dp-done">
+                      {ps.state === 'pulled' ? <p className="dp-state"><Icon name="check" />Pulled</p> : (
+                        <div className="dp-short">
+                          <p className="dp-state"><Icon name="warn" />Pulled {round2(ps.pulled!)} &middot; {q(ps.rest)} more from {storeLabel(r.p.fallbackLocationName ?? r.p.locationName)} (on the collection list)</p>
+                          {r.p.fallbackNote && !sameText(r.p.fallbackNote, storeLabel(r.p.fallbackLocationName ?? r.p.locationName)) ? <p className="dr-detail">{r.p.fallbackNote}</p> : null}
+                        </div>
+                      )}
+                      <button type="button" className="linkbtn" onClick={() => onChange(r.p, { upstairsQty: null })}>Undo</button>
+                    </div>
+                  )}
+                </li>
+              );
+            })}</ul>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+

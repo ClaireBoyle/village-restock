@@ -27,16 +27,19 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   const [k] = await sql`select id from departments where name = 'Gold Class Kitchen'`;
   await sql`delete from check_areas where department_id = ${k.id}`;
   await sql`insert into storage_locations (name, sort_order) values ('Walk in freezer(Downstairs)', 3), ('Walk in fridge(Downstairs)', 2) on conflict do nothing`;
-  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
+  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep', 'defrost-compact']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
 
   const b = await chromium.launch(); const errs = [];
   const P = await (await b.newContext({ ...devices['iPhone 13'] })).newPage(); P.on('pageerror', (e) => errs.push(e.message));
   await P.goto(B + '/'); await P.waitForSelector('.dcard2');
   await P.click('.who'); await P.fill('#staffname', 'Mia'); await P.click('.sheet .btn.primary');
-  await P.click('.dcard2:has-text("Kitchen") >> nth=0'); await P.click('.type-full button.btn.primary'); await P.waitForSelector('article.prow');
+  await P.click('.dcard2:has-text("Kitchen") >> nth=0'); await P.click('.type-full button.btn.primary'); await P.waitForSelector('article.drow2');
   ok(await sees(P, '.area-btn.cur', 'Defrost'), 'Defrost is still first');
-  await addTwo(P, row('Pulled Beef (Bao)'), 'Pulled Beef (Bao)');
-  await P.click(`.pull ${line('Pulled Beef (Bao)')} button.l-all`);
+  const beef = "article.drow2:has(h3:text-is('Pulled Beef (Bao)'))";
+  await P.click(`${beef} .dr-set`);
+  for (let i = 0; i < 40 && (await P.locator(`${beef} .qty-input`).inputValue().catch(() => '')) !== '1'; i++) await P.waitForTimeout(100);
+  await P.click(`${beef} button[aria-label="One more Pulled Beef (Bao)"]`);
+  await P.click(".dp-line[data-line='Pulled Beef (Bao)'] .dp-ok");
 
   // 1. The walk-in fridge, on its confirmed shelves.
   await P.click('.area-btn:has-text("Walk in fridge")'); await P.waitForSelector('.area-btn.cur:has-text("Walk in fridge")');

@@ -199,6 +199,7 @@ begin
   end if;
 
   -- 6. Defrost: where each one is pulled from, and its replacement in that compartment.
+  --    (Once 2026-11-gold-class-kitchen-defrost-compact.sql has shortened the directions, they're kept.)
   for i in 1 .. array_length(pulls, 1) loop
     norm := regexp_replace(lower(pulls[i][1]), '[^a-z0-9]', '', 'g');
     pl := (select x.id from product_placements x join products q on q.id = x.product_id
@@ -207,7 +208,7 @@ begin
     if pulls[i][2] = '' then
       -- Straight from the downstairs walk-in freezer (on the collection list), into the upstairs walk-in fridge.
       update product_placements set pickup_area_id = null, pickup_suggest = false, location_id = down,
-        grab_note = pulls[i][4], fallback_note = null,
+        grab_note = case when (select guide_text from check_areas where id = defrost) like 'Defrost for tomorrow: set an amount%' then grab_note else pulls[i][4] end, fallback_note = null,
         put_note = coalesce(nullif(trim(put_note), ''), 'Upstairs walk-in fridge, right-hand dessert shelf')
         where id = pl;
       -- No longer pulled from (or topped up in) Freezer 1.
@@ -217,7 +218,7 @@ begin
       sec := (select id from check_areas where department_id = dept and lower(name) = lower(format('Freezer %s · %s', pulls[i][2], pulls[i][3])));
       update product_placements set pickup_area_id = sec, pickup_suggest = true,
         location_id = case pulls[i][2] when '2' then coalesce(f2s, location_id) else coalesce(f1s, location_id) end,
-        grab_note = pulls[i][4]
+        grab_note = case when (select guide_text from check_areas where id = defrost) like 'Defrost for tomorrow: set an amount%' then grab_note else pulls[i][4] end
         where id = pl;
     end if;
   end loop;

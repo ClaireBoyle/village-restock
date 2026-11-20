@@ -22,8 +22,15 @@ const RESET = 'An admin reset this restock. It has been cleared from this device
 const COLUMN: Record<keyof ItemFields, string> = {
   currentQty: 'current_qty', requestedQty: 'requested_qty', routineChoice: 'routine_choice',
   collectedMode: 'collected_mode', collectedQty: 'collected_qty', shortfallReason: 'shortfall_reason', flagged: 'flagged',
-  noneOnDisplay: 'none_on_display', refillStatus: 'refill_status',
+  noneOnDisplay: 'none_on_display', refillStatus: 'refill_status', upstairsQty: 'upstairs_qty',
 };
+
+/** Migration 019 adds defrost pulls from upstairs. */
+let hasUpstairs = false;
+async function upstairsReady(tx: Tx) {
+  if (!hasUpstairs) hasUpstairs = (await tx`select 1 from information_schema.columns where table_name = 'session_items' and column_name = 'upstairs_qty'`).length > 0;
+  return hasUpstairs;
+}
 
 /** Migration 018 adds refill tasks. */
 let hasRefill = false;
@@ -146,6 +153,10 @@ async function apply(tx: Tx, op: SyncOp, deviceId: string): Promise<{ mergedInto
         }
       }
       // Before migration 013: a cleared "None on display" is simply not stored; a set one waits for the update.
+      if ('upstairsQty' in f && !(await upstairsReady(tx))) {
+        if (f.upstairsQty !== null && f.upstairsQty !== undefined) throw new OpError('The server needs a database update (019_upstairs_pulls.sql)', false);
+        delete f.upstairsQty;
+      }
       if ('refillStatus' in f && !(await refillReady(tx))) {
         if (f.refillStatus) throw new OpError('The server needs a database update (018_refills_and_linked_rows.sql)', false);
         delete f.refillStatus;
@@ -349,6 +360,7 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
     routineChoice: r.routineChoice as ItemState['routineChoice'], collectedMode: r.collectedMode as ItemState['collectedMode'],
     collectedQty: r.collectedQty as number | null, shortfallReason: r.shortfallReason as ItemState['shortfallReason'], flagged: Boolean(r.flagged), noneOnDisplay: Boolean(r.noneOnDisplay),
     refillStatus: (r.refillStatus as ItemState['refillStatus']) ?? null,
+    upstairsQty: r.upstairsQty === null || r.upstairsQty === undefined ? null : Number(r.upstairsQty),
     conflict: (r.conflict as Conflict | null) ?? null,
   }]));
   const recorded = new Map<string, AreaStatus>(areaRows.map((r) => [String(r.checkAreaId), r.status as AreaStatus]));
@@ -440,6 +452,7 @@ function toRemote(s: Record<string, unknown>, areas: Record<string, unknown>[], 
       routineChoice: (r.routineChoice as 'needed' | 'not_needed') ?? null, collectedMode: (r.collectedMode as 'all' | 'partial') ?? null,
       collectedQty: (r.collectedQty as number) ?? null, shortfallReason: (r.shortfallReason as RemoteSession['items'][number]['shortfallReason']) ?? null,
       flagged: Boolean(r.flagged), noneOnDisplay: Boolean(r.noneOnDisplay), refillStatus: (r.refillStatus as RemoteSession['items'][number]['refillStatus']) ?? null,
+      upstairsQty: r.upstairsQty === null || r.upstairsQty === undefined ? null : Number(r.upstairsQty),
       conflict: (r.conflict as Conflict | null) ?? null,
     })),
   };
