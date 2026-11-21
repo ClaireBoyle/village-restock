@@ -43,6 +43,15 @@ export const prepItemSchema = z.object({
   name: z.string().trim().min(1).max(80), qty: z.string().trim().max(30).nullable(), note: z.string().trim().max(200).nullable(),
 }).strict();
 
+/** Prep checklist: Ready / Needs prep (null = Unchecked), Leave for morning, an optional note, and the morning team's Done. */
+export const prepCheckFieldsSchema = z.object({
+  status: z.enum(['ready', 'needs']).nullable().optional(),
+  morning: z.boolean().optional(),
+  note: z.string().trim().max(200).nullable().optional(),
+  morningDone: z.boolean().optional(),
+}).strict();
+export type PrepCheckFields = z.infer<typeof prepCheckFieldsSchema>;
+
 export const opSchema = z.discriminatedUnion('type', [
   z.object({
     ...base, type: z.literal('session.start'),
@@ -76,6 +85,11 @@ export const opSchema = z.discriminatedUnion('type', [
   z.object({ ...base, type: z.literal('prep.done'), sessionId: z.uuid(), itemId: z.uuid(), done: z.boolean() }),
   // Defrost rows: tomorrow's forecast admits, entered once per restock (blank = not entered).
   z.object({ ...base, type: z.literal('session.admits'), sessionId: z.uuid(), admits: z.number().int().min(0).max(9999).nullable() }),
+  // Prep checklist: one job's check for a department's service (trading day). Only the fields sent change.
+  z.object({
+    ...base, type: z.literal('prepcheck.set'), departmentId: z.uuid(), tradingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), taskId: z.uuid(),
+    fields: prepCheckFieldsSchema,
+  }),
   // Defrost Planner: one item's entry for a department's next service (blank = not entered).
   z.object({
     ...base, type: z.literal('defrost.set'), planId: z.uuid(), departmentId: z.uuid(), serviceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

@@ -127,8 +127,7 @@ const syncNow = (p) => p.evaluate(() => window.dispatchEvent(new Event('online')
 
   // ---------- 3. Quick restock on the admin's own device ----------
   await A.p.goto(`${B}/d/${kit.id}`); await A.p.click('button:has-text("Start quick restock")'); await A.p.waitForSelector('.qrow');
-  await A.p.click('.qrow:has-text("Milk") button:has-text("Add")'); await A.p.waitForSelector('.picked article.prow');
-  await A.p.fill('.picked article.prow .qty-input', '2');
+  await A.p.fill('.qpanel .qrow:has-text("Milk") .q-num', '2'); await A.p.waitForSelector('.picked .qrow:has-text("Milk")');
   await waitDb(() => sql`select count(*)::int as n from restock_sessions where kind = 'quick'`, (r) => r[0].n === 1);
   await A.p.goto(`${B}/d/${kit.id}`); await A.p.waitForSelector('.type-quick .amenu');
   await A.p.click('.type-quick .amenu-btn'); await A.p.click('.amenu-pop button:has-text("Reset restock")');

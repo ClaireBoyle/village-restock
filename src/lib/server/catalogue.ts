@@ -65,9 +65,13 @@ export async function loadCatalogue(): Promise<Catalogue> {
       where i.active order by i.sort_order, i.name` : [];
     // Morning prep checklist exists once migration 017 has run.
     const [{ hasPrep }] = await tx`select to_regclass('public.prep_tasks') is not null as has_prep`;
+    // Both lists: the morning handover (active) and the Prep checklist (on_checklist, migration 021).
     const prepTasks = hasPrep ? await tx`
-      select t.id, t.department_id, t.grp as "group", t.name, t.sort_order from prep_tasks t join departments d on d.id = t.department_id and d.active
-      where t.active order by t.sort_order, t.name` : [];
+      select t.id, t.department_id, t.grp as "group", t.name, t.sort_order, t.active,
+             coalesce((to_jsonb(t)->>'on_checklist')::boolean, false) as on_checklist,
+             to_jsonb(t)->>'checklist_group' as checklist_group, to_jsonb(t)->>'checklist_name' as checklist_name
+      from prep_tasks t join departments d on d.id = t.department_id and d.active
+      where t.active or coalesce((to_jsonb(t)->>'on_checklist')::boolean, false) order by t.sort_order, t.name` : [];
     return {
       version: Number(setting('catalogue_version') ?? 1),
       prepTasks,

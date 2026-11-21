@@ -6,7 +6,7 @@ import Dexie, { type Table } from 'dexie';
 import type { Catalogue } from '@/lib/catalogue-types';
 import type { ItemState } from '@/lib/restock-logic';
 import type { SyncOp } from '@/lib/sync-types';
-import type { PrepHandover } from '@/lib/prep';
+import type { PrepCheck, PrepHandover } from '@/lib/prep';
 
 interface KV { key: string; value: unknown }
 
@@ -81,6 +81,7 @@ class LocalDb extends Dexie {
   problems!: Table<ProblemRow, number>;
   defrost!: Table<LocalDefrost, [string, string, string]>;
   prep!: Table<LocalPrep, string>;
+  prepChecks!: Table<PrepCheck, [string, string, string]>;
   constructor() {
     super('village-restock');
     this.version(1).stores({ kv: 'key' });
@@ -97,6 +98,9 @@ class LocalDb extends Dexie {
     });
     this.version(4).stores({
       prep: 'sessionId, departmentId, [departmentId+tradingDate]',
+    });
+    this.version(5).stores({
+      prepChecks: '[departmentId+tradingDate+taskId], [departmentId+tradingDate], departmentId',
     });
   }
 }

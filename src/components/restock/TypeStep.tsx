@@ -9,12 +9,13 @@ import { AREA_BADGE, AREA_LABEL, Badge, timeOf } from './shared';
 import type { RemoteSession } from '@/lib/sync-types';
 import { AdminMenu } from './ResetControls';
 import type { ResetFor } from './RestockApp';
+import type { PrepTask } from '@/lib/prep';
 import { MorningPrepHome } from './MorningPrep';
 
 const TIPS_KEY = 'vr-hide-tips';
 
 /** Choose Full or Quick Restock, with tonight's progress at a glance. */
-export function TypeStep({ view, fullSession, remoteFull, quickSession, opening, onStart, onSummary, hasDefrost = false, onReset, prep }: {
+export function TypeStep({ view, fullSession, remoteFull, quickSession, opening, onStart, onSummary, hasDefrost = false, onReset, prep, checklist = false }: {
   view: DepartmentView; fullSession: LocalSession | null; remoteFull: RemoteSession | null; quickSession: LocalSession | null; opening: boolean;
   onStart: (m: 'full' | 'quick') => void; onSummary: () => void;
   /** Gold Class Kitchen: offer the (optional) Defrost Planner beside Kitchen Restock. */
@@ -22,7 +23,9 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
   /** Admins only: reset a restock. */
   onReset?: (r: ResetFor) => void;
   /** Gold Class Kitchen: the morning prep handover for the morning team. */
-  prep?: { today: string; who: string } | null;
+  prep?: { today: string; who: string; tasks?: PrepTask[] } | null;
+  /** Gold Class Kitchen: the Prep checklist (open any time, no restock needed). */
+  checklist?: boolean;
 }) {
   const [hideTips, setHideTips] = useState(true);
   // Closed unless someone opened it on this device: the Start button comes first.
@@ -67,7 +70,7 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
         <img className="dh-mark" src="/brand/village-v-white.png" alt="" aria-hidden="true" />
       </section>
       {/* Kitchen: last night's morning prep handover, for the morning team (tracked apart from the restock). */}
-      {prep ? <MorningPrepHome departmentId={view.department.id} today={prep.today} who={prep.who} /> : null}
+      {prep ? <MorningPrepHome departmentId={view.department.id} today={prep.today} who={prep.who} tasks={prep.tasks} /> : null}
       {hideTips ? (
         <button className="linkbtn" style={{ alignSelf: 'flex-start' }} onClick={toggleTips}><Icon name="info" />How restocking works</button>
       ) : (
@@ -76,6 +79,12 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
           <button className="linkbtn" onClick={toggleTips}>Hide tips</button>
         </section>
       )}
+      {checklist ? (
+        // Open any time (e.g. before a busy night): no restock or handover needed.
+        <Link className="quick-link prep-link" href={`/d/${view.department.id}/prep`}>
+          <Icon name="task" /><span><b>Prep checklist</b><small>Check what&rsquo;s ready and what still needs prepping for service.</small></span><Icon name="next" />
+        </Link>
+      ) : null}
       <div className={`types ${hasDefrost ? 'with-defrost' : ''}`}>
         {hasDefrost ? (
           <section className="type type-defrost">

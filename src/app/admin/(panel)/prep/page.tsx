@@ -17,11 +17,14 @@ export default async function MorningPrepAdmin({ searchParams }: { searchParams:
   const { dept } = await searchParams;
   const cur = depts.find((d) => String(d.id) === dept) ?? depts.find((d) => Number(d.n) > 0) ?? depts[0];
   if (!cur) return null;
-  const tasks = await sql`select id, grp, name, active from prep_tasks where department_id = ${String(cur.id)} order by sort_order, name`;
+  const tasks = await sql`select id, grp, name, active, coalesce((to_jsonb(t)->>'on_checklist')::boolean, false) as on_checklist,
+    to_jsonb(t)->>'checklist_group' as checklist_group, to_jsonb(t)->>'checklist_name' as checklist_name
+    from prep_tasks t where department_id = ${String(cur.id)} order by sort_order, name`;
+  const groups = [...new Set(tasks.map((t) => t.checklistGroup as string | null).filter((g): g is string => !!g))];
   return (
     <>
       <div className="page-head"><div><h1>Morning prep</h1>
-        <p>The checklist the closing team picks from on the Finish screen (&ldquo;Morning prep needed&rdquo;). What they pick is shown to the morning team on the department screen, where each task is marked Done. Staff can also type in a task that isn&rsquo;t here.</p></div></div>
+        <p>One list for both: the <b>morning handover</b> the closing team picks from on the Finish screen (&ldquo;Morning prep needed&rdquo;), shown to the morning team on the department screen where each task is marked Done; and the <b>Prep checklist</b> staff open any time to check what&rsquo;s ready for the service, grouped by its checklist group. Add or reorder a job here once.</p></div></div>
       <nav className="chips" aria-label="Department">{depts.map((d) => (
         <Link key={String(d.id)} className={`chip ${d.id === cur.id ? 'on' : ''}`} href={`/admin/prep?dept=${d.id}`}>{String(d.name)}{Number(d.n) ? ` (${Number(d.n)})` : ''}</Link>
       ))}</nav>
@@ -35,11 +38,13 @@ export default async function MorningPrepAdmin({ searchParams }: { searchParams:
               const i = tasks.indexOf(t);
               return (
                 <div key={String(t.id)} className={`row ${t.active ? '' : 'muted'}`} style={{ flexWrap: 'wrap' }}>
-                  <div className="grow" style={{ minWidth: 200 }}><div className="title">{String(t.name)}</div>{t.active ? null : <div className="meta">Not on the checklist</div>}</div>
+                  <div className="grow" style={{ minWidth: 200 }}><div className="title">{String(t.name)}</div>
+                    <div className="meta">{[t.active ? 'Morning handover' : 'Not on the morning handover', t.onChecklist ? `Prep checklist: ${t.checklistGroup || label} · ${t.checklistName || String(t.name)}` : 'Not on the Prep checklist'].join(' · ')}</div></div>
                   <MoveButtons kind="prepTask" id={String(t.id)} first={i === 0} last={i === tasks.length - 1} label={String(t.name)} />
                   <details style={{ flexBasis: '100%' }}>
                     <summary className="linkbtn" style={{ cursor: 'pointer' }}>Edit</summary>
-                    <div style={{ paddingBlock: 8 }}><PrepTaskForm departmentId={String(cur.id)} t={{ id: String(t.id), name: String(t.name), group: String(t.grp), active: Boolean(t.active) }} /></div>
+                    <div style={{ paddingBlock: 8 }}><PrepTaskForm departmentId={String(cur.id)} groups={groups} t={{ id: String(t.id), name: String(t.name), group: String(t.grp), active: Boolean(t.active),
+                      onChecklist: Boolean(t.onChecklist), checklistGroup: (t.checklistGroup as string) ?? null, checklistName: (t.checklistName as string) ?? null }} /></div>
                   </details>
                 </div>
               );
@@ -47,7 +52,7 @@ export default async function MorningPrepAdmin({ searchParams }: { searchParams:
           </section>
         );
       })}
-      <section className="panel"><PrepTaskForm departmentId={String(cur.id)} /></section>
+      <section className="panel"><PrepTaskForm departmentId={String(cur.id)} groups={groups} /></section>
     </>
   );
 }

@@ -94,7 +94,8 @@ export function useCatalogue(): CatalogueState {
     warmed.current = catalogue.version;
     const photos = [...catalogue.products.map((p) => p.photoPath), ...catalogue.areas.map((a) => a.guidePhotoPath)].filter((p): p is string => !!p);
     const defrostDepts = new Set((catalogue.defrostItems ?? []).map((i) => i.departmentId));
-    void warmOfflineCache(['/', ...catalogue.departments.map((d) => `/d/${d.id}`), ...[...defrostDepts].map((id) => `/d/${id}/defrost`)], photos);
+    const prepDepts = new Set((catalogue.prepTasks ?? []).filter((t) => t.onChecklist).map((t) => t.departmentId));
+    void warmOfflineCache(['/', ...catalogue.departments.map((d) => `/d/${d.id}`), ...[...defrostDepts].map((id) => `/d/${id}/defrost`), ...[...prepDepts].map((id) => `/d/${id}/prep`)], photos);
   }, [catalogue, connection]);
 
   return { catalogue, checkedAt, connection, error, refresh };

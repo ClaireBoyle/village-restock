@@ -64,6 +64,10 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
   const prepOn = ctx.prepTasks.length > 0 && session.kind === 'full';
   const handover = useLive(async () => (prepOn ? localDb().prep.get(session.id) : undefined), [session.id, prepOn], undefined);
   const prepMissing = prepOn && !handover && !finished;
+  // Jobs left for morning on tonight's Prep checklist: already on the opener's handover.
+  const leftChecks = useLive(async () => (prepOn ? (await localDb().prepChecks.where('[departmentId+tradingDate]').equals([session.departmentId, session.tradingDate]).toArray()).filter((c) => c.morning) : []),
+    [session.departmentId, session.tradingDate, prepOn], []);
+  const leftForMorning = leftChecks.map((c) => ctx.allPrepTasks.find((t) => t.id === c.taskId)?.name).filter((n): n is string => !!n);
   const goPrep = () => document.getElementById('morning-prep')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   const ex = finished ? [] : exceptions({ kind: session.kind, view, placements, recordedAreas: recorded, items });
   // Area restocks (e.g. Candy Bar's confection stand) are named after their area.
@@ -179,7 +183,7 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
             {/* Kitchen: drawers still waiting for their refill (not a shortage). */}
             <PendingRefills list={pendingRefills(session.kind, placements, recorded, items)}
               onRefilled={(p) => void setItems(session.id, [{ placementId: p.placementId, fields: { refillStatus: 'refilled' } }], who)} />
-            {prepOn ? <MorningPrepPicker tasks={ctx.prepTasks} handover={handover}
+            {prepOn ? <MorningPrepPicker tasks={ctx.prepTasks} handover={handover} leftForMorning={leftForMorning}
               onSave={(st, list) => void setPrep(session, st, list, who)} /> : null}
 
             {/* Always shown (also when there are no shortages): who is signing this restock off. */}

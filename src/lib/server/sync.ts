@@ -292,6 +292,27 @@ async function apply(tx: Tx, op: SyncOp, deviceId: string): Promise<{ mergedInto
       return {};
     }
 
+    case 'prepcheck.set': {
+      // Needs migration 021. Until then, keep it on the device and retry later rather than lose it.
+      if (!(await prepCheckTable(tx))) throw new OpError('The server needs a database update (021_prep_checklist.sql)', false);
+      const [task] = await tx`select name from prep_tasks where id = ${op.taskId} and department_id = ${op.departmentId}`;
+      if (!task) throw new OpError('That prep job no longer exists');
+      const f = op.fields;
+      const has = (k: keyof typeof f) => Object.prototype.hasOwnProperty.call(f, k);
+      await tx`insert into prep_checks (department_id, trading_date, task_id, task_name, updated_by, updated_at)
+        values (${op.departmentId}, ${op.tradingDate}, ${op.taskId}, ${String(task.name)}, ${op.by}, ${op.at})
+        on conflict (department_id, trading_date, task_id) do nothing`;
+      await tx`update prep_checks set
+          status = ${has('status') ? f.status ?? null : tx`status`},
+          morning = ${has('morning') ? Boolean(f.morning) : tx`morning`},
+          note = ${has('note') ? f.note?.trim() || null : tx`note`},
+          morning_done_at = ${has('morningDone') ? (f.morningDone ? op.at : null) : tx`morning_done_at`},
+          morning_done_by = ${has('morningDone') ? (f.morningDone ? op.by : null) : tx`morning_done_by`},
+          task_name = ${String(task.name)}, updated_by = ${op.by}, updated_at = ${op.at}
+        where department_id = ${op.departmentId} and trading_date = ${op.tradingDate} and task_id = ${op.taskId}`;
+      return {};
+    }
+
     case 'defrost.set': {
       if (await defrostWasReset(tx, op.departmentId, op.serviceDate, op.at)) throw new OpError('An admin cleared this Defrost Planner record.', true, true);
       const [item] = await tx`select name from defrost_items where id = ${op.itemId} and department_id = ${op.departmentId}`;
@@ -338,6 +359,12 @@ async function completedByColumn(tx: Tx): Promise<boolean> {
 }
 
 let hasPrep = false;
+let hasPrepChecks = false;
+async function prepCheckTable(tx: Tx): Promise<boolean> {
+  if (!hasPrepChecks) hasPrepChecks = !!(await tx`select to_regclass('public.prep_checks') is not null as ok`)[0]?.ok;
+  return hasPrepChecks;
+}
+
 async function prepTables(tx: Tx): Promise<boolean> {
   if (!hasPrep) hasPrep = !!(await tx`select to_regclass('public.prep_handover_items') is not null as ok`)[0]?.ok;
   return hasPrep;

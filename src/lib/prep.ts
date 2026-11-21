@@ -7,7 +7,36 @@ export const PREP_GROUPS: [PrepGroup, string][] = [['vegetables', 'Vegetables'],
 export const prepGroupLabel = (g: PrepGroup) => PREP_GROUPS.find((x) => x[0] === g)?.[1] ?? 'Other';
 
 /** One job on the checklist (set up in Admin → Morning prep). */
-export interface PrepTask { id: string; departmentId: string; group: PrepGroup; name: string; sortOrder: number }
+export interface PrepTask {
+  id: string; departmentId: string; group: PrepGroup; name: string; sortOrder: number;
+  /** On the morning handover list (Finish screen). Missing = yes. */
+  active?: boolean;
+  /** On the Prep checklist, and how it's shown there (needs migration 021). Blank = its group / task name. */
+  onChecklist?: boolean; checklistGroup?: string | null; checklistName?: string | null;
+}
+
+/** Prep checklist jobs, grouped by shelf ("Make sauces"), groups in the order of their first job. */
+export function checklistGroups(tasks: PrepTask[]): { name: string; tasks: (PrepTask & { label: string })[] }[] {
+  const out: { name: string; tasks: (PrepTask & { label: string })[] }[] = [];
+  for (const t of [...tasks].filter((x) => x.onChecklist).sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))) {
+    const name = t.checklistGroup?.trim() || prepGroupLabel(t.group);
+    let g = out.find((x) => x.name === name);
+    if (!g) out.push((g = { name, tasks: [] }));
+    g.tasks.push({ ...t, label: t.checklistName?.trim() || t.name });
+  }
+  return out;
+}
+
+/** One check on the Prep checklist for a service. status null = Unchecked. */
+export interface PrepCheck {
+  departmentId: string; tradingDate: string; taskId: string;
+  status: 'ready' | 'needs' | null;
+  /** "Leave for morning": on the opener's handover. */
+  morning: boolean;
+  note: string | null;
+  morningDoneAt: string | null; morningDoneBy: string | null;
+  updatedBy: string | null; updatedAt: string;
+}
 
 /** A task the closing team selected ("Needs prep"), or one they typed in. */
 export interface PrepItem {

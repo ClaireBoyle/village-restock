@@ -7,7 +7,7 @@ import { useCatalogue } from '@/lib/client/use-catalogue';
 import { useLive, useResetIds, useStaffName } from '@/lib/client/hooks';
 import { localDb, type LocalArea, type LocalSession } from '@/lib/client/local-db';
 import { findOpenQuickSession, openAreaSession, openFullSession, startSession } from '@/lib/client/restock-store';
-import { EMPTY_ITEM, departmentView, scopeView, suggestions, usesRefill, withSuggestions, type AreaStatus, type DepartmentView, type ItemState, type PlacementView, type Suggestion } from '@/lib/restock-logic';
+import { EMPTY_ITEM, departmentView, quickPlacements, scopeView, suggestions, usesRefill, withSuggestions, type AreaStatus, type DepartmentView, type ItemState, type PlacementView, type Suggestion } from '@/lib/restock-logic';
 import { tradingDate } from '@/lib/restock-math';
 import { CheckStep } from './CheckStep';
 import { CollectStep } from './CollectStep';
@@ -47,6 +47,8 @@ export interface RestockCtx {
   doneLabel: string;
   /** Morning prep checklist for this department (Gold Class Kitchen); empty = no handover. */
   prepTasks: PrepTask[];
+  /** Every prep task for the department (also those only on the Prep checklist). */
+  allPrepTasks: PrepTask[];
 }
 
 type Mode = 'full' | 'quick' | 'area';
@@ -196,7 +198,10 @@ export function RestockApp({ departmentId, isAdmin = false }: { departmentId: st
 
   const gold = view?.department.theme === 'gold';
   const hasDefrost = !!catalogue?.defrostItems?.some((i) => i.departmentId === departmentId);
-  const prepTasks = useMemo(() => (catalogue?.prepTasks ?? []).filter((t) => t.departmentId === departmentId), [catalogue, departmentId]);
+  // The morning handover list (a task can be on the Prep checklist only).
+  const prepTasks = useMemo(() => (catalogue?.prepTasks ?? []).filter((t) => t.departmentId === departmentId && t.active !== false), [catalogue, departmentId]);
+  const allPrepTasks = useMemo(() => (catalogue?.prepTasks ?? []).filter((t) => t.departmentId === departmentId), [catalogue, departmentId]);
+  const checklistOn = allPrepTasks.some((t) => t.onChecklist);
   // Each department has its own backdrop: deep navy (Village) or dark gold (Gold Class).
   const themeCls = `theme-navy ${gold ? 'theme-gold gc' : ''}`;
   const activeSession = session;
@@ -238,7 +243,7 @@ export function RestockApp({ departmentId, isAdmin = false }: { departmentId: st
     return (
       <div className={themeCls}>{top}
         <TypeStep view={view} fullSession={fullSession} remoteFull={remoteFull} quickSession={quickSession} opening={opening}
-          onStart={(m) => void begin(m)} onSummary={showFullSummary} hasDefrost={hasDefrost} prep={prepTasks.length && today ? { today, who } : null}
+          onStart={(m) => void begin(m)} onSummary={showFullSummary} hasDefrost={hasDefrost} checklist={checklistOn} prep={(prepTasks.length || checklistOn) && today ? { today, who, tasks: allPrepTasks } : null}
           onReset={isAdmin ? (r) => void startReset(r) : undefined} />
         {resetSheet}{toastEl}
       </div>
@@ -261,11 +266,12 @@ export function RestockApp({ departmentId, isAdmin = false }: { departmentId: st
   const shownStep: Step = refill ? (step === 'refill' ? 'boh' : step) : step === 'refill' || step === 'boh' ? 'check' : step;
   // An area restock sees only its own area: its products, its collection list, its finish.
   const scoped = session.kind === 'area' ? scopeView(view, session.areaId) : view;
-  const placements = session.kind === 'quick' ? session.selected.map((id) => view.byId.get(id)).filter((p): p is PlacementView => Boolean(p)) : scoped.placements;
+  // Quick Restock: what's been given an amount (shared by every device on this restock), in the order it was added.
+  const placements = session.kind === 'quick' ? quickPlacements(view, items, session.selected) : scoped.placements;
   const byArea = session.kind === 'area';
 
   const ctx: RestockCtx = {
-    view: scoped, session, placements, items, rawItems, suggested, refill, areaRecords, recorded, who, go, hasDefrost, prepTasks,
+    view: scoped, session, placements, items, rawItems, suggested, refill, areaRecords, recorded, who, go, hasDefrost, prepTasks, allPrepTasks,
     // Restock screens: one slim step bar, no banner, so products start near the top of the screen.
     header: <div className="rbar"><Stages kind={session.kind} current={shownStep} onGo={go} refill={refill} /></div>,
     // Area restocks go back to choosing an area, where this one shows as saved (or done).

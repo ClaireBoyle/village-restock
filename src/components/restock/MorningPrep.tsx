@@ -8,6 +8,8 @@ import { PREP_GROUPS, prepGroupLabel, sortedItems, type PrepGroup, type PrepItem
 import { localDb, type LocalPrep } from '@/lib/client/local-db';
 import { useLive } from '@/lib/client/hooks';
 import { importRemotePrep, setPrepDone } from '@/lib/client/prep-store';
+import { importRemotePrepChecks, setPrepCheck } from '@/lib/client/prep-check-store';
+import type { PrepCheck } from '@/lib/prep';
 
 import { timeOf } from './shared';
 
@@ -23,9 +25,11 @@ function SaveText({ value, onSave, ...rest }: { value: string; onSave: (v: strin
     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(); e.currentTarget.blur(); } }} />;
 }
 
-export function MorningPrepPicker({ tasks, handover, onSave }: {
+export function MorningPrepPicker({ tasks, handover, onSave, leftForMorning = [] }: {
   tasks: PrepTask[]; handover: LocalPrep | undefined;
   onSave: (status: 'needed' | 'none' | null, items: PrepItem[]) => void;
+  /** Jobs already left for morning on tonight's Prep checklist (they're on the handover too). */
+  leftForMorning?: string[];
 }) {
   // Shown straight away (a tick never waits for the device's database), then saved.
   const [local, setLocal] = useState<{ status: 'needed' | 'none' | null; items: PrepItem[] }>({ status: handover?.status ?? null, items: handover?.items ?? [] });
@@ -69,6 +73,7 @@ export function MorningPrepPicker({ tasks, handover, onSave }: {
     <section className={`prep ${status ? '' : 'unanswered'}`} aria-labelledby="prep-h" id="morning-prep">
       <h3 id="prep-h"><Icon name="clock" />Morning prep needed</h3>
       <p className="prep-hint">Tick everything the morning team needs to prep. Add a note if needed. Choosing tasks only updates this handover, not the restock.</p>
+      {leftForMorning.length ? <p className="prep-left"><Icon name="info" /><span>Already left for morning on the Prep checklist: <b>{leftForMorning.join(', ')}</b></span></p> : null}
       <button type="button" className={`prep-none ${status === 'none' ? 'on' : ''}`} aria-pressed={status === 'none'}
         onClick={() => onSaveNow(status === 'none' ? null : 'none', [])}>
         <Icon name={status === 'none' ? 'check' : 'circle'} />No morning prep needed</button>
@@ -139,7 +144,9 @@ function GroupedList({ items, render }: { items: PrepItem[]; render?: (i: PrepIt
 }
 
 /** Kitchen screen: last night's handover for the morning team, each task marked Done on its own. */
-export function MorningPrepCard({ handover, dateLabel, onDone }: { handover: LocalPrep; dateLabel: string; onDone: (itemId: string, done: boolean) => void }) {
+export function MorningPrepCard({ handover, dateLabel, onDone, sub }: { handover: LocalPrep; dateLabel: string; onDone: (itemId: string, done: boolean) => void;
+  /** Where it came from, when not only the close (e.g. jobs left for morning on the Prep checklist). */
+  sub?: string }) {
   if (handover.status === 'none') {
     return <section className="prep-card none" aria-label="Morning prep"><Icon name="check" /><div><b>No morning prep needed</b><small>From the {dateLabel} close</small></div></section>;
   }
@@ -147,7 +154,7 @@ export function MorningPrepCard({ handover, dateLabel, onDone }: { handover: Loc
   return (
     <section className={`prep-card ${done === handover.items.length ? 'all-done' : ''}`} aria-labelledby="prep-card-h">
       <div className="pc-head"><h2 id="prep-card-h"><Icon name="clock" />Morning prep</h2><span className="pc-n">{done} of {handover.items.length} done</span></div>
-      <p className="pc-sub">From the {dateLabel} close{handover.updatedBy ? ` · ${handover.updatedBy}` : ''}</p>
+      <p className="pc-sub">{sub ?? <>From the {dateLabel} close{handover.updatedBy ? ` · ${handover.updatedBy}` : ''}</>}</p>
       <GroupedList items={handover.items} render={(i) => (
         <div className={`pc-row ${i.doneAt ? 'done' : ''}`}>
           <span className="pc-t"><b>{i.name}</b>{i.note ? <small>{i.note}</small> : null}
@@ -163,12 +170,13 @@ export function MorningPrepCard({ handover, dateLabel, onDone }: { handover: Loc
 
 /**
  * The Kitchen screen's handover for the morning team: the latest one from a finished restock
- * (last night's, or tonight's once the closing team finishes). Brought in from the server so any
- * device sees it, and kept on this device for when there's no connection.
+ * (last night's, or tonight's once the closing team finishes), plus jobs left for morning on the
+ * Prep checklist that service. Brought in from the server so any device sees it, and kept on this
+ * device for when there's no connection.
  */
-export function MorningPrepHome({ departmentId, today, who }: { departmentId: string; today: string; who: string }) {
+export function MorningPrepHome({ departmentId, today, who, tasks = [] }: { departmentId: string; today: string; who: string; tasks?: PrepTask[] }) {
   const since = shiftDay(today, -1);
-  useEffect(() => { void importRemotePrep(departmentId, since); }, [departmentId, since]);
+  useEffect(() => { void importRemotePrep(departmentId, since); void importRemotePrepChecks(departmentId, since); }, [departmentId, since]);
   const rows = useLive(async () => {
     const list = await localDb().prep.where('departmentId').equals(departmentId).toArray();
     const sessions = new Map((await localDb().sessions.bulkGet(list.map((h) => h.sessionId))).filter(Boolean).map((s) => [s!.id, s!.status]));
@@ -176,10 +184,29 @@ export function MorningPrepHome({ departmentId, today, who }: { departmentId: st
       .filter((h) => /^finished/.test(sessions.get(h.sessionId) ?? h.restockStatus ?? ''))
       .sort((a, b) => b.tradingDate.localeCompare(a.tradingDate) || b.updatedAt.localeCompare(a.updatedAt));
   }, [departmentId, since], [] as LocalPrep[]);
-  const h = rows[0];
-  if (!h) return null;
-  const dateLabel = new Date(`${h.tradingDate}T12:00:00Z`).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
-  return <MorningPrepCard handover={h} dateLabel={dateLabel} onDone={(id, done) => void setPrepDone(h.sessionId, id, done, who)} />;
+  const left = useLive(async () => (await localDb().prepChecks.where('departmentId').equals(departmentId).toArray()).filter((c) => c.morning && c.tradingDate >= since),
+    [departmentId, since], [] as PrepCheck[]);
+  // The latest service with anything for the morning team: its handover and its "Leave for morning" jobs together.
+  const day = [rows[0]?.tradingDate, ...left.map((c) => c.tradingDate)].filter(Boolean).sort().pop();
+  if (!day) return null;
+  const h = rows[0]?.tradingDate === day ? rows[0] : undefined;
+  const taskOf = new Map(tasks.map((t) => [t.id, t]));
+  const inHandover = new Set((h?.status === 'needed' ? h.items : []).flatMap((i) => (i.taskId ? [i.taskId] : [])));
+  const extra: PrepItem[] = left.filter((c) => c.tradingDate === day && !inHandover.has(c.taskId) && taskOf.has(c.taskId)).map((c) => ({
+    id: `chk:${c.taskId}`, taskId: c.taskId, group: taskOf.get(c.taskId)!.group, name: taskOf.get(c.taskId)!.name, qty: null, note: c.note,
+    doneAt: c.morningDoneAt, doneBy: c.morningDoneBy,
+  }));
+  const items = [...(h?.status === 'needed' ? h.items : []), ...extra];
+  const merged: LocalPrep = h && !extra.length ? h : {
+    sessionId: h?.sessionId ?? '', departmentId, tradingDate: day, status: items.length ? 'needed' : 'none', items,
+    updatedBy: h?.updatedBy ?? null, updatedAt: h?.updatedAt ?? '',
+  };
+  const dateLabel = new Date(`${day}T12:00:00Z`).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '');
+  const onDone = (id: string, done: boolean) => (id.startsWith('chk:')
+    ? void setPrepCheck(departmentId, day, id.slice(4), { morningDone: done }, who)
+    : h ? void setPrepDone(h.sessionId, id, done, who) : undefined);
+  const sub = !h ? `Left for morning on the ${dateLabel} prep checklist` : extra.length ? `From the ${dateLabel} close and prep checklist` : undefined;
+  return <MorningPrepCard handover={merged} dateLabel={dateLabel} sub={sub} onDone={onDone} />;
 }
 
 function shiftDay(d: string, n: number) {

@@ -227,6 +227,8 @@ export async function moveItem(form: FormData): Promise<void> {
 const prepTaskSchema = z.object({
   id: optUuid, departmentId: uuid, name: text(80, 'Task'),
   group: z.enum(['vegetables', 'proteins', 'sauces', 'other']), active: checkbox,
+  // Prep checklist (migration 021): shown there, under which group, with which short name.
+  onChecklist: checkbox, checklistGroup: optText(60), checklistName: optText(80),
 });
 
 export async function savePrepTask(_: ActionResult, form: FormData): Promise<ActionResult> {
@@ -240,10 +242,16 @@ export async function savePrepTask(_: ActionResult, form: FormData): Promise<Act
     if (t.id) {
       const r = await sql`update prep_tasks set name = ${t.name}, grp = ${t.group}, active = ${t.active} where id = ${t.id} and department_id = ${t.departmentId} returning id`;
       if (!r.length) return { error: 'That task no longer exists.' };
+      if (await hasColumn('prep_tasks', 'on_checklist')) {
+        await sql`update prep_tasks set on_checklist = ${t.onChecklist}, checklist_group = ${t.checklistGroup || null}, checklist_name = ${t.checklistName || null} where id = ${t.id}`;
+      } else if (t.onChecklist && (t.checklistGroup || t.checklistName)) return { error: 'Run db/migrations/021_prep_checklist.sql in Supabase first, then try again.' };
       return done('Task saved.');
     }
     const [{ n }] = await sql`select coalesce(max(sort_order), 0) + 1 as n from prep_tasks where department_id = ${t.departmentId}`;
-    await sql`insert into prep_tasks (department_id, grp, name, sort_order) values (${t.departmentId}, ${t.group}, ${t.name}, ${Number(n)})`;
+    const [row] = await sql`insert into prep_tasks (department_id, grp, name, sort_order) values (${t.departmentId}, ${t.group}, ${t.name}, ${Number(n)}) returning id`;
+    if (await hasColumn('prep_tasks', 'on_checklist')) {
+      await sql`update prep_tasks set on_checklist = ${t.onChecklist}, checklist_group = ${t.checklistGroup || null}, checklist_name = ${t.checklistName || null} where id = ${String(row.id)}`;
+    }
     return done(`${t.name} added.`);
   } catch (e) { return fail(e); }
 }

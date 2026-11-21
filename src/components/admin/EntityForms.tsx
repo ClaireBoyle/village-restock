@@ -113,7 +113,10 @@ export function LocationForm({ l }: { l?: { id: string; name: string; active: bo
 }
 
 /** One morning prep task (Admin → Morning prep): name, group, in use. */
-export function PrepTaskForm({ departmentId, t }: { departmentId: string; t?: { id: string; name: string; group: string; active: boolean } }) {
+export function PrepTaskForm({ departmentId, t, groups = [] }: { departmentId: string;
+  t?: { id: string; name: string; group: string; active: boolean; onChecklist?: boolean; checklistGroup?: string | null; checklistName?: string | null };
+  /** Checklist groups already used (suggested when typing). */
+  groups?: string[] }) {
   const k = t?.id ?? 'new';
   return (
     <ActionForm action={savePrepTask} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }} resetOnSuccess={!t}>
@@ -125,7 +128,13 @@ export function PrepTaskForm({ departmentId, t }: { departmentId: string; t?: { 
         <select id={`pg-${k}`} name="group" defaultValue={t?.group ?? 'vegetables'}>
           <option value="vegetables">Vegetables</option><option value="proteins">Proteins</option><option value="sauces">Sauces</option><option value="other">Other</option>
         </select></div>
-      {t ? <label className="check"><input type="checkbox" name="active" defaultChecked={t.active} />On the checklist</label> : <input type="hidden" name="active" value="on" />}
+      <div className="field" style={{ flex: '1 1 200px' }}><label htmlFor={`pcg-${k}`}>Prep checklist group</label>
+        <input id={`pcg-${k}`} name="checklistGroup" list={`pcg-list-${k}`} defaultValue={t?.checklistGroup ?? ''} maxLength={60} placeholder="e.g. Make sauces" />
+        <datalist id={`pcg-list-${k}`}>{groups.map((g) => <option key={g} value={g} />)}</datalist></div>
+      <div className="field" style={{ flex: '1 1 200px' }}><label htmlFor={`pcn-${k}`}>Name on the checklist</label>
+        <input id={`pcn-${k}`} name="checklistName" defaultValue={t?.checklistName ?? ''} maxLength={80} placeholder="e.g. Burger sauce (blank = task)" /></div>
+      {t ? <label className="check"><input type="checkbox" name="active" defaultChecked={t.active} />On the morning handover</label> : <input type="hidden" name="active" value="on" />}
+      <label className="check"><input type="checkbox" name="onChecklist" defaultChecked={t ? t.onChecklist ?? false : true} />On the Prep checklist</label>
       <SubmitButton className="btn">{t ? 'Save' : 'Add task'}</SubmitButton>
     </ActionForm>
   );

@@ -1376,3 +1376,72 @@ button.pnote.open span{display:block}
 .sr-change{margin-left:8px;font-size:13px;min-height:28px;padding:0 2px}
 .sr-fix{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .sr-fix .chip{min-height:36px}
+
+/* Quick Restock: the amount needed right in each product row (+ for one, or type a bigger number), with its unit. */
+.qrow.on{background:color-mix(in srgb,var(--warn-bg) 40%,transparent);border-radius:12px}
+.q-amt{display:flex;align-items:center;gap:6px;flex:none}
+.q-step .qty-input{width:56px}
+.q-unit{min-width:52px;font-size:13px;color:var(--ink-2);line-height:1.2;overflow-wrap:anywhere}
+.qrow .q-task{min-width:112px}
+.qrow .q-note{display:block;white-space:normal}
+.q-remove{min-height:28px;padding:2px 0;font-size:13px;color:var(--ink-2);text-decoration:underline;text-underline-offset:3px;align-self:flex-start}
+.q-guide{margin:0}
+@media (max-width:560px){
+  .q-unit{min-width:0;max-width:56px}
+  .q-step button{width:42px;height:42px}
+  .q-step .qty-input{width:50px;height:42px}
+}
+
+/* Prep checklist (Gold Class Kitchen): grouped jobs, Ready / Needs prep, Leave for morning. */
+.pcl{display:flex;flex-direction:column;gap:14px}
+.pcl-head{padding:16px 18px;border-radius:20px;background:var(--surface);border:1px solid var(--hair);display:flex;flex-direction:column;gap:10px}
+.theme-navy .pcl-head{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12)}
+.pcl-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.pcl-head h1{font-size:26px;letter-spacing:-.02em;margin-top:2px}
+.pcl-sum{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin:0;font-size:15px}
+.pcl-sum span{display:inline-flex;gap:4px;align-items:center;color:var(--ink-2);font-size:14px}
+.pcl-sum span.w{color:var(--warn);font-weight:600}
+.pcl-sum .ic{width:15px;height:15px}
+.pcl-bar{display:block;height:6px;border-radius:999px;background:var(--surface-2);overflow:hidden}
+.pcl-bar i{display:block;height:100%;background:var(--ok);border-radius:inherit;transition:width .3s ease}
+.pcl-filter{align-self:flex-start}
+.pcl-filter button{min-height:44px}
+.pcl-warn{display:flex;gap:6px;align-items:flex-start;margin:0;font-size:13.5px;color:var(--warn)}
+.pcl-group{display:flex;flex-direction:column;gap:6px}
+.pcl-group h2{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-family:var(--f-body);font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--d-accent);padding:0 4px}
+.pcl-group h2 small{font-size:12.5px;letter-spacing:0;text-transform:none;font-weight:500;color:var(--ink-2)}
+.pcl-group ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+@media (min-width:900px){.pcl-group ul{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.pcl-job{display:flex;flex-direction:column;gap:4px;padding:9px 10px 7px 12px;border-radius:14px;border:1px solid var(--hair);background:var(--surface);box-shadow:inset 3px 0 0 var(--none-line, var(--hair))}
+.theme-navy .pcl-job{background:rgba(255,255,255,.045);border-color:rgba(255,255,255,.08)}
+.pcl-job.s-ready{box-shadow:inset 3px 0 0 var(--ok)}
+.pcl-job.s-needs{box-shadow:inset 3px 0 0 var(--warn-fill);background:color-mix(in srgb,var(--warn-bg) 45%,var(--surface))}
+.pcl-main{display:flex;align-items:center;gap:10px}
+.pcl-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.pcl-t b{font-size:16px;font-weight:600;line-height:1.25;overflow-wrap:break-word}
+.pcl-st{display:inline-flex;align-items:center;gap:3px;font-size:13px;color:var(--ink-2)}
+.pcl-st .ic{width:14px;height:14px}
+.s-ready .pcl-st{color:var(--ok)}
+.s-needs .pcl-st{color:var(--warn);font-weight:600}
+.pcl-by{font-weight:400;color:var(--ink-2)}
+.pcl-seg{display:flex;gap:6px;flex:none}
+.pcl-seg button{min-height:44px;padding:0 12px;border-radius:12px;border:1px solid var(--hair);background:var(--surface-2);color:var(--ink);font-weight:600;font-size:14.5px;display:inline-flex;align-items:center;gap:5px}
+.pcl-seg button .ic{width:16px;height:16px}
+.pcl-seg .pcl-ready.on{background:var(--ok);border-color:var(--ok);color:#fff}
+.pcl-seg .pcl-needs.on{background:var(--warn-fill);border-color:var(--warn-fill);color:#1d1300}
+.pcl-extra{display:flex;flex-wrap:wrap;align-items:center;gap:2px 14px;min-height:30px}
+.pcl-extra .linkbtn{min-height:30px;font-size:13px;color:var(--ink-2);display:inline-flex;align-items:center;gap:4px;padding:0}
+.pcl-extra .ic{width:14px;height:14px}
+.pcl-note{color:var(--ink) !important;text-align:left}
+.pcl-note-in{flex:1 1 220px;min-height:36px;border-radius:10px;border:1px solid var(--line);background:var(--surface);padding:4px 10px;font-size:14px;color:var(--ink)}
+.pcl-morning.on{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:600;color:var(--d-accent)}
+.pcl-morning.on .linkbtn{color:var(--ink-2);text-decoration:underline;text-underline-offset:3px}
+.pcl-none{display:flex;gap:6px;align-items:center}
+.prep-link{margin:0}
+.prep-left{display:flex;gap:6px;align-items:flex-start;margin:0;font-size:13.5px;color:var(--ink-2)}
+@media (max-width:480px){
+  .pcl-main{flex-wrap:wrap}
+  .pcl-seg{width:100%}
+  .pcl-seg button{flex:1;justify-content:center}
+}
+.q-step button.q-hide{visibility:hidden}

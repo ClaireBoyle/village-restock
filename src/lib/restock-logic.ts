@@ -144,7 +144,7 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
   const products = new Map(cat.products.map((p) => [p.id, p]));
   const locations = new Map(cat.locations.map((l) => [l.id, l]));
   const categories = new Map(cat.categories.map((c) => [c.id, c.name]));
-  const prepNames = new Map((cat.prepTasks ?? []).filter((t) => t.departmentId === departmentId).map((t) => [t.id, t.name]));
+  const prepNames = new Map((cat.prepTasks ?? []).filter((t) => t.departmentId === departmentId && t.active !== false).map((t) => [t.id, t.name]));
   const all = cat.areas
     .filter((a) => a.departmentId === departmentId)
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
@@ -250,9 +250,30 @@ export function scopeView(view: DepartmentView, areaId: string | null | undefine
 export function needOf(p: PlacementView, i: ItemState): number | null {
   // A refill task or a linked row is never a requirement of its own.
   if (p.refillSource || p.linkedPlacementId) return null;
-  if (p.method === 'par') return p.par === null ? null : requiredForPar(p.par, i.currentQty);
+  // Quick Restock asks for the amount needed directly, also for target-level products (no shelf count).
+  if (p.method === 'par') return i.currentQty === null && i.requestedQty !== null ? i.requestedQty : p.par === null ? null : requiredForPar(p.par, i.currentQty);
   if (p.method === 'manual') return i.requestedQty;
   return null;
+}
+
+/** Quick Restock: products picked by amount. Refill tasks, linked rows and prep-made stock are restocked other ways. */
+export const isQuickPick = (p: PlacementView) => !p.refillSource && !p.linkedPlacementId && !p.prepTaskId;
+
+/** Quick Restock: the amount entered as needed (null = not on the list). */
+export const quickNeed = (p: PlacementView, i: ItemState): number | null => (p.method === 'routine' ? null : i.requestedQty);
+
+/**
+ * Quick Restock's list: what's been picked (an amount above zero, or a task marked needed), in the order
+ * it was added on this device and then as listed, so another device resuming it sees the same list.
+ */
+export function quickPlacements(view: DepartmentView, items: Map<string, ItemState>, order: string[]): PlacementView[] {
+  const on = (p: PlacementView) => {
+    const i = items.get(p.placementId) ?? EMPTY_ITEM;
+    return isQuickPick(p) && (p.method === 'routine' ? i.routineChoice === 'needed' : (i.requestedQty ?? 0) > 0);
+  };
+  const picked = view.placements.filter(on);
+  const rank = new Map(order.map((id, n) => [id, n]));
+  return picked.map((p, n) => ({ p, n })).sort((a, b) => (rank.get(a.p.placementId) ?? 1e6 + a.n) - (rank.get(b.p.placementId) ?? 1e6 + b.n)).map((x) => x.p);
 }
 
 /**
@@ -269,7 +290,7 @@ export function isChecked(p: PlacementView, i: ItemState): boolean {
   if (p.refillSource) return !!i.refillStatus;
   if (p.linkedPlacementId) return false; // its requirement is counted on the row it's linked to
   if (i.conflict) return false; // needs a person to choose first
-  if (p.method === 'par') return i.currentQty !== null;
+  if (p.method === 'par') return i.currentQty !== null || i.requestedQty !== null;
   if (p.method === 'manual') return i.requestedQty !== null;
   return i.routineChoice !== null;
 }
