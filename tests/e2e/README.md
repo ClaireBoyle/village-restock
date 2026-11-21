@@ -34,6 +34,7 @@ node tests/e2e/e2e-p2.js
 | `e2e-p16.js` | Completed by (prefilled, shown with no shortages, kept when left in progress, saved, fresh for the next run, saved offline then uploaded) and Home finished states (✓ Stocked green outline; ✓ Done · 2 shortages amber; cards and Candy Bar line). **First** load `candy-fixture.sql` then `candy-area-fixture.sql` after the reset |
 | `e2e-p17.js` | Gold Class Bar with nothing needed: Unchecked vs Checked · nothing needed, "Nothing added to the collection list" while checks are pending, upstairs spots with nothing to grab, straight to sign-off. **First** load `gcbar-refill-fixture.sql` after the reset |
 | `e2e-p20.js` | Gold Class Bar None left here: the tick (only on items added to collect, off by default, undo, cleared when removed), Collect labels, Finish review (Out of stock first, Low stock · Still available, Top-up incomplete) with Change, one-tap full collection, shortages and email wording. **First** load `gcbar-refill-fixture.sql` after the reset |
+| `e2e-p21.js` | A catalogue saved by an earlier release (e.g. a database update run before the new release went live) is replaced, even at the same version; same release and version is still "unchanged"; None left here then shows on a laptop. **First** load `gcbar-refill-fixture.sql` after the reset |
 | `e2e-stuck-lock.js` | A hung database connection holding a lock: the app says "Sync needs attention" (not "Offline") and uploads by itself once it clears |
 
 Screenshots go to `tests/e2e/out/` (not committed).

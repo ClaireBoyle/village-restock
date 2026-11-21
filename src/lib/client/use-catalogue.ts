@@ -30,11 +30,12 @@ export function useCatalogue(): CatalogueState {
   const [connection, setConnection] = useState<Connection>('checking');
   const [error, setError] = useState<string | null>(null);
   const versionRef = useRef<number | null>(null);
+  const revRef = useRef('');
 
   const refresh = useCallback(async () => {
     try {
       const since = versionRef.current ?? '';
-      const res = await fetch(`/api/catalogue?since=${since}`, { cache: 'no-store' });
+      const res = await fetch(`/api/catalogue?since=${since}&rev=${encodeURIComponent(revRef.current)}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`Server replied ${res.status}`);
       const body = (await res.json()) as CatalogueResponse;
       if (!body.unchanged) {
@@ -42,6 +43,7 @@ export function useCatalogue(): CatalogueState {
         void _u;
         await storeCatalogue(fresh).catch(() => undefined);
         versionRef.current = fresh.version;
+        revRef.current = fresh.rev ?? '';
         setCatalogue(fresh);
       }
       setCheckedAt(await touchCatalogueCheck().catch(() => new Date().toISOString()));
@@ -59,6 +61,7 @@ export function useCatalogue(): CatalogueState {
       const stored = await readStoredCatalogue();
       if (!cancelled && stored) {
         versionRef.current = stored.catalogue.version;
+        revRef.current = stored.catalogue.rev ?? '';
         setCatalogue(stored.catalogue);
         setCheckedAt(await readCatalogueCheck());
       }

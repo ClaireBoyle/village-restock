@@ -79,6 +79,8 @@ export interface ReadyTarget { min: number; max: number | null; qty: number }
 
 export interface Catalogue {
   version: number;
+  /** The app release that built this copy. A new release sends a fresh copy (it may carry new settings). */
+  rev?: string;
   generatedAt: string;
   /** Restocks finished after midnight but before cutoffHour count as the previous day's close. */
   settings: { timeZone: string; cutoffHour: number; defrostServiceTime: string };
