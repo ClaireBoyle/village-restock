@@ -19,13 +19,15 @@ function focusNext(from: HTMLInputElement) {
  * its restock method. Blank = not checked yet; 0 = checked, nothing needed.
  * Typing is kept as text until it's a valid number, so a half-typed "2." is never lost.
  */
-export function ProductRow({ p, item, onChange, showArea, onRemove, note, suggestedQty }: {
+export function ProductRow({ p, item, onChange, showArea, onRemove, note, suggestedQty, noneLeft = false }: {
   p: PlacementView; item: ItemState; onChange: (fields: Partial<ItemState>, resolve?: boolean) => void;
   showArea?: boolean; onRemove?: () => void;
   /** Refill FOH: the amount suggested from what was grabbed for front of house (staff can change or remove it). */
   suggestedQty?: number;
   /** A note about this product only (general area notes are shown once at the top). */
   note?: string | null;
+  /** Gold Class Bar: offer "None left here" once the item is added to collect. */
+  noneLeft?: boolean;
 }) {
   const st = cardState(p, item);
   const refillTask = p.method === 'routine' && !!p.pickupAreaId;
@@ -37,14 +39,20 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
   const [noteOpen, setNoteOpen] = useState(false);
   const focused = useRef(false);
   useEffect(() => { if (!focused.current) setText(fmt(value)); }, [value]);
+  // "None left here" shows the tap straight away (the saved value catches up a moment later).
+  const [tick, setTick] = useState<boolean | null>(null);
+  useEffect(() => setTick(null), [item.noneLeftHere]);
+  const ticked = tick ?? !!item.noneLeftHere;
 
-  const commit = (v: number | null) => { setErr(''); setText(fmt(v)); onChange({ [field]: v }); };
+  // Nothing to collect any more: "None left here" goes too (it's only shown with an amount).
+  const withTick = (v: number | null): Partial<ItemState> => (item.noneLeftHere && field === 'requestedQty' && !v ? { [field]: v, noneLeftHere: false } : { [field]: v });
+  const commit = (v: number | null) => { setErr(''); setText(fmt(v)); onChange(withTick(v)); };
   const onType = (raw: string) => {
     setText(raw);
     const r = parseQuantity(raw, { allowDecimal: p.allowDecimal, unitPlural: p.unitPlural });
     if (!r.ok) { setErr(r.message); return; }
     setErr('');
-    if (r.value !== value) onChange({ [field]: r.value });
+    if (r.value !== value) onChange(withTick(r.value));
   };
   const step = p.allowDecimal ? 0.5 : 1;
   // From blank, + gives 1 and − gives 0 (a quick way to say "none" / "empty").
@@ -138,6 +146,8 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
   }
 
   const routineText = p.method === 'routine' && !refillTask ? (p.instructions || 'Routine task') : null;
+  // Gold Class Bar: added to collect, so say if this spot is empty (off by default; an open bottle still in use is stock).
+  const showNone = noneLeft && progressive && !c && (need ?? 0) > 0 && !p.prepTaskId;
   return (
     <article className={`prow card s-${st} m-${p.method} ${quiet ? 'quiet' : ''} ${sug ? 'suggested' : ''}`} data-placement={p.placementId}>
       {/* A fixed photo slot, so adding a photo never moves anything. */}
@@ -147,6 +157,11 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
         <h3>{p.productName}</h3>
         {quiet && !showArea ? <p className="ps" id={`s-${p.placementId}`}>{status}</p>
           : <p className="ps" id={`s-${p.placementId}`}>{showArea ? <span className="parea">{p.areaName}{quiet ? '' : ' · '}</span> : null}{status}</p>}
+        {showNone ? (
+          <label className={`pnone ${ticked ? 'on' : ''}`} title="Only if this spot is empty. An open bottle that can still be used counts as stock.">
+            <input type="checkbox" checked={ticked} onChange={(e) => { setTick(e.target.checked); onChange({ noneLeftHere: e.target.checked }); }}
+              aria-label={`None left here: ${p.productName} in ${p.areaName}`} />None left here</label>
+        ) : null}
         {routineText ? <p className="pnote task"><Icon name="task" />{routineText}</p> : null}
         {note ? <button type="button" className={`pnote ${noteOpen ? 'open' : ''}`} onClick={() => setNoteOpen(!noteOpen)} aria-expanded={noteOpen}><Icon name="info" /><span>{note}</span></button> : null}
         {onRemove ? <button type="button" className="linkbtn premove" onClick={onRemove}>Remove from list</button> : null}

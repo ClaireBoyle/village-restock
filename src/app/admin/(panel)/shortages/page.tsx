@@ -35,7 +35,7 @@ export default async function Shortages() {
                 <div className="title">{r.productName} <span className="meta">&middot; {r.departmentName}</span></div>
                 <div className="meta">Short {Number(r.shortfallQty)} {r.unitPlural} &middot; {REASON[r.reason] ?? r.reason}{r.flagged ? ' · flagged' : ''} &middot; {day(r.tradingDate)}{r.reportedBy ? ` · ${r.reportedBy}` : ''}</div>
               </div>
-              <span className={`badge ${r.reason === 'insufficient' ? 's-bad' : 's-warn'}`}><Icon name={r.flagged ? 'flag' : 'warn'} />{r.reason === 'insufficient' ? (r.noneOnDisplay ? 'Out of stock' : 'Low stock') : 'Flagged'}</span>
+              <span className={`badge ${r.reason === 'insufficient' ? 's-bad' : 's-warn'}`}><Icon name={r.flagged ? 'flag' : 'warn'} />{r.reason !== 'insufficient' ? 'Flagged' : r.stockStatus === 'out' || r.noneOnDisplay ? 'Out of stock' : r.stockStatus === 'unconfirmed' ? 'Top-up incomplete' : 'Low stock'}</span>
               {r.sessionId ? <Link className="linkbtn" href={`/admin/restocks/${r.sessionId}`}>Restock</Link> : null}
               <form action={resolveShortage} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', flexBasis: '100%' }}>
                 <input type="hidden" name="id" value={r.id} />

@@ -132,6 +132,8 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   const notes = areaNotes(cur.placements);
   // The area's own short instruction, when set, replaces the long note repeated on every product.
   const sharedNotes = cur.area.guideText.trim() ? [] : notes.shared;
+  // Gold Class Bar: "None left here" on items added to collect (Bar and Upstairs checks).
+  const noneLeftOn = !!whole.department.noneLeftCheck;
   const hasGuide = !!(cur.area.guideText || cur.area.guidePhotoPath || sharedNotes.length);
   const guideShort = !cur.area.guidePhotoPath && !sharedNotes.length && cur.area.guideText.trim().length <= 110 && !cur.area.guideText.includes('\n');
 
@@ -233,7 +235,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
       onChange={(fields, resolve) => void onItem(p, fields, resolve)} />
   ) : (
     <ProductRow key={p.placementId} p={p} showArea={showArea} item={items.get(p.placementId) ?? EMPTY_ITEM} note={alsoEntered(p) ?? fromCupboard(p) ?? notes.own.get(p.placementId)}
-      suggestedQty={ctx.suggested.get(p.placementId)?.qty}
+      suggestedQty={ctx.suggested.get(p.placementId)?.qty} noneLeft={noneLeftOn}
       onChange={(fields, resolve) => void onItem(p, fields, resolve)} />
   );
   /**
@@ -360,6 +362,9 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
               </button>
               <button className="ag-more linkbtn" onClick={() => setGuideOpen(!guideOpen)} tabIndex={-1} aria-hidden="true">{guideOpen ? 'Less' : 'More'}</button>
             </section>
+          ) : null}
+          {noneLeftOn && cur.placements.some((p) => p.method === 'manual' && (needOf(p, items.get(p.placementId) ?? EMPTY_ITEM) ?? 0) > 0) ? (
+            <p className="aguide-line nl-hint"><Icon name="info" /><span>Tick <b>None left here</b> only when that spot is empty. An open bottle that can still be used counts as stock.</span></p>
           ) : null}
           {usesAdmits(cur.placements) ? (
             // Tomorrow's forecast admits: once per restock, for every suggested amount.

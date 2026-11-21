@@ -15,6 +15,8 @@ export interface CatDepartment {
   restockByArea?: boolean;
   /** Collecting less than needed is Low stock, even at zero; "None on display" makes it Out of stock (Candy Bar). */
   noneOnDisplay?: boolean;
+  /** Gold Class Bar: "None left here" on check rows; shortfalls are Out of stock, Low stock · Still available, or Top-up incomplete. */
+  noneLeftCheck?: boolean;
 }
 export interface CatArea {
   id: string; departmentId: string; name: string; guideText: string;

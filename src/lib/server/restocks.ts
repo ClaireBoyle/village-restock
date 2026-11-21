@@ -52,6 +52,8 @@ export interface ShortageRow {
   createdAt: string; resolvedAt: string | null; resolvedBy: string | null; resolutionNote: string | null; tradingDate: string | null;
   /** Candy Bar: none left on display either (Out of stock). Needs migration 013. */
   noneOnDisplay?: boolean;
+  /** Gold Class Bar: out · low · unconfirmed (Top-up incomplete). Needs migration 020. */
+  stockStatus?: 'out' | 'low' | 'unconfirmed' | null;
 }
 
 export async function listShortages(): Promise<ShortageRow[]> {
@@ -87,6 +89,7 @@ export async function restockDetail(id: string) {
     collectedQty: r.collectedQty as number | null, shortfallReason: r.shortfallReason as ItemState['shortfallReason'],
     flagged: Boolean(r.flagged), noneOnDisplay: Boolean(r.noneOnDisplay), refillStatus: (r.refillStatus as ItemState['refillStatus']) ?? null,
     upstairsQty: r.upstairsQty === null || r.upstairsQty === undefined ? null : Number(r.upstairsQty),
+    noneLeftHere: Boolean(r.noneLeftHere), statusOverride: (r.statusOverride as ItemState['statusOverride']) ?? null,
     conflict: (r.conflict as Conflict | null) ?? null,
   }]));
   const recorded = new Map<string, AreaStatus>(areas.map((a) => [String(a.checkAreaId), a.status as AreaStatus]));

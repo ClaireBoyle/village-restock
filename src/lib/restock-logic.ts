@@ -103,13 +103,17 @@ export interface ItemState {
   refillStatus?: 'refilled' | 'full' | 'needs_stock' | null;
   /** Defrost: pulled from the upstairs freezer (null = not yet). Less than needed: the rest comes from downstairs. */
   upstairsQty?: number | null;
+  /** Gold Class Bar: "None left here" ticked on the check (an open bottle that can still be used counts as stock). */
+  noneLeftHere?: boolean;
+  /** Gold Class Bar: shortage status chosen on the Finish screen (null = worked out from the checks). */
+  statusOverride?: 'out' | 'low' | 'unconfirmed' | null;
   /** Set when two people entered different counts; cleared when someone chooses. */
   conflict?: Conflict | null;
 }
 
 export const EMPTY_ITEM: ItemState = {
   currentQty: null, requestedQty: null, routineChoice: null,
-  collectedMode: null, collectedQty: null, shortfallReason: null, flagged: false, noneOnDisplay: false, refillStatus: null, upstairsQty: null, conflict: null,
+  collectedMode: null, collectedQty: null, shortfallReason: null, flagged: false, noneOnDisplay: false, refillStatus: null, upstairsQty: null, noneLeftHere: false, statusOverride: null, conflict: null,
 };
 
 /** A section shown inside an area's screen (e.g. "Spirits cupboard" inside Back bench). */
@@ -675,7 +679,49 @@ export function withSuggestions(kind: SessionKind, view: DepartmentView, items: 
 // ---------------------------------------------------------------------------
 // Stock after the restock: what we're now low on or out of
 // ---------------------------------------------------------------------------
-export type StockStatus = 'out' | 'low' | 'not_topped_up';
+export type StockStatus = 'out' | 'low' | 'unconfirmed' | 'not_topped_up';
+
+/**
+ * Gold Class Bar: what the checks say about a product upstairs (the bar and the upstairs stops).
+ *   stock    usable stock confirmed: a checked spot needed none, has a count on the shelf, or stock was grabbed for the bar
+ *   empty    every spot it was added at was ticked "None left here" (and nothing was grabbed for the bar)
+ *   unknown  otherwise: an unticked box only means staff didn't report that spot empty
+ */
+export type UpstairsCheck = 'stock' | 'empty' | 'unknown';
+
+export function upstairsCheck(kind: SessionKind, placements: PlacementView[], recordedAreas: Map<string, AreaStatus>, items: Map<string, ItemState>): Map<string, UpstairsCheck> {
+  const seen = new Map<string, UpstairsCheck[]>();
+  for (const p of placements) {
+    if (p.method === 'routine' || p.defrost || p.refillSource || p.linkedPlacementId) continue;
+    const i = items.get(p.placementId) ?? EMPTY_ITEM;
+    const area = recordedAreas.get(p.screenAreaId ?? p.areaId);
+    const need = needOf(p, i);
+    let v: UpstairsCheck;
+    if (asFull(kind) && area === 'skipped') v = 'unknown';
+    // Grabbed for the bar: that stock is upstairs now.
+    else if (isPickup(kind, p) && (i.collectedMode === 'all' ? (need ?? 0) > 0 : i.collectedMode === 'partial' && (i.collectedQty ?? 0) > 0)) v = 'stock';
+    else if (p.method === 'par' && i.currentQty !== null) v = i.currentQty > 0 ? 'stock' : 'empty';
+    else if (need !== null && need > 0) v = i.noneLeftHere ? 'empty' : 'unknown';
+    // Checked and nothing needed (0, or left blank in a checked area): there's stock there.
+    else if (need === 0 || (need === null && (!asFull(kind) || area === 'complete'))) v = 'stock';
+    else v = 'unknown';
+    seen.set(p.productId, [...(seen.get(p.productId) ?? []), v]);
+  }
+  const out = new Map<string, UpstairsCheck>();
+  for (const [id, vs] of seen) out.set(id, vs.includes('stock') ? 'stock' : vs.every((v) => v === 'empty') ? 'empty' : 'unknown');
+  return out;
+}
+
+/**
+ * Gold Class Bar status of a confirmed shortfall (not enough downstairs): collected some, or usable stock
+ * upstairs = Low stock · Still available; every spot empty and none collected = Out of stock; otherwise
+ * Top-up incomplete (upstairs unconfirmed). Staff can change it on Finish (only when none was collected).
+ */
+export function upstairsStatus(got: number, check: UpstairsCheck, override: ItemState['statusOverride'] = null): 'out' | 'low' | 'unconfirmed' {
+  if (got > 0) return 'low';
+  if (override) return override;
+  return check === 'stock' ? 'low' : check === 'empty' ? 'out' : 'unconfirmed';
+}
 
 export interface StockOutcome {
   productName: string; unitSingular: string; unitPlural: string;
@@ -689,6 +735,11 @@ export interface StockOutcome {
   affects: string[];
   /** Candy Bar: staff said none is left on display. */
   noneOnDisplay?: boolean;
+  /** Gold Class Bar: what the checks said upstairs, whether staff changed the status on Finish, and the line's placements. */
+  upstairs?: UpstairsCheck;
+  auto?: 'out' | 'low' | 'unconfirmed';
+  overridden?: boolean;
+  placementIds?: string[];
 }
 
 /**
@@ -698,7 +749,9 @@ export interface StockOutcome {
  *   not_topped_up not collected for another reason (time, access, not done).
  * Worst first: out, then low, then not topped up.
  */
-export function stockOutcomes(lines: CollectionLine[], items: Map<string, ItemState>, byId: Map<string, PlacementView>, displayRule = false): StockOutcome[] {
+export function stockOutcomes(lines: CollectionLine[], items: Map<string, ItemState>, byId: Map<string, PlacementView>, displayRule = false,
+  /** Gold Class Bar: the upstairs checks per product (see upstairsCheck). */
+  upstairs?: Map<string, UpstairsCheck>): StockOutcome[] {
   const out: StockOutcome[] = [];
   for (const l of lines) {
     if (l.kind !== 'qty') continue;
@@ -714,17 +767,35 @@ export function stockOutcomes(lines: CollectionLine[], items: Map<string, ItemSt
       target = round2(target! + p.par);
     }
     const confirmed = info.reason === 'insufficient';
+    const first = byId.get(l.parts[0].placementId);
+    const bar = upstairs && confirmed ? (() => {
+      const check = upstairs.get(first?.productId ?? '') ?? 'unknown';
+      const override = (items.get(l.parts[0].placementId) ?? EMPTY_ITEM).statusOverride ?? null;
+      const auto = upstairsStatus(got, check), status = upstairsStatus(got, check, override);
+      return { upstairs: check, auto, status, overridden: status !== auto, placementIds: l.parts.map((p) => p.placementId) };
+    })() : null;
     out.push({
       productName: l.productName, unitSingular: l.unitSingular, unitPlural: l.unitPlural,
-      status: confirmed ? shortStatus(got, info.noneOnDisplay, displayRule) : 'not_topped_up',
+      status: bar ? bar.status : confirmed ? shortStatus(got, info.noneOnDisplay, displayRule) : 'not_topped_up',
       noneOnDisplay: confirmed && got === 0 && info.noneOnDisplay,
       needed: l.total, got, short, onShelf, target, reason: info.reason, flagged: info.flagged,
-      affects: byId.get(l.parts[0].placementId)?.affects ?? [],
+      affects: first?.affects ?? [],
+      ...(bar ? { upstairs: bar.upstairs, auto: bar.auto, overridden: bar.overridden, placementIds: bar.placementIds } : {}),
     });
   }
-  const rank: Record<StockStatus, number> = { out: 0, low: 1, not_topped_up: 2 };
+  const rank: Record<StockStatus, number> = { out: 0, low: 1, unconfirmed: 2, not_topped_up: 3 };
   return out.sort((a, b) => rank[a.status] - rank[b.status] || a.productName.localeCompare(b.productName));
 }
+
+/** The stock outcomes of a restock, with the department's rule (Candy Bar "None on display", Gold Class Bar "None left here"). */
+export function restockOutcomes(kind: SessionKind, view: DepartmentView, placements: PlacementView[], recordedAreas: Map<string, AreaStatus>, items: Map<string, ItemState>, lines?: CollectionLine[]): StockOutcome[] {
+  const ls = lines ?? collectionLines(collectPlacements(kind, placements, recordedAreas), items);
+  const up = view.department.noneLeftCheck ? upstairsCheck(kind, placements, recordedAreas, items) : undefined;
+  return stockOutcomes(ls, items, view.byId, !!view.department.noneOnDisplay, up);
+}
+
+/** A storeroom shortage: out of stock, low, or (Gold Class Bar) top-up incomplete with upstairs unconfirmed. */
+export const isShortage = (o: StockOutcome) => o.status === 'out' || o.status === 'low' || o.status === 'unconfirmed';
 
 /**
  * How many stock shortages (out of stock or low) a restock recorded: the same count as
@@ -732,12 +803,17 @@ export function stockOutcomes(lines: CollectionLine[], items: Map<string, ItemSt
  */
 export function shortageCount(kind: SessionKind, view: DepartmentView, items: Map<string, ItemState>, recordedAreas: Map<string, AreaStatus>, admits: number | null = null): number {
   const it = withSuggestions(kind, view, items, recordedAreas, admits);
-  const lines = collectionLines(collectPlacements(kind, view.placements, recordedAreas), it);
-  return stockOutcomes(lines, it, view.byId, !!view.department.noneOnDisplay).filter((o) => o.status === 'out' || o.status === 'low').length;
+  return restockOutcomes(kind, view, view.placements, recordedAreas, it).filter(isShortage).length;
 }
 
 export function outcomeLine(o: StockOutcome): string {
   const q = (n: number) => formatQty(n, o.unitSingular, o.unitPlural);
+  if (o.upstairs) {
+    // Gold Class Bar wording (same as the Finish screen and the email).
+    const what = o.status === 'out' ? 'Out of stock' : o.status === 'low' ? 'Low stock' : 'Top-up incomplete';
+    const why = o.status === 'out' ? 'none upstairs or downstairs' : o.status === 'low' ? (o.got > 0 ? `${q(o.got)} collected` : 'still available upstairs') : 'upstairs stock not confirmed';
+    return `${o.productName}: ${what} \u00b7 ${q(o.short)} short (${why})${o.overridden ? ' [changed on Finish]' : ''}`;
+  }
   const shelf = o.onShelf !== null && o.target !== null ? ` \u00b7 ${round2(o.onShelf)} of ${round2(o.target)} on the shelf` : '';
   if (o.status === 'out' && o.noneOnDisplay) return `${o.productName}: none on display and none in the storeroom (needed ${q(o.needed)})${shelf}`;
   if (o.status === 'out') return `${o.productName}: none in the storeroom (needed ${q(o.needed)})${shelf}`;
@@ -763,7 +839,7 @@ export function summaryText(args: {
   if (args.completedBy) L.push(`Completed by: ${args.completedBy}`);
 
   const lines = collectionLines(collectPlacements(args.kind, args.placements, recordedAreas), items);
-  const outcomes = stockOutcomes(lines, items, view.byId, !!view.department.noneOnDisplay);
+  const outcomes = restockOutcomes(args.kind, view, args.placements, recordedAreas, items, lines);
   const group = (st: StockStatus, title: string) => {
     const g = outcomes.filter((o) => o.status === st);
     if (g.length) {
@@ -776,7 +852,8 @@ export function summaryText(args: {
   };
   if (!outcomes.length) { L.push(''); L.push('Nothing low or out of stock. Everything collected is back to target.'); }
   group('out', 'OUT OF STOCK');
-  group('low', view.department.noneOnDisplay ? 'LOW STOCK' : 'RUNNING LOW');
+  group('low', view.department.noneLeftCheck ? 'LOW STOCK \u00b7 STILL AVAILABLE' : view.department.noneOnDisplay ? 'LOW STOCK' : 'RUNNING LOW');
+  group('unconfirmed', 'TOP-UP INCOMPLETE (upstairs stock not confirmed)');
   group('not_topped_up', 'COLLECTION INCOMPLETE (not a storeroom shortage)');
 
   const flaggedDone = lines.filter((l) => lineInfo(l, items).flagged && lineState(l, items) === 'done').map((l) => l.productName);

@@ -21,6 +21,10 @@ export const itemFieldsSchema = z.object({
   refillStatus: z.enum(['refilled', 'full', 'needs_stock']).nullable().optional(),
   /** Defrost: pulled from the upstairs freezer (null = not yet). Less than needed: the rest comes from downstairs. */
   upstairsQty: qty.optional(),
+  /** Gold Class Bar: staff ticked "None left here" for this spot (an open bottle still in use counts as stock). */
+  noneLeftHere: z.boolean().optional(),
+  /** Gold Class Bar: a shortage status chosen on the Finish screen (null = worked out from the checks). */
+  statusOverride: z.enum(['out', 'low', 'unconfirmed']).nullable().optional(),
 }).strict();
 
 const base = { opId: z.uuid(), at: z.iso.datetime(), by: name };

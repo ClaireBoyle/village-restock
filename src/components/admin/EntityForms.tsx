@@ -15,6 +15,8 @@ export interface DepartmentRow {
   noneOnDisplay?: boolean;
   /** Email managers after every finished restock, even a clean one (needs migration 014). */
   emailEveryRestock?: boolean;
+  /** "None left here" on check rows; shortfalls are Out of stock / Low stock / Top-up incomplete (needs migration 020). */
+  noneLeftCheck?: boolean;
 }
 
 export function DepartmentForm({ d }: { d?: DepartmentRow }) {
@@ -37,6 +39,8 @@ export function DepartmentForm({ d }: { d?: DepartmentRow }) {
         <span className="meta" style={{ fontWeight: 400 }}>&nbsp;Staff pick one area, enter what it needs, collect and finish it, at any time and in any order (e.g. Candy Bar). Otherwise every area is checked in one full restock.</span></label>
       <label className="check"><input type="checkbox" name="noneOnDisplay" defaultChecked={d?.noneOnDisplay ?? false} />Ask &ldquo;None on display?&rdquo; when nothing is collected
         <span className="meta" style={{ fontWeight: 400 }}>&nbsp;Collecting less than needed shows as Low stock, even when none was collected. Staff tap &ldquo;None on display&rdquo; to mark it Out of stock (e.g. Candy Bar). Otherwise none collected is Out of stock.</span></label>
+      <label className="check"><input type="checkbox" name="noneLeftCheck" defaultChecked={d?.noneLeftCheck ?? false} />Ask &ldquo;None left here&rdquo; on items added to collect
+        <span className="meta" style={{ fontWeight: 400 }}>&nbsp;A short top-up is Out of stock only when every spot was ticked empty and none was collected; Low stock when stock was seen or some collected; otherwise Top-up incomplete (e.g. Gold Class Bar).</span></label>
       <label className="check"><input type="checkbox" name="emailEveryRestock" defaultChecked={d?.emailEveryRestock ?? false} />Email managers after every finished restock
         <span className="meta" style={{ fontWeight: 400 }}>&nbsp;Also when everything was collected (e.g. Candy Bar). Otherwise only when there&rsquo;s something to act on: shortages, comments or exceptions. Uses the address in Settings.</span></label>
       <div><SubmitButton>{d ? 'Save department' : 'Add department'}</SubmitButton></div>

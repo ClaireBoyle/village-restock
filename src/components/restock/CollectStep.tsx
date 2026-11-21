@@ -3,7 +3,8 @@ import { useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
   EMPTY_ITEM, SHORT_REASONS, activePlacements, clearCollectedUpdates, collectPlacements, refillLines, collectionLines, gotAllUpdates, gotFewerUpdates,
-  groupByStoreroom, isChecked, isRequired, lineGot, lineInfo, lineState, pendingRefills, storeLabel, type CollectionLine, type ItemState, type ShortReason,
+  groupByStoreroom, isChecked, isRequired, lineGot, lineInfo, lineState, pendingRefills, storeLabel, upstairsCheck, upstairsStatus,
+  type CollectionLine, type ItemState, type ShortReason, type UpstairsCheck,
 } from '@/lib/restock-logic';
 import { formatQty, round2 } from '@/lib/restock-math';
 import { setItems } from '@/lib/client/restock-store';
@@ -31,6 +32,9 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
   const write = (ups: { placementId: string; fields: Partial<ItemState> }[]) => void setItems(session.id, ups, who);
   // Kitchen: drawers answered "Needs stock", to fill once the stock is up.
   const refills = pendingRefills(session.kind, placements, recorded, items);
+  // Gold Class Bar: what the Bar and Upstairs checks said ("None left here"), for each line's label.
+  const up = view.department.noneLeftCheck ? upstairsCheck(session.kind, placements, recorded, items) : null;
+  const checkOf = up ? (l: CollectionLine) => up.get(view.byId.get(l.parts[0].placementId)?.productId ?? '') ?? 'unknown' : undefined;
 
   return (
     <>
@@ -43,7 +47,7 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
         {lines.length === 0 ? <p className="empty">{session.kind === 'area' ? 'Nothing to collect. Nothing was entered as needed.'
           : checksPending ? 'Nothing added to the collection list yet. Some areas haven’t been checked.' : 'Nothing to collect. Every area is checked and nothing is needed.'}</p> : (
           <div className="rooms">
-            {groups.map((g) => <Room key={g.lines[0].locationId ?? g.name} name={g.name} lines={g.lines} items={items} write={write} oneArea={oneArea} displayRule={!!view.department.noneOnDisplay}
+            {groups.map((g) => <Room key={g.lines[0].locationId ?? g.name} name={g.name} lines={g.lines} items={items} write={write} oneArea={oneArea} displayRule={!!view.department.noneOnDisplay} checkOf={checkOf}
               note={roomNote(g.lines, view.locationNotes)} />)}
           </div>
         )}
@@ -69,7 +73,7 @@ function roomNote(lines: CollectionLine[], notes: Map<string, string>) {
 }
 
 /** One storeroom: header with progress, folds away once everything in it is collected. */
-function Room({ name, lines, items, write, note, oneArea, tickOnly = false, displayRule = false }: {
+function Room({ name, lines, items, write, note, oneArea, tickOnly = false, displayRule = false, checkOf }: {
   name: string; lines: CollectionLine[]; items: Map<string, ItemState>; write: (u: { placementId: string; fields: Partial<ItemState> }[]) => void;
   /** The storeroom's reminder (e.g. "Use opened boxes first"), shown once under its heading. */
   note?: string; oneArea: string | null;
@@ -77,6 +81,8 @@ function Room({ name, lines, items, write, note, oneArea, tickOnly = false, disp
   tickOnly?: boolean;
   /** Candy Bar: short is Low stock (even at zero); "None on display" makes it Out of stock. */
   displayRule?: boolean;
+  /** Gold Class Bar: the upstairs checks for a line's product. */
+  checkOf?: (l: CollectionLine) => UpstairsCheck;
 }) {
   const doneN = lines.filter((l) => ['done', 'short'].includes(lineState(l, items))).length;
   const complete = doneN === lines.length;
@@ -91,12 +97,14 @@ function Room({ name, lines, items, write, note, oneArea, tickOnly = false, disp
         <Icon name={open ? 'up' : 'down'} />
       </button>
       {open && note ? <p className="room-note"><Icon name="info" /><span>{note}</span></p> : null}
-      {open ? <div className="room-lines">{lines.map((l) => <Line key={l.key} line={l} items={items} write={write} oneArea={oneArea} tickOnly={tickOnly} displayRule={displayRule} />)}</div> : null}
+      {open ? <div className="room-lines">{lines.map((l) => <Line key={l.key} line={l} items={items} write={write} oneArea={oneArea} tickOnly={tickOnly} displayRule={displayRule} barCheck={checkOf?.(l)} />)}</div> : null}
     </section>
   );
 }
 
-export function Line({ line, items, write, oneArea, tickOnly = false, displayRule = false, verb = 'Grabbed' }: { line: CollectionLine; items: Map<string, ItemState>; write: (u: { placementId: string; fields: Partial<ItemState> }[]) => void; oneArea: string | null; tickOnly?: boolean; displayRule?: boolean;
+export function Line({ line, items, write, oneArea, tickOnly = false, displayRule = false, verb = 'Grabbed', barCheck }: { line: CollectionLine; items: Map<string, ItemState>; write: (u: { placementId: string; fields: Partial<ItemState> }[]) => void; oneArea: string | null; tickOnly?: boolean; displayRule?: boolean;
+  /** Gold Class Bar: what the Bar and Upstairs checks said about this product (Out of stock / Low stock / Top-up incomplete). */
+  barCheck?: UpstairsCheck;
   /** Tick-only lines: what taking it is called ("Grabbed" for the bar, "Pulled" from a freezer for defrost). */
   verb?: 'Grabbed' | 'Pulled' }) {
   const st = lineState(line, items);
@@ -156,7 +164,8 @@ export function Line({ line, items, write, oneArea, tickOnly = false, displayRul
   /** Candy Bar: none collected and none left on display → Out of stock (tap again to undo). */
   const toggleNone = () => write(gotFewerUpdates(line, got, info.reason, info.flagged, !info.noneOnDisplay));
   const stockShort = st === 'short' && info.reason === 'insufficient';
-  const stockLabel = displayRule ? (stockShort && got === 0 && info.noneOnDisplay ? 'Out of stock' : 'Low stock') : (got === 0 ? 'Out of stock' : 'Running low');
+  const barSt = barCheck ? upstairsStatus(got, barCheck, (items.get(line.parts[0].placementId) ?? EMPTY_ITEM).statusOverride ?? null) : null;
+  const stockLabel = barSt ? (barSt === 'out' ? 'Out of stock' : barSt === 'low' ? 'Low stock · Still available' : 'Top-up incomplete') : displayRule ? (stockShort && got === 0 && info.noneOnDisplay ? 'Out of stock' : 'Low stock') : (got === 0 ? 'Out of stock' : 'Running low');
   const askNone = displayRule && stockShort && got === 0 && !open;
   const undo = () => { write(clearCollectedUpdates(line)); setEditing(false); setMore(false); };
 
@@ -190,7 +199,7 @@ export function Line({ line, items, write, oneArea, tickOnly = false, displayRul
         <div className="l-nm">
           <b>{line.productName}</b>
           {st === 'short' && !open ? (
-            <small className="l-why">{tickOnly ? `${verb} ${round2(got)} of ${round2(line.total)}` : <>{info.reason === 'insufficient' ? stockLabel : shortReason(info.reason)} &middot; short {formatQty(short, line.unitSingular, line.unitPlural)}{info.flagged ? ' · flagged' : ''}</>}
+            <small className="l-why">{tickOnly ? `${verb} ${round2(got)} of ${round2(line.total)}` : <>{info.reason === 'insufficient' ? stockLabel : shortReason(info.reason)} &middot; {barSt && info.reason === 'insufficient' ? <>{formatQty(short, line.unitSingular, line.unitPlural)} short</> : <>short {formatQty(short, line.unitSingular, line.unitPlural)}</>}{info.flagged ? ' · flagged' : ''}</>}
               <button type="button" className="linkbtn l-link" onClick={openEditor}>Change</button></small>
           ) : st === 'done' ? (
             <small className="l-ok">{line.kind === 'task' ? 'Done' : tickOnly ? verb : 'Collected'}<button type="button" className="linkbtn l-link" onClick={undo}>Undo</button></small>

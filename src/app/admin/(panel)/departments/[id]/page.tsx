@@ -12,6 +12,7 @@ export default async function DepartmentDetail({ params }: { params: Promise<{ i
   const sql = db();
   const [d] = (await sql`select id, name, short_name, group_label, theme, icon, description, active, coalesce((to_jsonb(departments)->>'restock_by_area')::boolean, false) as restock_by_area,
     coalesce((to_jsonb(departments)->>'none_on_display')::boolean, false) as none_on_display,
+    coalesce((to_jsonb(departments)->>'none_left_check')::boolean, false) as none_left_check,
     coalesce((to_jsonb(departments)->>'email_every_restock')::boolean, false) as email_every_restock from departments where id = ${id}`) as unknown as DepartmentRow[];
   if (!d) notFound();
   const areas = await sql`

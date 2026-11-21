@@ -4,7 +4,7 @@ import { db } from './db';
 import { loadCatalogue } from './catalogue';
 import { queueRestockEmail } from './email';
 import {
-  CONFLICT_FIELDS, EMPTY_ITEM, areaStatus, pendingRefills, isChecked, isRequired, stockOutcomes, type Conflict, collectionLines, collectPlacements, withSuggestions, departmentView, exceptions, lineGot, lineInfo, lineState,
+  CONFLICT_FIELDS, EMPTY_ITEM, areaStatus, pendingRefills, isChecked, isRequired, restockOutcomes, type Conflict, collectionLines, collectPlacements, withSuggestions, departmentView, exceptions, lineGot, lineInfo, lineState,
   scopeView, type AreaStatus, type ItemState, type SessionKind,
 } from '@/lib/restock-logic';
 import { defrostWasReset, sessionWasReset, startedBeforeReset } from './reset';
@@ -23,7 +23,15 @@ const COLUMN: Record<keyof ItemFields, string> = {
   currentQty: 'current_qty', requestedQty: 'requested_qty', routineChoice: 'routine_choice',
   collectedMode: 'collected_mode', collectedQty: 'collected_qty', shortfallReason: 'shortfall_reason', flagged: 'flagged',
   noneOnDisplay: 'none_on_display', refillStatus: 'refill_status', upstairsQty: 'upstairs_qty',
+  noneLeftHere: 'none_left_here', statusOverride: 'status_override',
 };
+
+/** Migration 020 adds "None left here" and Finish corrections (Gold Class Bar). */
+let hasNoneLeft = false;
+async function noneLeftReady(tx: Tx) {
+  if (!hasNoneLeft) hasNoneLeft = (await tx`select 1 from information_schema.columns where table_name = 'session_items' and column_name = 'status_override'`).length > 0;
+  return hasNoneLeft;
+}
 
 /** Migration 019 adds defrost pulls from upstairs. */
 let hasUpstairs = false;
@@ -153,6 +161,10 @@ async function apply(tx: Tx, op: SyncOp, deviceId: string): Promise<{ mergedInto
         }
       }
       // Before migration 013: a cleared "None on display" is simply not stored; a set one waits for the update.
+      if (('noneLeftHere' in f || 'statusOverride' in f) && !(await noneLeftReady(tx))) {
+        if (f.noneLeftHere || f.statusOverride) throw new OpError('The server needs a database update (020_none_left_here.sql)', false);
+        delete f.noneLeftHere; delete f.statusOverride;
+      }
       if ('upstairsQty' in f && !(await upstairsReady(tx))) {
         if (f.upstairsQty !== null && f.upstairsQty !== undefined) throw new OpError('The server needs a database update (019_upstairs_pulls.sql)', false);
         delete f.upstairsQty;
@@ -361,6 +373,7 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
     collectedQty: r.collectedQty as number | null, shortfallReason: r.shortfallReason as ItemState['shortfallReason'], flagged: Boolean(r.flagged), noneOnDisplay: Boolean(r.noneOnDisplay),
     refillStatus: (r.refillStatus as ItemState['refillStatus']) ?? null,
     upstairsQty: r.upstairsQty === null || r.upstairsQty === undefined ? null : Number(r.upstairsQty),
+    noneLeftHere: Boolean(r.noneLeftHere), statusOverride: (r.statusOverride as ItemState['statusOverride']) ?? null,
     conflict: (r.conflict as Conflict | null) ?? null,
   }]));
   const recorded = new Map<string, AreaStatus>(areaRows.map((r) => [String(r.checkAreaId), r.status as AreaStatus]));
@@ -378,7 +391,11 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
     if (ex.length && !reason) { status = 'finished_exceptions'; finalReason = 'Finished with outstanding work'; }
 
     await tx`delete from shortages where session_id = ${s.id} and status = 'open'`;
-    for (const line of collectionLines(collectPlacements(s.kind, placements, recorded), items)) {
+    const shortLines = collectionLines(collectPlacements(s.kind, placements, recorded), items);
+    // Gold Class Bar: each shortage keeps its status (out · low · unconfirmed), from the checks or as changed on Finish.
+    const barStatus = view.department.noneLeftCheck && await noneLeftReady(tx)
+      ? new Map(restockOutcomes(s.kind, view, placements, recorded, items, shortLines).filter((o) => o.placementIds).map((o) => [o.placementIds![0], o.status])) : null;
+    for (const line of shortLines) {
       if (line.kind !== 'qty') continue;
       const st = lineState(line, items), info = lineInfo(line, items);
       const short = Math.round((line.total - lineGot(line, items)) * 100) / 100;
@@ -388,6 +405,8 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
       const [row] = await tx`insert into shortages (session_id, department_id, product_id, product_name, unit_plural, shortfall_qty, reason, flagged, reported_by)
         values (${s.id}, ${s.departmentId}, ${productId}, ${line.productName}, ${line.unitPlural}, ${short}, ${info.reason ?? 'other'}, ${info.flagged}, ${by}) returning id`;
       if (info.noneOnDisplay && lineGot(line, items) === 0 && await noneOnDisplayReady(tx)) await tx`update shortages set none_on_display = true where id = ${row.id}`;
+      const bs = barStatus?.get(line.parts[0].placementId);
+      if (bs) await tx`update shortages set stock_status = ${bs} where id = ${row.id}`;
     }
   }
   await tx`update restock_sessions set status = ${status}, exception_reason = ${finalReason}, finished_at = ${at} where id = ${s.id}`;
@@ -425,8 +444,8 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
       departmentName: `${String(dept?.name ?? view.department.name)}${s.kind === 'area' && view.areas[0] ? ` · ${view.areas[0].area.name}` : ''}`,
       finishedLabel: `${new Date(at).toLocaleDateString('en-AU', { timeZone: cat.settings.timeZone, weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '')}, ${new Date(at).toLocaleTimeString('en-AU', { timeZone: cat.settings.timeZone, hour: 'numeric', minute: '2-digit' }).toLowerCase()}`,
       people: (row?.people as string[]) ?? [], exceptionReason: finalReason,
-      areaRestock: s.kind === 'area', completedBy, lowStockWording: !!view.department.noneOnDisplay,
-      outcomes: stockOutcomes(lines, items, view.byId, !!view.department.noneOnDisplay), notChecked, note: comment, prep,
+      areaRestock: s.kind === 'area', completedBy, lowStockWording: !!view.department.noneOnDisplay || !!view.department.noneLeftCheck,
+      outcomes: restockOutcomes(s.kind, view, view.placements, recorded, items, lines), notChecked, note: comment, prep,
       refills: pendingRefills(s.kind, view.placements, recorded, items).map((p) => p.productName),
       link: host ? `https://${host}/admin/restocks/${s.id}` : null,
     }, Boolean(dept?.emailEveryRestock));
@@ -453,6 +472,7 @@ function toRemote(s: Record<string, unknown>, areas: Record<string, unknown>[], 
       collectedQty: (r.collectedQty as number) ?? null, shortfallReason: (r.shortfallReason as RemoteSession['items'][number]['shortfallReason']) ?? null,
       flagged: Boolean(r.flagged), noneOnDisplay: Boolean(r.noneOnDisplay), refillStatus: (r.refillStatus as RemoteSession['items'][number]['refillStatus']) ?? null,
       upstairsQty: r.upstairsQty === null || r.upstairsQty === undefined ? null : Number(r.upstairsQty),
+      noneLeftHere: Boolean(r.noneLeftHere), statusOverride: (r.statusOverride as RemoteSession['items'][number]['statusOverride']) ?? null,
       conflict: (r.conflict as Conflict | null) ?? null,
     })),
   };

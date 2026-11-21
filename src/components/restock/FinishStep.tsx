@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
   EXCEPTION_REASONS, EMPTY_ITEM, SHORT_REASONS, activePlacements, areaStatus, collectPlacements, collectionLines, exceptions, isChecked, isRequired,
-  lineGot, lineInfo, lineState, pendingRefills, stockOutcomes, type StockOutcome,
+  isShortage, lineGot, lineInfo, lineState, pendingRefills, restockOutcomes, type ItemState, type StockOutcome,
 } from '@/lib/restock-logic';
 import { useLive } from '@/lib/client/hooks';
 import { localDb } from '@/lib/client/local-db';
@@ -80,7 +80,7 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
     if (st !== 'done' && info.reason !== 'insufficient') notCollected.push([l.productName, `${formatQty(round2(l.total - got), l.unitSingular, l.unitPlural)} not collected${info.reason ? ` (${SHORT_REASONS.find((r) => r[0] === info.reason)![1].toLowerCase()})` : ''}`]);
   }
   const displayRule = !!view.department.noneOnDisplay;
-  const outcomes = stockOutcomes(lines, items, view.byId, displayRule);
+  const outcomes = restockOutcomes(session.kind, view, placements, recorded, items, lines);
   // Recorded "couldn't collect" results (access, time, other): not a shortage, but managers should know.
   const incomplete = outcomes.some((o) => o.status === 'not_topped_up' && o.reason);
   const finishReason = (r: string | null) => r ?? (incomplete ? 'Collection incomplete' : null);
@@ -99,7 +99,10 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
     ctx.go(e.kind === 'collect' ? 'collect' : 'check');
   };
 
-  const report = <StockReport outcomes={outcomes} displayRule={displayRule} />;
+  // Gold Class Bar: staff can change a status worked out from the checks (only while the restock is open).
+  const correct = finished ? undefined : (o: StockOutcome, st: NonNullable<ItemState['statusOverride']>) =>
+    void setItems(session.id, (o.placementIds ?? []).map((placementId) => ({ placementId, fields: { statusOverride: st === o.auto ? null : st } })), who);
+  const report = <StockReport outcomes={outcomes} displayRule={displayRule} onCorrect={correct} />;
 
   const details = (
     <div className="sum">
@@ -224,31 +227,57 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
  * running low), then collection that couldn't be finished (not a shortage). Nothing at all
  * when everything was collected.
  */
-function StockReport({ outcomes, displayRule = false }: { outcomes: StockOutcome[]; displayRule?: boolean }) {
-  const short = outcomes.filter((o) => o.status === 'out' || o.status === 'low');
+function StockReport({ outcomes, displayRule = false, onCorrect }: {
+  outcomes: StockOutcome[]; displayRule?: boolean;
+  /** Gold Class Bar: change a shortage's status (Out of stock / Still available / Not sure). */
+  onCorrect?: (o: StockOutcome, status: NonNullable<ItemState['statusOverride']>) => void;
+}) {
+  const [changing, setChanging] = useState<string | null>(null);
+  const short = outcomes.filter(isShortage);
   const incomplete = outcomes.filter((o) => o.status === 'not_topped_up' && o.reason);
   if (!short.length && !incomplete.length) return null;
   const q = (o: StockOutcome, n: number) => `${fmt(n)} ${n === 1 ? o.unitSingular : o.unitPlural}`;
   const why = (o: StockOutcome) => SHORT_REASONS.find((r) => r[0] === o.reason)?.[1] ?? 'Not collected';
-  const row = (o: StockOutcome, kind: 'out' | 'low' | 'inc') => (
-    <li key={o.productName} className={`sr-row k-${kind}`}>
+  const CHOICES: [NonNullable<ItemState['statusOverride']>, string][] = [['out', 'Out of stock'], ['low', 'Still available'], ['unconfirmed', 'Not sure']];
+  const row = (o: StockOutcome, kind: 'out' | 'low' | 'unc' | 'inc') => (
+    <li key={o.productName} className={`sr-row k-${kind}`} data-outcome={o.productName}>
       <span className="sr-dot" aria-hidden="true" />
       <span className="sr-t">
         <b>{o.productName}{o.flagged ? <span className="sr-flag"><Icon name="flag" />Flagged</span> : null}</b>
-        <small>{kind === 'out' ? <>Out of stock{o.noneOnDisplay ? <> &middot; None on display</> : null} &middot; Short {q(o, o.short)}</>
-          // Candy Bar: Low stock with how many short (also when none was collected).
-          : kind === 'low' && displayRule ? <>Low stock &middot; Short {q(o, o.short)}{o.got > 0 ? <> &middot; Collected {fmt(o.got)}</> : null}</>
-          : kind === 'low' ? <>Running low &middot; Collected {fmt(o.got)} of {q(o, o.needed)}</>
-          : <>Collection incomplete &middot; {why(o)} &middot; {q(o, o.short)} not collected</>}</small>
+        {o.upstairs ? (
+          // Gold Class Bar: from the "None left here" ticks and what was collected downstairs.
+          <small>{kind === 'out' ? <>Out of stock &middot; {q(o, o.short)} short</>
+            : kind === 'low' ? <>Low stock &middot; {q(o, o.short)} short &middot; {o.got > 0 ? `${q(o, o.got)} collected` : 'Still available upstairs'}</>
+            : <>Top-up incomplete &middot; {q(o, o.short)} short &middot; Upstairs stock not confirmed</>}
+            {o.overridden ? <> &middot; Changed</> : null}
+            {onCorrect && o.got === 0 ? <button type="button" className="linkbtn sr-change" aria-expanded={changing === o.productName}
+              onClick={() => setChanging(changing === o.productName ? null : o.productName)}>{changing === o.productName ? 'Done' : 'Change'}</button> : null}</small>
+        ) : (
+          <small>{kind === 'out' ? <>Out of stock{o.noneOnDisplay ? <> &middot; None on display</> : null} &middot; Short {q(o, o.short)}</>
+            // Candy Bar: Low stock with how many short (also when none was collected).
+            : kind === 'low' && displayRule ? <>Low stock &middot; Short {q(o, o.short)}{o.got > 0 ? <> &middot; Collected {fmt(o.got)}</> : null}</>
+            : kind === 'low' ? <>Running low &middot; Collected {fmt(o.got)} of {q(o, o.needed)}</>
+            : <>Collection incomplete &middot; {why(o)} &middot; {q(o, o.short)} not collected</>}</small>
+        )}
         {kind === 'out' && o.affects.length ? <small className="sr-affects">Set as sold out: <b>{o.affects.join(', ')}</b></small> : null}
+        {onCorrect && o.upstairs && changing === o.productName ? (
+          <span className="chips sr-fix" role="group" aria-label={`Status of ${o.productName}`}>
+            {CHOICES.map(([v, label]) => (
+              <button type="button" key={v} className={`chip ${o.status === v ? 'on' : ''}`} aria-pressed={o.status === v}
+                onClick={() => { onCorrect(o, v); setChanging(null); }}>{label}</button>
+            ))}
+          </span>
+        ) : null}
       </span>
     </li>
   );
+  const kindOf = (o: StockOutcome) => (o.status === 'out' ? 'out' : o.status === 'low' ? 'low' : 'unc');
   return (
     <>
       {short.length ? (
         <section className="sreport" aria-labelledby="sr-short"><h3 id="sr-short">Stock shortages <span className="count">{short.length}</span></h3>
-          <ul>{short.filter((o) => o.status === 'out').map((o) => row(o, 'out'))}{short.filter((o) => o.status === 'low').map((o) => row(o, 'low'))}</ul></section>
+          {/* Out of stock first: what the next shift can't serve. */}
+          <ul>{short.map((o) => row(o, kindOf(o)))}</ul></section>
       ) : null}
       {incomplete.length ? (
         <section className="sreport" aria-labelledby="sr-inc"><h3 id="sr-inc">Collection incomplete <span className="count">{incomplete.length}</span></h3>

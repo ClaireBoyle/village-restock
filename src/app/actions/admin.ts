@@ -60,6 +60,7 @@ const departmentSchema = z.object({
   active: checkbox,
   restockByArea: checkbox,
   noneOnDisplay: checkbox,
+  noneLeftCheck: checkbox,
   emailEveryRestock: checkbox,
 });
 
@@ -76,6 +77,8 @@ export async function saveDepartment(_: ActionResult, form: FormData): Promise<A
       else if (d.restockByArea) return { error: 'Run db/migrations/009_area_restocks.sql in Supabase first, then try again.' };
       if (await hasColumn('departments', 'none_on_display')) await db()`update departments set none_on_display = ${d.noneOnDisplay} where id = ${d.id}`;
       else if (d.noneOnDisplay) return { error: 'Run db/migrations/013_none_on_display.sql in Supabase first, then try again.' };
+      if (await hasColumn('departments', 'none_left_check')) await db()`update departments set none_left_check = ${d.noneLeftCheck} where id = ${d.id}`;
+      else if (d.noneLeftCheck) return { error: 'Run db/migrations/020_none_left_here.sql in Supabase first, then try again.' };
       if (await hasColumn('departments', 'email_every_restock')) await db()`update departments set email_every_restock = ${d.emailEveryRestock} where id = ${d.id}`;
       else if (d.emailEveryRestock) return { error: 'Run db/migrations/014_email_every_restock.sql in Supabase first, then try again.' };
       return done('Department saved.');
@@ -85,6 +88,7 @@ export async function saveDepartment(_: ActionResult, form: FormData): Promise<A
       values (${d.name}, ${d.shortName}, ${d.groupLabel}, ${d.theme}, ${d.icon}, ${d.description}, ${sort}) returning id`;
     if (d.restockByArea && await hasColumn('departments', 'restock_by_area')) await db()`update departments set restock_by_area = true where id = ${String(row.id)}`;
     if (d.noneOnDisplay && await hasColumn('departments', 'none_on_display')) await db()`update departments set none_on_display = true where id = ${String(row.id)}`;
+    if (d.noneLeftCheck && await hasColumn('departments', 'none_left_check')) await db()`update departments set none_left_check = true where id = ${String(row.id)}`;
     if (d.emailEveryRestock && await hasColumn('departments', 'email_every_restock')) await db()`update departments set email_every_restock = true where id = ${String(row.id)}`;
     return done(`${d.name} added.`);
   } catch (e) { return fail(e); }

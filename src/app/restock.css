@@ -1363,3 +1363,16 @@ button.pnote.open span{display:block}
 .dp-line.s-warn .dp-state .ic{color:var(--warn-fill)}
 .l-dnotes{padding:0 10px 8px}
 .dp-line.s-warn .dp-state{color:var(--ink)}
+
+/* "None left here" (Gold Class Bar): a small, optional tick under the amount to collect. Off by default. */
+.pnone{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;margin-top:3px;min-height:32px;padding:2px 10px 2px 6px;border-radius:999px;border:1px solid var(--hair);font-size:13px;font-weight:600;color:var(--ink-2);background:var(--surface);cursor:pointer;user-select:none}
+.pnone input{width:18px;height:18px;margin:0;accent-color:var(--bad)}
+.pnone.on{color:var(--bad);border-color:var(--bad-line);background:color-mix(in srgb,var(--bad) 8%,var(--surface))}
+.pnone:focus-within{outline:2px solid var(--focus,#2446B8);outline-offset:2px}
+.nl-hint b{font-weight:700}
+/* Gold Class Bar: Top-up incomplete (upstairs not confirmed) and the Finish correction chips. */
+.sr-row.k-unc .sr-dot{background:#8D96AB}
+.sr-row.k-unc .sr-t small:first-of-type{color:var(--ink-2)}
+.sr-change{margin-left:8px;font-size:13px;min-height:28px;padding:0 2px}
+.sr-fix{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.sr-fix .chip{min-height:36px}
