@@ -1,16 +1,16 @@
 -- Gold Class Kitchen walk-in fridge: the third and fourth shelves (back wall). Safe to run more than once.
 -- Run AFTER the earlier Gold Class Kitchen scripts. Only touches Gold Class Kitchen.
 --
---   Third shelf    Spare sauce ingredients: Maple Syrup, Sauerkraut, Sesame Kewpie
+--   Third shelf    Spare sauce ingredients: Maple Syrup, Sauerkraut, Sesame Kewpie, Tomato Passata
 --                  Feta and cheeseboard: Feta, Brie, Cheddar, Quince Paste, Strawberries, Raspberries
 --   Fourth shelf   Mexican Rice, American Sliced Cheese, Smoky Mozzarella, Portioned Napoli Cheese (pizza cheese)
---   Right rack top shelf   the burger buns (as before), then Fresh herbs: Mint, Parsley, Spring Onion
+--   Right rack top shelf   the burger buns (as before), then Fresh herbs: Mint, Parsley, Spring Onion, Dill
 --
 -- * "Cheeseboard tub" becomes "Third shelf" and "Bottom cheese shelf" becomes "Fourth shelf" (the same records,
 --   so past restocks and anything set in Admin are kept). Existing products and rows are reused and moved,
 --   never duplicated; notes changed in Admin are kept.
--- * New products (Maple Syrup, Sauerkraut, Sesame Kewpie, Feta, Raspberries, Mexican Rice, Mint, Parsley,
---   Spring Onion): "staff enter", with
+-- * New products (Maple Syrup, Sauerkraut, Sesame Kewpie, Tomato Passata, Feta, Raspberries, Mexican Rice, Mint, Parsley,
+--   Spring Onion, Dill): "staff enter", with
 --   these units (change them in Admin if needed) and no storeroom assumed (set it in Admin; until then they're
 --   listed under "No storeroom set" on the collection list).
 -- * 2026-11-gold-class-kitchen-walk-in-shelves.sql does nothing once this has run, so the old shelves never come back.
@@ -23,6 +23,7 @@ declare
     ['Third shelf', 'Maple Syrup', 'bottle', 'bottles', 'Spare sauce ingredients', ''],
     ['Third shelf', 'Sauerkraut', 'tub', 'tubs', '', ''],
     ['Third shelf', 'Sesame Kewpie', 'bottle', 'bottles', '', ''],
+    ['Third shelf', 'Tomato Passata', 'bottle', 'bottles', '', ''],
     ['Third shelf', 'Feta', 'tub', 'tubs', 'Feta and cheeseboard', ''],
     ['Third shelf', 'Brie', 'pack', 'packs', '', ''],
     ['Third shelf', 'Cheddar', 'block', 'blocks', '', ''],
@@ -35,7 +36,8 @@ declare
     ['Fourth shelf', 'Portioned Napoli Cheese', 'portion', 'portions', '', 'Pizza cheese'],
     ['Right rack top shelf', 'Mint', 'bunch', 'bunches', 'Fresh herbs', ''],
     ['Right rack top shelf', 'Parsley', 'bunch', 'bunches', '', ''],
-    ['Right rack top shelf', 'Spring Onion', 'bunch', 'bunches', '', '']
+    ['Right rack top shelf', 'Spring Onion', 'bunch', 'bunches', '', ''],
+    ['Right rack top shelf', 'Dill', 'bunch', 'bunches', '', '']
   ];
 begin
   if dept is null then raise notice 'Gold Class Kitchen not found: nothing changed'; return; end if;

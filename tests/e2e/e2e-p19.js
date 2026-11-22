@@ -54,9 +54,9 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   ok((await names('Sauces (shelf to confirm)')).join('|') === 'vodka sauce|maple aioli', 'vodka sauce and maple aioli: shelf to confirm');
   const shelf = async (s) => P.$$eval(`.psec:has(.psec-t b:text-is("${s}")) article.prow h3`, (e) => e.map((x) => x.textContent));
   const third = await shelf('Third shelf'), fourth = await shelf('Fourth shelf'), herbs = await shelf('Right rack top shelf');
-  ok(third.join(', ') === 'Maple Syrup, Sauerkraut, Sesame Kewpie, Feta, Brie, Cheddar, Quince Paste, Strawberries, Raspberries', 'third shelf: ' + third.join(', '));
+  ok(third.join(', ') === 'Maple Syrup, Sauerkraut, Sesame Kewpie, Tomato Passata, Feta, Brie, Cheddar, Quince Paste, Strawberries, Raspberries', 'third shelf: ' + third.join(', '));
   ok(fourth.join(', ') === 'Mexican Rice, American Sliced Cheese, Smoky Mozzarella, Portioned Napoli Cheese', 'fourth shelf: ' + fourth.join(', '));
-  ok(herbs.join(', ') === 'Buns (Portioned Tubs), Mint, Parsley, Spring Onion', 'right rack top shelf: ' + herbs.join(', '));
+  ok(herbs.join(', ') === 'Buns (Portioned Tubs), Mint, Parsley, Spring Onion, Dill', 'right rack top shelf: ' + herbs.join(', '));
   const heads = await P.$$eval('.psec:has(.psec-t b:text-is("Third shelf")) .phead, .psec:has(.psec-t b:text-is("Right rack top shelf")) .phead', (e) => e.map((x) => x.textContent.trim()));
   ok(['Spare sauce ingredients', 'Feta and cheeseboard', 'Fresh herbs'].every((h) => heads.some((x) => x.startsWith(h))), 'subheadings: ' + heads.join(', '));
   ok(await P.locator(sec('Spare produce', 'Tomatoes')).count() === 1 && await P.locator('.psec:has(.psec-t b:text-is("Left rack lower shelves")) article.prow h3').filter({ hasText: 'Hellmann' }).count() === 1, 'tomatoes; pickles and mayonnaise on the left rack');
