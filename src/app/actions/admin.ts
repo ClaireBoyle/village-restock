@@ -62,6 +62,7 @@ const departmentSchema = z.object({
   noneOnDisplay: checkbox,
   noneLeftCheck: checkbox,
   emailEveryRestock: checkbox,
+  collectGroup: z.enum(['', 'type', 'area']).optional(),
 });
 
 export async function saveDepartment(_: ActionResult, form: FormData): Promise<ActionResult> {
@@ -79,6 +80,10 @@ export async function saveDepartment(_: ActionResult, form: FormData): Promise<A
       else if (d.noneOnDisplay) return { error: 'Run db/migrations/013_none_on_display.sql in Supabase first, then try again.' };
       if (await hasColumn('departments', 'none_left_check')) await db()`update departments set none_left_check = ${d.noneLeftCheck} where id = ${d.id}`;
       else if (d.noneLeftCheck) return { error: 'Run db/migrations/020_none_left_here.sql in Supabase first, then try again.' };
+      if (d.collectGroup !== undefined) {
+        if (await hasColumn('departments', 'collect_group')) await db()`update departments set collect_group = ${d.collectGroup || null} where id = ${d.id}`;
+        else if (d.collectGroup) return { error: 'Run db/migrations/025_collection_groups.sql in Supabase first, then try again.' };
+      }
       if (await hasColumn('departments', 'email_every_restock')) await db()`update departments set email_every_restock = ${d.emailEveryRestock} where id = ${d.id}`;
       else if (d.emailEveryRestock) return { error: 'Run db/migrations/014_email_every_restock.sql in Supabase first, then try again.' };
       return done('Department saved.');
@@ -90,6 +95,7 @@ export async function saveDepartment(_: ActionResult, form: FormData): Promise<A
     if (d.noneOnDisplay && await hasColumn('departments', 'none_on_display')) await db()`update departments set none_on_display = true where id = ${String(row.id)}`;
     if (d.noneLeftCheck && await hasColumn('departments', 'none_left_check')) await db()`update departments set none_left_check = true where id = ${String(row.id)}`;
     if (d.emailEveryRestock && await hasColumn('departments', 'email_every_restock')) await db()`update departments set email_every_restock = true where id = ${String(row.id)}`;
+    if (d.collectGroup && await hasColumn('departments', 'collect_group')) await db()`update departments set collect_group = ${d.collectGroup} where id = ${String(row.id)}`;
     return done(`${d.name} added.`);
   } catch (e) { return fail(e); }
 }
@@ -136,7 +142,7 @@ export async function saveArea(_: ActionResult, form: FormData): Promise<ActionR
   } catch (e) { return fail(e); }
 }
 
-const categorySchema = z.object({ id: optUuid, departmentId: uuid, name: text(40, 'Category name'), active: checkbox });
+const categorySchema = z.object({ id: optUuid, departmentId: uuid, name: text(40, 'Category name'), active: checkbox, collectGroup: optText(40).optional() });
 
 export async function saveCategory(_: ActionResult, form: FormData): Promise<ActionResult> {
   await requireAdmin();
@@ -146,6 +152,9 @@ export async function saveCategory(_: ActionResult, form: FormData): Promise<Act
   try {
     if (c.id) {
       await db()`update categories set name = ${c.name}, active = ${c.active} where id = ${c.id} and department_id = ${c.departmentId}`;
+      if (c.collectGroup !== undefined && await hasColumn('categories', 'collect_group')) {
+        await db()`update categories set collect_group = ${c.collectGroup.trim() || null} where id = ${c.id} and department_id = ${c.departmentId}`;
+      }
       return done('Category saved.');
     }
     const sort = await nextSort('categories', { col: 'department_id', id: c.departmentId });

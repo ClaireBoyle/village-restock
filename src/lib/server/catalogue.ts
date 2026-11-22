@@ -17,7 +17,9 @@ export async function loadCatalogue(): Promise<Catalogue> {
       select d.id, d.name, d.short_name, d.group_label, d.theme, d.icon, d.description, d.sort_order,
              coalesce((to_jsonb(d)->>'restock_by_area')::boolean, false) as restock_by_area,
              coalesce((to_jsonb(d)->>'none_on_display')::boolean, false) as none_on_display,
-             coalesce((to_jsonb(d)->>'none_left_check')::boolean, false) as none_left_check
+             coalesce((to_jsonb(d)->>'none_left_check')::boolean, false) as none_left_check,
+             -- Collection list grouping (migration 025)
+             nullif(to_jsonb(d)->>'collect_group', '') as collect_group
       from departments d where d.active order by d.sort_order, d.name`;
     const areas = await tx`
       select a.id, a.department_id, a.name, a.guide_text, a.guide_photo_path, a.sort_order,
@@ -27,7 +29,8 @@ export async function loadCatalogue(): Promise<Catalogue> {
     const locations = await tx`select l.id, l.name, l.sort_order, coalesce(to_jsonb(l)->>'collect_note', '') as collect_note
       from storage_locations l where l.active order by l.sort_order, l.name`;
     const categories = await tx`
-      select id, department_id, name, sort_order from categories where active order by sort_order, name`;
+      select c.id, c.department_id, c.name, c.sort_order, nullif(trim(to_jsonb(c)->>'collect_group'), '') as collect_group
+      from categories c where c.active order by c.sort_order, c.name`;
     // Photo credits exist once migrations 005/007 have run; never let a missing table break the catalogue.
     const [{ hasPhotos }] = await tx`select to_regclass('public.photos') is not null as has_photos`;
     const products = await tx`

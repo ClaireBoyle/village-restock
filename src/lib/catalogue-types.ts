@@ -17,6 +17,8 @@ export interface CatDepartment {
   noneOnDisplay?: boolean;
   /** Gold Class Bar: "None left here" on check rows; shortfalls are Out of stock, Low stock · Still available, or Top-up incomplete. */
   noneLeftCheck?: boolean;
+  /** Collection list, inside each storeroom: grouped by product type (Gold Class Bar) or by where it's going (Kitchen). */
+  collectGroup?: 'type' | 'area' | null;
 }
 export interface CatArea {
   id: string; departmentId: string; name: string; guideText: string;
@@ -31,7 +33,11 @@ export interface CatLocation {
   /** Shown once under this storeroom's heading on collection lists (e.g. "Use opened boxes first"). */
   collectNote?: string;
 }
-export interface CatCategory { id: string; departmentId: string; name: string; sortOrder: number }
+export interface CatCategory {
+  id: string; departmentId: string; name: string; sortOrder: number;
+  /** The broader type it's listed under on the collection list (e.g. Red Wine → "Wine"); blank = its own name. */
+  collectGroup?: string | null;
+}
 export interface CatProduct {
   id: string; departmentId: string; categoryId: string | null; name: string;
   unitSingular: string; unitPlural: string; method: RestockMethod; allowDecimal: boolean;

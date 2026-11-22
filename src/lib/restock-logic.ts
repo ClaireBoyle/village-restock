@@ -49,6 +49,10 @@ export interface PlacementView {
   locationName: string | null;
   instructions: string;
   categoryName: string | null;
+  /** The product's type on the collection list (its category, or the broader group it's in), and that type's order. */
+  typeGroup?: string | null;
+  typeOrder?: number;
+  categoryOrder?: number;
   /** Menu items to mark as sold out if this product runs out. */
   affects: string[];
   /** Reference photo, if one has been added. */
@@ -155,6 +159,17 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
   const products = new Map(cat.products.map((p) => [p.id, p]));
   const locations = new Map(cat.locations.map((l) => [l.id, l]));
   const categories = new Map(cat.categories.map((c) => [c.id, c.name]));
+  // Types for the collection list: a category's broader group (e.g. Wine), ordered by its first category.
+  const typeOf = new Map<string, { label: string; order: number; own: number }>();
+  {
+    const first = new Map<string, number>();
+    cat.categories.forEach((c, i) => {
+      const label = c.collectGroup?.trim() || c.name;
+      const k = `${c.departmentId}|${label.toLowerCase()}`;
+      if (!first.has(k)) first.set(k, c.sortOrder * 1000 + i);
+      typeOf.set(c.id, { label, order: first.get(k)!, own: c.sortOrder * 1000 + i });
+    });
+  }
   const prepNames = new Map((cat.prepTasks ?? []).filter((t) => t.departmentId === departmentId && t.active !== false).map((t) => [t.id, t.name]));
   const all = cat.areas
     .filter((a) => a.departmentId === departmentId)
@@ -190,6 +205,9 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
         locationName: locId ? locations.get(locId)?.name ?? null : null,
         instructions: pl.instructions ?? p.instructions,
         categoryName: p.categoryId ? categories.get(p.categoryId) ?? null : null,
+        typeGroup: p.categoryId ? typeOf.get(p.categoryId)?.label ?? null : null,
+        typeOrder: p.categoryId ? typeOf.get(p.categoryId)?.order ?? 1e9 : 1e9,
+        categoryOrder: p.categoryId ? typeOf.get(p.categoryId)?.own ?? 1e9 : 1e9,
         affects: p.affects ?? [],
         photoPath: p.photoPath ?? null,
         photoCredit: p.photoCredit ?? null,
@@ -464,6 +482,41 @@ export function collectReminders(lines: CollectionLine[], items: Map<string, Ite
     out.set(k, r);
   }
   return [...out.values()];
+}
+
+/** A storeroom's lines in groups, for reading and picking: by product type, or by where they're going. */
+export interface LineGroup { key: string; label: string; lines: CollectionLine[]; areaName?: string }
+
+/**
+ * Inside one storeroom: 'type' groups by product type (e.g. Beer, cider & hard soda · Wine · Spirits), in the
+ * department's category order; 'area' groups by where each line goes (the screen of its first part: To defrost,
+ * Freezer 1, Freezer 2…), in walk order. Lines keep their order inside a group. Untyped lines come last ("Other").
+ */
+export function lineGroups(lines: CollectionLine[], view: DepartmentView, by: 'type' | 'area'): LineGroup[] {
+  const screens = new Map(view.areas.map((a, i) => [a.area.id, { i, a }]));
+  const groups = new Map<string, LineGroup & { order: number }>();
+  for (const l of lines) {
+    const p = view.byId.get(l.parts[0]?.placementId ?? '');
+    let key: string, label: string, order: number, areaName: string | undefined;
+    if (by === 'type') {
+      label = p?.typeGroup ?? 'Other'; key = label.toLowerCase(); order = p?.typeGroup ? p.typeOrder ?? 1e9 : 2e9;
+    } else {
+      const s = p ? screens.get(p.screenAreaId) : undefined;
+      key = s?.a.area.id ?? ''; order = s ? s.i : 2e9; areaName = s?.a.area.name;
+      // A screen of defrost rows (e.g. Defrost): "To defrost"; otherwise where it goes ("For Freezer 1").
+      label = !s ? 'Other' : s.a.placements.length && s.a.placements.every((x) => x.defrost) ? 'To defrost' : `For ${s.a.area.name}`;
+    }
+    const g = groups.get(key) ?? { key, label, order, lines: [], ...(areaName ? { areaName } : {}) };
+    g.lines.push(l);
+    groups.set(key, g);
+  }
+  const sorted = [...groups.values()].sort((a, b) => a.order - b.order);
+  // By type: each category together inside its group (e.g. the rums, then the gins), otherwise as listed.
+  if (by === 'type') {
+    const rank = (l: CollectionLine) => view.byId.get(l.parts[0]?.placementId ?? '')?.categoryOrder ?? 1e9;
+    for (const g of sorted) g.lines = g.lines.map((l, i) => ({ l, i })).sort((a, b) => rank(a.l) - rank(b.l) || a.i - b.i).map((x) => x.l);
+  }
+  return sorted.map((g): LineGroup => ({ key: g.key, label: g.label, lines: g.lines, ...(g.areaName ? { areaName: g.areaName } : {}) }));
 }
 
 /** Lines grouped by storeroom, storerooms in the admin's order. */

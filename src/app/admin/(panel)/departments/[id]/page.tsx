@@ -13,7 +13,8 @@ export default async function DepartmentDetail({ params }: { params: Promise<{ i
   const [d] = (await sql`select id, name, short_name, group_label, theme, icon, description, active, coalesce((to_jsonb(departments)->>'restock_by_area')::boolean, false) as restock_by_area,
     coalesce((to_jsonb(departments)->>'none_on_display')::boolean, false) as none_on_display,
     coalesce((to_jsonb(departments)->>'none_left_check')::boolean, false) as none_left_check,
-    coalesce((to_jsonb(departments)->>'email_every_restock')::boolean, false) as email_every_restock from departments where id = ${id}`) as unknown as DepartmentRow[];
+    coalesce((to_jsonb(departments)->>'email_every_restock')::boolean, false) as email_every_restock,
+    nullif(to_jsonb(departments)->>'collect_group', '') as collect_group from departments where id = ${id}`) as unknown as DepartmentRow[];
   if (!d) notFound();
   const areas = await sql`
     select a.id, a.name, a.guide_text, a.guide_photo_path, a.active, a.is_sample,
@@ -21,7 +22,7 @@ export default async function DepartmentDetail({ params }: { params: Promise<{ i
       (select count(*) from product_placements pl join products p on p.id = pl.product_id and p.status = 'active' where pl.check_area_id = a.id)::int as products
     from check_areas a where a.department_id = ${id} order by a.sort_order, a.name`;
   const categories = await sql`
-    select c.id, c.name, c.active, (select count(*) from products p where p.category_id = c.id and p.status = 'active')::int as products
+    select c.id, c.name, c.active, coalesce(to_jsonb(c)->>'collect_group', '') as collect_group, (select count(*) from products p where p.category_id = c.id and p.status = 'active')::int as products
     from categories c where c.department_id = ${id} order by c.sort_order, c.name`;
 
   return (
@@ -67,11 +68,11 @@ export default async function DepartmentDetail({ params }: { params: Promise<{ i
         <div className="rows">
           {categories.map((c, i) => (
             <div key={String(c.id)} className={`row ${c.active ? '' : 'muted'}`} style={{ flexWrap: 'wrap' }}>
-              <div className="grow" style={{ minWidth: 200 }}><div className="title">{String(c.name)}</div><div className="meta">{Number(c.products)} products</div></div>
+              <div className="grow" style={{ minWidth: 200 }}><div className="title">{String(c.name)}</div><div className="meta">{Number(c.products)} products{c.collectGroup ? <> &middot; listed under {String(c.collectGroup)}</> : null}</div></div>
               <MoveButtons kind="category" id={String(c.id)} first={i === 0} last={i === categories.length - 1} label={String(c.name)} />
               <details style={{ flexBasis: '100%' }}>
-                <summary className="linkbtn" style={{ cursor: 'pointer' }}>Rename or hide</summary>
-                <div style={{ paddingBlock: 8 }}><CategoryForm departmentId={id} c={{ id: String(c.id), name: String(c.name), active: Boolean(c.active) }} /></div>
+                <summary className="linkbtn" style={{ cursor: 'pointer' }}>Rename, group or hide</summary>
+                <div style={{ paddingBlock: 8 }}><CategoryForm departmentId={id} c={{ id: String(c.id), name: String(c.name), active: Boolean(c.active), collectGroup: String(c.collectGroup ?? '') }} /></div>
               </details>
             </div>
           ))}

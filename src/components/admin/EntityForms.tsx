@@ -17,6 +17,8 @@ export interface DepartmentRow {
   emailEveryRestock?: boolean;
   /** "None left here" on check rows; shortfalls are Out of stock / Low stock / Top-up incomplete (needs migration 020). */
   noneLeftCheck?: boolean;
+  /** Collection list grouping inside each storeroom: by type or by where it's going (needs migration 025). */
+  collectGroup?: 'type' | 'area' | null;
 }
 
 export function DepartmentForm({ d }: { d?: DepartmentRow }) {
@@ -41,6 +43,13 @@ export function DepartmentForm({ d }: { d?: DepartmentRow }) {
         <span className="meta" style={{ fontWeight: 400 }}>&nbsp;Collecting less than needed shows as Low stock, even when none was collected. Staff tap &ldquo;None on display&rdquo; to mark it Out of stock (e.g. Candy Bar). Otherwise none collected is Out of stock.</span></label>
       <label className="check"><input type="checkbox" name="noneLeftCheck" defaultChecked={d?.noneLeftCheck ?? false} />Ask &ldquo;None left here&rdquo; on items added to collect
         <span className="meta" style={{ fontWeight: 400 }}>&nbsp;A short top-up is Out of stock only when every spot was ticked empty and none was collected; Low stock when stock was seen or some collected; otherwise Top-up incomplete (e.g. Gold Class Bar).</span></label>
+      <div className="field" style={{ maxWidth: 520 }}><label htmlFor={`dcg-${k}`}>Group the collection list</label>
+        <select id={`dcg-${k}`} name="collectGroup" defaultValue={d?.collectGroup ?? ''}>
+          <option value="">Not grouped: one list per storeroom</option>
+          <option value="type">By type, e.g. Beer · Wine · Spirits (how the storeroom shelves are set out)</option>
+          <option value="area">By where it&rsquo;s going, e.g. To defrost · For Freezer 1 (in walk order)</option>
+        </select>
+        <small>Inside each storeroom, with a small heading per group. Types come from the categories below (&ldquo;Listed under&rdquo; groups several together).</small></div>
       <label className="check"><input type="checkbox" name="emailEveryRestock" defaultChecked={d?.emailEveryRestock ?? false} />Email managers after every finished restock
         <span className="meta" style={{ fontWeight: 400 }}>&nbsp;Also when everything was collected (e.g. Candy Bar). Otherwise only when there&rsquo;s something to act on: shortages, comments or exceptions. Uses the address in Settings.</span></label>
       <div><SubmitButton>{d ? 'Save department' : 'Add department'}</SubmitButton></div>
@@ -84,7 +93,7 @@ export function AreaForm({ departmentId, a, parents = [] }: {
   );
 }
 
-export function CategoryForm({ departmentId, c }: { departmentId: string; c?: { id: string; name: string; active: boolean } }) {
+export function CategoryForm({ departmentId, c }: { departmentId: string; c?: { id: string; name: string; active: boolean; collectGroup?: string } }) {
   const k = c?.id ?? `new-${departmentId}`;
   return (
     <ActionForm action={saveCategory} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }} resetOnSuccess={!c}>
@@ -92,6 +101,8 @@ export function CategoryForm({ departmentId, c }: { departmentId: string; c?: { 
       {c ? <input type="hidden" name="id" value={c.id} /> : null}
       <div className="field" style={{ flex: '1 1 200px' }}><label htmlFor={`cn-${k}`}>{c ? 'Category name' : 'New category'}</label>
         <input id={`cn-${k}`} name="name" defaultValue={c?.name} required maxLength={40} placeholder="e.g. Dairy" /></div>
+      {c ? <div className="field" style={{ flex: '1 1 200px' }}><label htmlFor={`cg-${k}`}>Listed under (collection list, optional)</label>
+        <input id={`cg-${k}`} name="collectGroup" defaultValue={c.collectGroup ?? ''} maxLength={40} placeholder="e.g. Wine (blank = its own name)" /></div> : null}
       {c ? <label className="check"><input type="checkbox" name="active" defaultChecked={c.active} />In use</label> : <input type="hidden" name="active" value="on" />}
       <SubmitButton className="btn">{c ? 'Save' : 'Add'}</SubmitButton>
     </ActionForm>

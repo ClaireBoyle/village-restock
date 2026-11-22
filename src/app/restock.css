@@ -894,6 +894,11 @@ button.pnote.open span{display:block}
 .aguide-line .ic{width:16px;height:16px;flex:none;margin-top:2px;color:var(--d-accent)}
 
 /* Storeroom reminder, once, under its heading */
+.lgrp+.lgrp{margin-top:6px}
+.lgrp-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:6px 2px 4px;font-size:13px;letter-spacing:.03em;text-transform:uppercase;color:var(--ink-2)}
+.lgrp-h b{font-weight:600;color:var(--d-accent)}
+.lgrp-h small{display:inline-flex;align-items:center;gap:3px;font-size:12.5px;letter-spacing:0;text-transform:none;font-variant-numeric:tabular-nums}
+.lgrp-h small .ic{width:13px;height:13px;color:var(--ok)}
 .take-down{display:flex;gap:10px;align-items:flex-start;margin:0 0 10px;padding:10px 12px;border-radius:12px;border:1.5px solid var(--d-line);background:var(--d-soft);color:var(--d-ink)}
 .take-down>.ic{width:20px;height:20px;flex:none;margin-top:1px;color:var(--d-accent)}
 .take-down h3{margin:0;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--d-accent)}

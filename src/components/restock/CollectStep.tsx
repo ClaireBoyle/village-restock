@@ -3,8 +3,8 @@ import { useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
   EMPTY_ITEM, SHORT_REASONS, activePlacements, clearCollectedUpdates, collectPlacements, refillLines, collectionLines, gotAllUpdates, gotFewerUpdates,
-  collectReminders, groupByStoreroom, isChecked, isRequired, isSideLine, lineGot, lineInfo, lineState, pendingRefills, sideShares, storeLabel, upstairsDetail, upstairsStatus, gotFewerSplitUpdates,
-  type CollectionLine, type ItemState, type ShortReason, type UpstairsCheck,
+  collectReminders, groupByStoreroom, isChecked, lineGroups, isRequired, isSideLine, lineGot, lineInfo, lineState, pendingRefills, sideShares, storeLabel, upstairsDetail, upstairsStatus, gotFewerSplitUpdates,
+  type CollectionLine, type ItemState, type LineGroup, type ShortReason, type UpstairsCheck,
 } from '@/lib/restock-logic';
 import { formatQty, round2 } from '@/lib/restock-math';
 import { setItems } from '@/lib/client/restock-store';
@@ -22,6 +22,9 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
   // Upstairs pickups were on Refill FOH; this is the downstairs run.
   const lines = collectionLines(collectPlacements(session.kind, placements, recorded), items);
   const groups = groupByStoreroom(lines, view.locationOrder);
+  // Inside each storeroom: by type (Gold Class Bar: Beer, Wine, Spirits…) or by where it's going (Kitchen).
+  // An area restock is all for one area, so grouping by area adds nothing there.
+  const groupBy = view.department.collectGroup === 'type' || (view.department.collectGroup === 'area' && view.areas.length > 1) ? view.department.collectGroup : null;
   // What to take down (e.g. tubs and boxes for the burger patties), above the first storeroom.
   const reminders = collectReminders(lines, items);
   const handled = lines.filter((l) => ['done', 'short'].includes(lineState(l, items))).length;
@@ -58,6 +61,7 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
               </section>
             ) : null}
             {groups.map((g) => <Room key={g.lines[0].locationId ?? g.name} name={g.name} lines={g.lines} items={items} write={write} oneArea={oneArea} displayRule={!!view.department.noneOnDisplay} checkOf={checkOf}
+              grouped={groupBy ? lineGroups(g.lines, view, groupBy) : undefined}
               note={roomNote(g.lines, view.locationNotes)} />)}
           </div>
         )}
@@ -84,8 +88,10 @@ function roomNote(lines: CollectionLine[], notes: Map<string, string>) {
 }
 
 /** One storeroom: header with progress, folds away once everything in it is collected. */
-function Room({ name, lines, items, write, note, oneArea, tickOnly = false, displayRule = false, checkOf }: {
+function Room({ name, lines, items, write, note, oneArea, tickOnly = false, displayRule = false, checkOf, grouped }: {
   name: string; lines: CollectionLine[]; items: Map<string, ItemState>; write: (u: { placementId: string; fields: Partial<ItemState> }[]) => void;
+  /** The storeroom's lines in groups (by type, or by where they're going), each with a small heading. */
+  grouped?: LineGroup[];
   /** The storeroom's reminder (e.g. "Use opened boxes first"), shown once under its heading. */
   note?: string; oneArea: string | null;
   /** Collect upstairs: "grabbed" wording; Got fewer records how many were actually there (no reasons). */
@@ -108,12 +114,24 @@ function Room({ name, lines, items, write, note, oneArea, tickOnly = false, disp
         <Icon name={open ? 'up' : 'down'} />
       </button>
       {open && note ? <p className="room-note"><Icon name="info" /><span>{note}</span></p> : null}
-      {open ? <div className="room-lines">{lines.map((l) => <Line key={l.key} line={l} items={items} write={write} oneArea={oneArea} tickOnly={tickOnly} displayRule={displayRule} barCheck={checkOf?.(l).check} barWhere={checkOf?.(l).where ?? null} />)}</div> : null}
+      {open && grouped ? (
+        <div className="room-lines">{grouped.map((g) => {
+          const n = g.lines.filter((l) => ['done', 'short'].includes(lineState(l, items))).length;
+          return (
+            <div key={g.key} className="lgrp" data-group={g.label}>
+              <p className="lgrp-h"><b>{g.label}</b><small>{n === g.lines.length ? <><Icon name="check" />{g.lines.length}</> : `${n} of ${g.lines.length}`}</small></p>
+              {g.lines.map((l) => <Line key={l.key} line={l} items={items} write={write} oneArea={oneArea} tickOnly={tickOnly} displayRule={displayRule} barCheck={checkOf?.(l).check} barWhere={checkOf?.(l).where ?? null} groupArea={g.areaName} />)}
+            </div>
+          );
+        })}</div>
+      ) : open ? <div className="room-lines">{lines.map((l) => <Line key={l.key} line={l} items={items} write={write} oneArea={oneArea} tickOnly={tickOnly} displayRule={displayRule} barCheck={checkOf?.(l).check} barWhere={checkOf?.(l).where ?? null} />)}</div> : null}
     </section>
   );
 }
 
-export function Line({ line, items, write, oneArea, tickOnly = false, displayRule = false, verb = 'Grabbed', barCheck, barWhere = null }: { line: CollectionLine; items: Map<string, ItemState>; write: (u: { placementId: string; fields: Partial<ItemState> }[]) => void; oneArea: string | null; tickOnly?: boolean; displayRule?: boolean;
+export function Line({ line, items, write, oneArea, tickOnly = false, displayRule = false, verb = 'Grabbed', barCheck, barWhere = null, groupArea }: { line: CollectionLine; items: Map<string, ItemState>; write: (u: { placementId: string; fields: Partial<ItemState> }[]) => void; oneArea: string | null; tickOnly?: boolean; displayRule?: boolean;
+  /** Listed under where it's going (e.g. "For Freezer 1"): the line only says the compartment ("Upper right"). */
+  groupArea?: string;
   /** Gold Class Bar: what the Bar and Upstairs checks said about this product (Out of stock / Low stock / Top-up incomplete). */
   barCheck?: UpstairsCheck;
   /** …and where it's still available (at the bar, or upstairs). */
@@ -218,8 +236,10 @@ export function Line({ line, items, write, oneArea, tickOnly = false, displayRul
       </span>
     );
   }
+  const inGroup = groupArea && line.parts.length === 1 && (line.parts[0].areaName === groupArea || line.parts[0].areaName.startsWith(`${groupArea} · `))
+    ? line.parts[0].areaName.slice(groupArea.length + 3) : null;
   const sub = line.kind === 'task' ? (line.instructions || forTxt)
-    : oneArea && line.parts.length === 1 ? null : `For ${forTxt}`;
+    : oneArea && line.parts.length === 1 ? null : inGroup !== null ? (inGroup || null) : `For ${forTxt}`;
   // Kitchen: part to defrost, part back into its freezer (e.g. "2 to defrost → Upstairs walk-in fridge · 2 back into Freezer 1").
   const split = line.kind === 'qty' && line.parts.some((p) => p.label);
 
