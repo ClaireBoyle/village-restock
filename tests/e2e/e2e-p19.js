@@ -27,7 +27,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   const [k] = await sql`select id from departments where name = 'Gold Class Kitchen'`;
   await sql`delete from check_areas where department_id = ${k.id}`;
   await sql`insert into storage_locations (name, sort_order) values ('Walk in freezer(Downstairs)', 3), ('Walk in fridge(Downstairs)', 2) on conflict do nothing`;
-  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep', 'defrost-compact', 'freezer-1-first', 'no-walk-in-desserts', 'walk-in-third-shelf', 'walk-in-shelves', 'walk-in-third-shelf', 'relish-prep', 'walk-in-fresh-produce', 'walk-in-fresh-produce']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
+  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep', 'defrost-compact', 'freezer-1-first', 'no-walk-in-desserts', 'walk-in-third-shelf', 'walk-in-shelves', 'walk-in-third-shelf', 'relish-prep', 'walk-in-fresh-produce', 'walk-in-fresh-produce', 'bottom-sauce-shelf', 'bottom-sauce-shelf']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
 
   // Portioned sauces are counted in bottles.
   const portioned = await sql`select distinct q.name, q.unit_plural from products q join product_placements x on x.product_id = q.id join prep_tasks t on t.id = x.prep_task_id
@@ -55,7 +55,12 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   ok((await names('Top sauce shelf')).join('|') === 'tomato sauce|garlic sauce / aioli|tzatziki|chipotle|vegan aioli|hollandaise dressing|sriracha|buttermilk ranch|american mustard', 'top sauce shelf (American Mustard last)');
   ok((await names('Second sauce shelf')).join('|') === 'sweet chilli sauce|burger sauce|xo sauce|sesame mayo|sriracha mayo|tartare|bbq sauce|maple aioli|soy sauce'
     && await sees(P, `${sec('Second sauce shelf', 'Soy Sauce')} .pnote`, 'Far right of the shelf'), 'second sauce shelf, soy sauce at the far right');
-  ok((await names('Sauces (shelf to confirm)')).join('|') === 'vodka sauce', 'vodka sauce: lower spare sauces shelf (maple aioli moved to the second sauce shelf)');
+  ok((await names('Sauces (shelf to confirm)')).join('|') === "sweet chilli sauce (unportioned)|tomato sauce (unportioned)|smokey bbq sauce (unportioned)|hellmann's mayo (bottle)|lemon juice|dijon mayo|gherkin relish|vodka sauce",
+    'bottom sauce shelf: the unportioned spare bottles and ingredients, then vodka sauce (maple aioli moved to the second sauce shelf)');
+  const bottom = (n) => sec('Sauces (shelf to confirm)', n);
+  const bheads = await P.$$eval('.psec:has(.psec-t b:text-is("Sauces (shelf to confirm)")) .phead', (e) => e.map((x) => x.textContent.trim()));
+  ok(bheads.some((h) => h.startsWith('Spare bottles · keep 2 of each')) && bheads.some((h) => h.startsWith('Ingredients · keep 1 of each'))
+    && (await P.locator(`${bottom('Sweet Chilli Sauce (unportioned)')} button.padd`).innerText()).trim() === 'Add', 'spare bottles: "keep 2 of each" / "keep 1 of each", plain Add (stock, not prep; nothing to count): ' + bheads.join(' | '));
   const shelf = async (s) => P.$$eval(`.psec:has(.psec-t b:text-is("${s}")) article.prow h3`, (e) => e.map((x) => x.textContent));
   const third = await shelf('Third shelf'), fourth = await shelf('Fourth shelf'), herbs = await shelf('Right rack top shelf');
   ok(third.join(', ') === 'Maple Syrup, Sauerkraut, Sesame Kewpie, Tomato Passata, Feta, Brie, Cheddar, Quince Paste, Strawberries, Raspberries', 'third shelf: ' + third.join(', '));

@@ -20,7 +20,7 @@ const st = async (P, n) => (await P.locator(`${job(n)} .pcl-st`).innerText()).sp
   const [k] = await sql`select id from departments where name = 'Gold Class Kitchen'`;
   await sql`delete from check_areas where department_id = ${k.id}`;
   await sql`insert into storage_locations (name, sort_order) values ('Walk in freezer(Downstairs)', 3), ('Walk in fridge(Downstairs)', 2) on conflict do nothing`;
-  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep', 'defrost-compact', 'freezer-1-first', 'no-walk-in-desserts', 'walk-in-third-shelf', 'walk-in-fresh-produce', 'prep-checklist', 'prep-checklist']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
+  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep', 'defrost-compact', 'freezer-1-first', 'no-walk-in-desserts', 'walk-in-third-shelf', 'walk-in-fresh-produce', 'bottom-sauce-shelf', 'prep-checklist', 'prep-checklist']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
 
   const b = await chromium.launch(); const errs = [];
   const A = await (await b.newContext({ ...devices['iPhone 13'] })).newPage(); A.on('pageerror', (e) => errs.push(e.message));
