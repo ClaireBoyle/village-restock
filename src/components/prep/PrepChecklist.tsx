@@ -9,8 +9,11 @@ import { useCatalogue } from '@/lib/client/use-catalogue';
 import { useLive, useStaffName } from '@/lib/client/hooks';
 import { localDb } from '@/lib/client/local-db';
 import { importRemotePrepChecks, setPrepCheck } from '@/lib/client/prep-check-store';
+import { importRemotePrep, setPrepDone } from '@/lib/client/prep-store';
 import { tradingDate } from '@/lib/restock-math';
 import { checklistGroups, type PrepCheck, type PrepTask } from '@/lib/prep';
+
+const portionNames = new Set(['portion lamb', 'portion zucchini wedges', 'portion cauliflower popcorn', "portion fisherman's baskets", "portion fisherman's basket"]);
 
 const RECHECK_MS = 20_000;
 
@@ -32,10 +35,17 @@ export function PrepChecklist({ departmentId }: { departmentId: string }) {
   const [serverReady, setServerReady] = useState<boolean | null>(true);
 
   const rows = useLive(async () => (today ? localDb().prepChecks.where('[departmentId+tradingDate]').equals([departmentId, today]).toArray() : []), [departmentId, today], [] as PrepCheck[]);
+  const portions = useLive(async () => {
+    if (!today) return [];
+    const handovers = await localDb().prep.where('departmentId').equals(departmentId).toArray();
+    return handovers.filter(h => h.tradingDate === today && h.status === 'needed' && h.restockStatus !== 'cancelled')
+      .flatMap(h => h.items.filter(i => portionNames.has(i.name.toLowerCase().replace(/’/g, "'")))
+        .map(i => ({ ...i, sessionId: h.sessionId })));
+  }, [departmentId, today], [] as (import('@/lib/prep').PrepItem & { sessionId: string })[]);
   // Other devices' checks: on opening, every 20 seconds while open, and when the screen comes back.
   useEffect(() => {
     if (!today) return;
-    const pull = () => { void importRemotePrepChecks(departmentId, today).then((r) => { if (r !== null) setServerReady(r); }); };
+    const pull = () => { void importRemotePrep(departmentId, today, true); void importRemotePrepChecks(departmentId, today).then((r) => { if (r !== null) setServerReady(r); }); };
     pull();
     const t = window.setInterval(pull, RECHECK_MS);
     const vis = () => { if (document.visibilityState === 'visible') pull(); };
@@ -45,8 +55,9 @@ export function PrepChecklist({ departmentId }: { departmentId: string }) {
 
   const byTask = new Map(rows.map((r) => [r.taskId, r]));
   const all = groups.flatMap((g) => g.tasks);
-  const checked = all.filter((t) => byTask.get(t.id)?.status).length;
-  const needs = all.filter((t) => byTask.get(t.id)?.status === 'needs').length;
+  const total = all.length + portions.length;
+  const checked = portions.filter(p => p.doneAt).length + all.filter((t) => byTask.get(t.id)?.status).length;
+  const needs = portions.filter(p => !p.doneAt).length + all.filter((t) => byTask.get(t.id)?.status === 'needs').length;
   const morning = all.filter((t) => byTask.get(t.id)?.morning).length;
 
   // Needs prep: the outstanding jobs. One marked Ready stays in view (with Undo) until the filter is changed.
@@ -79,12 +90,12 @@ export function PrepChecklist({ departmentId }: { departmentId: string }) {
             </div>
             <Link className="btn small" href={`/d/${departmentId}`}><Icon name="list" />Kitchen</Link>
           </div>
-          {all.length ? (
+          {total ? (
             <>
-              <p className="pcl-sum" aria-live="polite"><b>{checked} of {all.length} checked</b>
+              <p className="pcl-sum" aria-live="polite"><b>{checked} of {total} checked</b>
                 {needs ? <span className="w"><Icon name="warn" />{needs} need prep</span> : null}
                 {morning ? <span><Icon name="clock" />{morning} left for morning</span> : null}</p>
-              <span className="pcl-bar" aria-hidden="true"><i style={{ width: `${Math.round((checked / all.length) * 100)}%` }} /></span>
+              <span className="pcl-bar" aria-hidden="true"><i style={{ width: `${Math.round((checked / total) * 100)}%` }} /></span>
               <div className="segb pcl-filter" role="group" aria-label="Show">
                 <button className={filter === 'all' ? 'on' : ''} aria-pressed={filter === 'all'} onClick={() => pick('all')}>All jobs</button>
                 <button className={filter === 'needs' ? 'on' : ''} aria-pressed={filter === 'needs'} onClick={() => pick('needs')}>Needs prep{needs ? ` (${needs})` : ''}</button>
@@ -94,9 +105,9 @@ export function PrepChecklist({ departmentId }: { departmentId: string }) {
           {serverReady === false ? <p className="pcl-warn"><Icon name="warn" />Saved on this device only: the server needs a database update (021_prep_checklist.sql) before other devices see these checks.</p> : null}
         </section>
 
-        {!catalogue ? null : all.length === 0 ? (
+        {!catalogue ? null : total === 0 ? (
           <p className="empty">No prep jobs are on the checklist yet. A manager can add them in Admin &rsaquo; Morning prep.</p>
-        ) : filter === 'needs' && !all.some(show) ? (
+        ) : filter === 'needs' && !all.some(show) && !portions.some(p => !p.doneAt || keep.has(p.id)) ? (
           <p className="empty pcl-none"><Icon name="check" />Nothing needs prep right now.</p>
         ) : groups.map((g) => {
           const list = g.tasks.filter(show);
@@ -109,6 +120,21 @@ export function PrepChecklist({ departmentId }: { departmentId: string }) {
             </section>
           );
         })}
+        {portions.some(p => filter === 'all' || !p.doneAt || keep.has(p.id)) && (
+          <section className="pcl-group" aria-label="Portioning from restock">
+            <h2><span>Portioning from restock</span><small>{portions.filter(p => p.doneAt).length} of {portions.length} ready</small></h2>
+            <ul>{portions.filter(p => filter === 'all' || !p.doneAt || keep.has(p.id)).map(p => (
+              <li key={p.id}><strong>{p.name}</strong>
+                {p.note && <p>{p.note}</p>}
+                <button type="button" className="btn small" aria-label={p.name + (p.doneAt ? ': mark needs prep' : ': mark ready')}
+                  onClick={() => {
+                    if (filter === 'needs') setKeep(k => new Set(k).add(p.id));
+                    void setPrepDone(p.sessionId, p.id, !p.doneAt, who);
+                  }}>{p.doneAt ? 'Ready · Undo' : 'Needs prep · Mark ready'}</button>
+              </li>
+            ))}</ul>
+          </section>
+        )}
       </main>
     </div>
   );
