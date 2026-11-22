@@ -96,7 +96,7 @@ export function PortionCheckRow({ p, taskName, on, onToggle, photo }: { p: Place
     <article className={`prow card pcrow s-${on ? 'warn' : 'none'} ${on ? '' : 'quiet'}`} data-placement={p.placementId}>
       {photo}
       <div className="pt"><h3>{p.productName}</h3>
-        <p className="ps" id={`s-${p.placementId}`}>{on ? <><Icon name="clock" />On tomorrow&rsquo;s prep list: {taskName}</> : <span className="sr-only">Not ticked</span>}</p></div>
+        <p className="ps" id={`s-${p.placementId}`}>{on ? <><Icon name="clock" />On the prep checklist and morning handover: {taskName}</> : <span className="sr-only">Not ticked</span>}</p></div>
       <div className="pc">
         <button type="button" className={`pnn pc-tick ${on ? 'on' : ''}`} aria-pressed={on} onClick={onToggle}
           aria-label={`${p.productName}: needs portioning`}>{on ? <Icon name="check" /> : null}Needs portioning</button>

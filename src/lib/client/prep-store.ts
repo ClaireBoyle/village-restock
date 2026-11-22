@@ -50,18 +50,29 @@ export async function setPrepDone(sessionId: string, itemId: string, done: boole
 }
 
 /** Bring in handovers from other devices (e.g. last night's, for the morning team), keeping anything not yet uploaded from here. */
-export async function importRemotePrep(departmentId: string, since: string) {
-  const res = await fetch(`/api/prep?dept=${departmentId}&since=${since}`, { cache: 'no-store' }).catch(() => null);
+export async function importRemotePrep(departmentId: string, since: string, serviceOnly = false) {
+  const started = new Date().toISOString();
+  const res = await fetch(`/api/prep?dept=${departmentId}&since=${since}${serviceOnly ? '&service=1' : ''}`, { cache: 'no-store' }).catch(() => null);
   if (!res?.ok) return;
   const body = (await res.json()) as PrepHandoverResponse;
   const db = localDb();
   await db.transaction('rw', db.prep, db.outbox, async () => {
     const waiting = await db.outbox.toArray();
+    if (serviceOnly) {
+      const received = new Set(body.handovers.map(h => h.sessionId));
+      const cached = await db.prep.where('departmentId').equals(departmentId).toArray();
+      for (const h of cached) {
+        if (h.tradingDate !== since || received.has(h.sessionId) || h.updatedAt >= started) continue;
+        if (!waiting.some(r => (r.op.type === 'prep.set' || r.op.type === 'prep.done') && r.op.sessionId === h.sessionId)) {
+          await db.prep.delete(h.sessionId);
+        }
+      }
+    }
     for (const h of body.handovers) {
       const pendingList = waiting.some((r) => r.op.type === 'prep.set' && r.op.sessionId === h.sessionId);
       const pendingDone = new Set(waiting.flatMap((r) => (r.op.type === 'prep.done' && r.op.sessionId === h.sessionId ? [r.op.itemId] : [])));
       const cur = await db.prep.get(h.sessionId);
-      if (pendingList && cur) { await db.prep.put({ ...cur, restockStatus: h.restockStatus }); continue; }
+      if (pendingList) { if (cur) await db.prep.put({ ...cur, restockStatus: h.restockStatus }); continue; }
       const mine = new Map((cur?.items ?? []).map((i) => [i.id, i]));
       await db.prep.put({ ...h, items: h.items.map((i) => (pendingDone.has(i.id) && mine.get(i.id) ? { ...i, doneAt: mine.get(i.id)!.doneAt, doneBy: mine.get(i.id)!.doneBy } : i)) } satisfies LocalPrep);
     }
@@ -80,16 +91,20 @@ export async function applyStockPrep(session: { id: string; departmentId: string
  * A portioning check while refilling (e.g. Freezer 2's portioned lamb): ticking it puts the task on the
  * morning prep handover; unticking takes it off again (unless staff have since added an amount or note).
  */
-export async function tickPrep(session: { id: string; departmentId: string; tradingDate: string }, task: PrepTask, on: boolean, who: string) {
-  const cur = await localDb().prep.get(session.id);
-  let items = cur?.status === 'needed' ? cur.items : [];
-  const it = items.find((i) => i.taskId === task.id);
-  if (on) {
-    if (it) return;
-    items = [...items, { id: crypto.randomUUID(), taskId: task.id, group: task.group, name: task.name, qty: null, note: null, doneAt: null, doneBy: null }];
-    await setPrep(session, 'needed', items, who);
-  } else if (it && !it.note) {
-    items = items.filter((i) => i !== it);
-    await setPrep(session, items.length ? 'needed' : null, items, who);
-  }
+export async function tickPrep(session: { id: string; departmentId: string; tradingDate: string }, task: Pick<PrepTask, 'name' | 'group'> & { id: string | null }, on: boolean, who: string) {
+  const db = localDb();
+  await db.transaction('rw', db.prep, db.outbox, async () => {
+    const cur = await db.prep.get(session.id);
+    let items = cur?.status === 'needed' ? cur.items : [];
+    const it = items.find((i) => task.id ? i.taskId === task.id : i.name === task.name);
+    if (on) {
+      if (it) return;
+      items = [...items, { id: crypto.randomUUID(), taskId: task.id, group: task.group, name: task.name, qty: null, note: null, doneAt: null, doneBy: null }];
+      await setPrep(session, 'needed', items, who);
+    } else if (it && !it.note) {
+      items = items.filter((i) => i !== it);
+      await setPrep(session, items.length ? 'needed' : null, items, who);
+    }
+  });
+  requestSync();
 }

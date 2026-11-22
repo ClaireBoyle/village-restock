@@ -16,9 +16,10 @@ export async function GET(req: NextRequest) {
   const headers = { 'Cache-Control': 'no-store' };
   const [{ has }] = await sql`select to_regclass('public.prep_handover_items') is not null as has`;
   if (!has) return NextResponse.json({ handovers: [] } satisfies PrepHandoverResponse, { headers });
+  const serviceOnly = req.nextUrl.searchParams.get('service') === '1';
   const rows = await sql`select h.session_id, h.department_id, h.trading_date, h.status, h.updated_by, h.updated_at, s.status as restock_status, s.finished_at
     from prep_handovers h join restock_sessions s on s.id = h.session_id
-    where h.department_id = ${dept} and h.trading_date >= ${since} order by h.trading_date desc, h.updated_at desc limit 5`;
+    where h.department_id = ${dept} and ${serviceOnly ? sql`h.trading_date = ${since}` : sql`h.trading_date >= ${since}`} order by h.trading_date desc, h.updated_at desc ${serviceOnly ? sql`` : sql`limit 5`}`;
   const items = rows.length ? await sql`select id, session_id, task_id, grp, name, qty, note, done_at, done_by from prep_handover_items
     where session_id in ${sql(rows.map((r) => String(r.sessionId)))} order by sort_order` : [];
   const iso = (v: unknown) => (v ? new Date(v as string).toISOString() : null);
