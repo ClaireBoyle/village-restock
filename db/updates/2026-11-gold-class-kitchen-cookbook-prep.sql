@@ -17,6 +17,7 @@ begin
     ('Make raspberry compote', 'Raspberry compote', 'Dessert prep', 'other'),
     ('Make signature chip salt', 'Signature chip salt', 'Seasonings', 'other'),
     ('Dice white onion for burgers', 'Diced white onion for burgers', 'Salad bar', 'vegetables'),
+    ('Slice cucumber for bao buns', 'Sliced cucumber for bao buns', 'Salad bar', 'vegetables'),
     ('Dice tomato', 'Diced tomato', 'Salad bar', 'vegetables'),
     ('Wash tubs of lettuce', 'Washed lettuce tubs', 'Salad bar', 'vegetables'),
     ('Cut and shred lettuce', 'Cut and shredded lettuce', 'Salad bar', 'vegetables'),
