@@ -48,7 +48,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
     `walk-in shelves: ${secs.join(', ')}`);
   // (case-insensitive: the test data's own "Tomato sauce" is reused)
   const names = async (c) => (await P.locator(`.psec:has(.psec-t b:text-is("${c}")) article.prow h3`).allInnerTexts()).map((n) => n.toLowerCase());
-  ok((await names('Top sauce shelf')).join('|') === 'tomato sauce|garlic sauce / aioli|tzatziki|chipotle|vegan aioli|hollandaise dressing|sriracha|buttermilk ranch', 'top sauce shelf');
+  ok((await names('Top sauce shelf')).join('|') === 'tomato sauce|garlic sauce / aioli|tzatziki|chipotle|vegan aioli|hollandaise dressing|sriracha|buttermilk ranch|american mustard', 'top sauce shelf (American Mustard last)');
   ok((await names('Second sauce shelf')).join('|') === 'sweet chilli sauce|burger sauce|xo sauce|sesame mayo|sriracha mayo|tartare|bbq sauce|soy sauce'
     && await sees(P, `${sec('Second sauce shelf', 'Soy Sauce')} .pnote`, 'Far right of the shelf'), 'second sauce shelf, soy sauce at the far right');
   ok((await names('Sauces (shelf to confirm)')).join('|') === 'vodka sauce|maple aioli', 'vodka sauce and maple aioli: shelf to confirm');

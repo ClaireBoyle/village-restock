@@ -5,19 +5,20 @@
 --                  Feta and cheeseboard: Feta, Brie, Cheddar, Quince Paste, Strawberries, Raspberries
 --   Fourth shelf   Mexican Rice, American Sliced Cheese, Smoky Mozzarella, Portioned Napoli Cheese (pizza cheese)
 --   Right rack top shelf   the burger buns (as before), then Fresh herbs: Mint, Parsley, Spring Onion, Dill
+--   Top sauce shelf        American Mustard, after the sauces already there
 --
 -- * "Cheeseboard tub" becomes "Third shelf" and "Bottom cheese shelf" becomes "Fourth shelf" (the same records,
 --   so past restocks and anything set in Admin are kept). Existing products and rows are reused and moved,
 --   never duplicated; notes changed in Admin are kept.
 -- * New products (Maple Syrup, Sauerkraut, Sesame Kewpie, Tomato Passata, Feta, Raspberries, Mexican Rice, Mint, Parsley,
---   Spring Onion, Dill): "staff enter", with
+--   Spring Onion, Dill, American Mustard): "staff enter", with
 --   these units (change them in Admin if needed) and no storeroom assumed (set it in Admin; until then they're
 --   listed under "No storeroom set" on the collection list).
 -- * 2026-11-gold-class-kitchen-walk-in-shelves.sql does nothing once this has run, so the old shelves never come back.
 do $$
 declare
   dept uuid := (select id from departments where lower(name) = 'gold class kitchen');
-  walk uuid; third uuid; fourth uuid; herbs uuid; area uuid; p uuid; pl uuid; i int; norm text; moved int := 0; added int := 0;
+  walk uuid; third uuid; fourth uuid; herbs uuid; topsauce uuid; area uuid; p uuid; pl uuid; i int; norm text; moved int := 0; added int := 0;
   -- section, product, unit (one), unit (more), subheading ('' = none), note
   items text[][] := array[
     ['Third shelf', 'Maple Syrup', 'bottle', 'bottles', 'Spare sauce ingredients', ''],
@@ -37,7 +38,8 @@ declare
     ['Right rack top shelf', 'Mint', 'bunch', 'bunches', 'Fresh herbs', ''],
     ['Right rack top shelf', 'Parsley', 'bunch', 'bunches', '', ''],
     ['Right rack top shelf', 'Spring Onion', 'bunch', 'bunches', '', ''],
-    ['Right rack top shelf', 'Dill', 'bunch', 'bunches', '', '']
+    ['Right rack top shelf', 'Dill', 'bunch', 'bunches', '', ''],
+    ['Top sauce shelf', 'American Mustard', 'bottle', 'bottles', '', '']
   ];
 begin
   if dept is null then raise notice 'Gold Class Kitchen not found: nothing changed'; return; end if;
@@ -77,9 +79,16 @@ begin
     guide_text = case when trim(coalesce(guide_text, '')) in ('', 'Right rack, top shelf.') then 'Right rack, top shelf: burger buns, then the fresh herbs.' else guide_text end
     where id = herbs;
 
+  -- The top sauce shelf: American Mustard goes after the sauces already there.
+  topsauce := (select id from check_areas where department_id = dept and parent_area_id = walk and lower(name) = lower('Walk in fridge · Top sauce shelf') limit 1);
+  if topsauce is null then
+    insert into check_areas (department_id, name, sort_order, parent_area_id, section_mode, guide_text) values (dept, 'Walk in fridge · Top sauce shelf', 1, walk, 'open', 'Back wall, top sauce shelf.') returning id into topsauce;
+  end if;
+  update check_areas set active = true where id = topsauce;
+
   -- 2. Every item on its shelf, in order, moving rows that are elsewhere in the walk-in (never copying them).
   for i in 1 .. array_length(items, 1) loop
-    area := case items[i][1] when 'Third shelf' then third when 'Fourth shelf' then fourth else herbs end;
+    area := case items[i][1] when 'Third shelf' then third when 'Fourth shelf' then fourth when 'Top sauce shelf' then topsauce else herbs end;
     norm := regexp_replace(lower(items[i][2]), '[^a-z0-9]', '', 'g');
     p := (select id from products where department_id = dept and regexp_replace(lower(name), '[^a-z0-9]', '', 'g') = norm
           order by (status = 'active') desc, created_at limit 1);
@@ -97,7 +106,8 @@ begin
       if pl is not null then update product_placements set check_area_id = area where id = pl; moved := moved + 1; end if;
     end if;
     if pl is null then insert into product_placements (product_id, check_area_id, sort_order) values (p, area, i) returning id into pl; end if;
-    update product_placements set sort_order = case when area = herbs then 100 + i else i end, heading = nullif(items[i][5], ''),
+    update product_placements set sort_order = case when area in (herbs, topsauce) then 100 + i else i end,
+      heading = case when area = topsauce then heading else nullif(items[i][5], '') end,
       instructions = coalesce(nullif(trim(instructions), ''), nullif(items[i][6], ''))
       where id = pl;
   end loop;
@@ -105,5 +115,6 @@ begin
   raise notice 'Third shelf: %', (select string_agg(q.name, ', ' order by x.sort_order) from product_placements x join products q on q.id = x.product_id where x.check_area_id = third);
   raise notice 'Fourth shelf: %', (select string_agg(q.name, ', ' order by x.sort_order) from product_placements x join products q on q.id = x.product_id where x.check_area_id = fourth);
   raise notice 'Right rack top shelf: %', (select string_agg(q.name, ', ' order by x.sort_order) from product_placements x join products q on q.id = x.product_id where x.check_area_id = herbs);
+  raise notice 'Top sauce shelf: %', (select string_agg(q.name, ', ' order by x.sort_order) from product_placements x join products q on q.id = x.product_id where x.check_area_id = topsauce);
   raise notice '% new products, % rows moved', added, moved;
 end $$;
