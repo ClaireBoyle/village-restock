@@ -74,6 +74,7 @@ export function AreaForm({ departmentId, a, parents = [] }: {
               <option value="open">Shown open</option>
               <option value="collapsed">Collapsed (tap to show)</option>
               <option value="optional">Optional and collapsed (never required)</option>
+              <option value="side">A side of a stand (Side A / Side B switch, collected as one total)</option>
             </select></div>
         </div>
       ) : null}

@@ -99,7 +99,7 @@ export async function saveDepartment(_: ActionResult, form: FormData): Promise<A
 // ---------------------------------------------------------------------------
 const areaSchema = z.object({
   id: optUuid, departmentId: uuid, name: text(60, 'Area name'), guideText: optText(600), active: checkbox,
-  parentAreaId: optUuid.optional(), sectionMode: z.enum(['open', 'collapsed', 'optional']).optional(),
+  parentAreaId: optUuid.optional(), sectionMode: z.enum(['open', 'collapsed', 'optional', 'side']).optional(),
 });
 
 export async function saveArea(_: ActionResult, form: FormData): Promise<ActionResult> {

@@ -10,6 +10,7 @@ import { localDb } from '@/lib/client/local-db';
 import { setPrep } from '@/lib/client/prep-store';
 import { MorningPrepPicker, PrepSummary } from './MorningPrep';
 import { PendingRefills } from './KitchenRows';
+import { FillSides } from './FillSides';
 import { formatQty, round2 } from '@/lib/restock-math';
 import { finishSession, reopenSession, setItems, updateLocalSession } from '@/lib/client/restock-store';
 import { useSyncStatus } from '@/lib/client/hooks';
@@ -180,6 +181,8 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
 
             {report}
 
+            {/* Candy Bar confection stand: Fill Side A / Fill Side B, a reference before finishing. */}
+            <FillSides lines={lines} items={items} />
             {/* Kitchen: drawers still waiting for their refill (not a shortage). */}
             <PendingRefills list={pendingRefills(session.kind, placements, recorded, items)}
               onRefilled={(p) => void setItems(session.id, [{ placementId: p.placementId, fields: { refillStatus: 'refilled' } }], who)} />

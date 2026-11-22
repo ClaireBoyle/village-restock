@@ -3,13 +3,14 @@ import { useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
   EMPTY_ITEM, SHORT_REASONS, activePlacements, clearCollectedUpdates, collectPlacements, refillLines, collectionLines, gotAllUpdates, gotFewerUpdates,
-  groupByStoreroom, isChecked, isRequired, lineGot, lineInfo, lineState, pendingRefills, storeLabel, upstairsCheck, upstairsStatus,
+  groupByStoreroom, isChecked, isRequired, isSideLine, lineGot, lineInfo, lineState, pendingRefills, sideShares, storeLabel, upstairsCheck, upstairsStatus, gotFewerSplitUpdates,
   type CollectionLine, type ItemState, type ShortReason, type UpstairsCheck,
 } from '@/lib/restock-logic';
 import { formatQty, round2 } from '@/lib/restock-math';
 import { setItems } from '@/lib/client/restock-store';
 import { ProductThumb } from './ProductCard';
 import { PendingRefills } from './KitchenRows';
+import { FillSides } from './FillSides';
 import { sameText } from './DefrostParts';
 import { Dock, plural } from './shared';
 import type { RestockCtx } from './RestockApp';
@@ -51,6 +52,7 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
               note={roomNote(g.lines, view.locationNotes)} />)}
           </div>
         )}
+        <FillSides lines={lines} items={items} />
         <PendingRefills list={refills} title="Back upstairs: refill" onRefilled={(p) => write([{ placementId: p.placementId, fields: { refillStatus: 'refilled' } }])} />
       </main>
       <Dock icon={handled === lines.length ? 'check' : 'list'} progress={lines.length ? handled / lines.length : 1}
@@ -116,6 +118,9 @@ export function Line({ line, items, write, oneArea, tickOnly = false, displayRul
   const [more, setMore] = useState(false);
   const [dReason, setDReason] = useState<ShortReason | null>(null); // null = not enough in the storeroom
   const [dFlag, setDFlag] = useState(false);
+  // A stand filled side by side: where the units that were there go (placement → how many), when it's fewer.
+  const sided = isSideLine(line) && line.parts.length > 1;
+  const [alloc, setAlloc] = useState<Record<string, number>>({});
   const fewRef = useRef<HTMLButtonElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
   // An amount left unconfirmed by an older version of the app also opens the editor, to be finished.
@@ -141,7 +146,14 @@ export function Line({ line, items, write, oneArea, tickOnly = false, displayRul
     setDraft(st === 'short' || st === 'part' ? String(round2(got)) : '');
     setDReason(info.reason && info.reason !== 'insufficient' ? info.reason : null);
     setDFlag(info.flagged);
+    // Changing it: the split staff chose last time.
+    setAlloc(Object.fromEntries(sideShares(line, items).map((s) => [s.placementId, s.collected ?? 0])));
     window.setTimeout(() => document.getElementById(inputId)?.focus(), 30);
+  };
+  /** The default split of n units: each side in turn gets what it asked for, until they run out. */
+  const defaultAlloc = (n: number) => {
+    let left = n;
+    return Object.fromEntries(line.parts.map((p) => { const s = round2(Math.min(left, p.need)); left = round2(left - s); return [p.placementId, s]; }));
   };
   /** Back to the same row (focus and scroll stay there). */
   const close = () => {
@@ -150,10 +162,21 @@ export function Line({ line, items, write, oneArea, tickOnly = false, displayRul
   };
   const cancel = () => { if (st === 'part') write(clearCollectedUpdates(line)); close(); };
   /** Confirm saves it: all of it is "got all"; less is a shortfall ("not enough in storeroom" unless another reason). */
+  // The split for the amount typed: what staff set, as long as it still adds up to it (otherwise the default).
+  const split2 = sided && valid && num! < line.total
+    ? (round2(line.parts.reduce((s, p) => s + (alloc[p.placementId] ?? 0), 0)) === round2(num!) ? alloc : defaultAlloc(num!)) : null;
+  const moveOne = (from: string, to: string) => {
+    if (!split2) return;
+    const a = { ...split2 }, pt = line.parts.find((p) => p.placementId === to)!;
+    if ((a[from] ?? 0) < step || (a[to] ?? 0) + step > pt.need) return;
+    a[from] = round2(a[from] - step); a[to] = round2((a[to] ?? 0) + step); setAlloc(a);
+  };
   const confirm = () => {
     if (!valid) return;
+    const why = tickOnly ? 'insufficient' : dReason ?? 'insufficient', flag = tickOnly ? false : dFlag;
     if (num! >= line.total) write(gotAllUpdates(line));
-    else write(gotFewerUpdates(line, num!, tickOnly ? 'insufficient' : dReason ?? 'insufficient', tickOnly ? false : dFlag, info.noneOnDisplay));
+    else if (split2) write(gotFewerSplitUpdates(line, new Map(Object.entries(split2)), why, flag, info.noneOnDisplay));
+    else write(gotFewerUpdates(line, num!, why, flag, info.noneOnDisplay));
     close();
   };
   const bump = (dir: 1 | -1) => {
@@ -200,7 +223,17 @@ export function Line({ line, items, write, oneArea, tickOnly = false, displayRul
         <ProductThumb src={line.photoPath} name={line.productName} credit={line.photoCredit} className="l-photo" />
         <div className="l-nm">
           <b>{line.productName}</b>
-          {st === 'short' && !open ? (
+          {isSideLine(line) && !open ? (
+            // A stand filled side by side: the split stays in view (also once collected).
+            <span className="l-sides">
+              {st === 'short' ? <small className="l-why">{round2(got)} collected of {round2(line.total)} requested{info.reason && info.reason !== 'insufficient' ? ` · ${shortReason(info.reason)}` : ''}
+                <button type="button" className="linkbtn l-link" onClick={openEditor}>Change</button></small> : null}
+              <small className="l-split-sides">{sideShares(line, items).map((s) => (
+                <span key={s.placementId} className="l-side"><b>{s.side}</b>{st === 'short' ? <> requested {round2(s.requested)} &middot; gets <b>{round2(s.collected ?? 0)}</b></> : <> &middot; {round2(s.requested)}</>}</span>
+              ))}</small>
+              {st === 'done' ? <small className="l-ok">Collected<button type="button" className="linkbtn l-link" onClick={undo}>Undo</button></small> : null}
+            </span>
+          ) : st === 'short' && !open ? (
             <small className="l-why">{tickOnly ? `${verb} ${round2(got)} of ${round2(line.total)}` : <>{info.reason === 'insufficient' ? stockLabel : shortReason(info.reason)} &middot; {barSt && info.reason === 'insufficient' ? <>{formatQty(short, line.unitSingular, line.unitPlural)} short</> : <>short {formatQty(short, line.unitSingular, line.unitPlural)}</>}{info.flagged ? ' · flagged' : ''}</>}
               <button type="button" className="linkbtn l-link" onClick={openEditor}>Change</button></small>
           ) : st === 'done' ? (
@@ -244,6 +277,24 @@ export function Line({ line, items, write, oneArea, tickOnly = false, displayRul
             {dShort !== null && dShort > 0 ? <span className="short-txt"><Icon name="warn" />Short {formatQty(dShort, line.unitSingular, line.unitPlural)}</span>
               : dShort === 0 ? <span className="fw-all"><Icon name="check" />That&rsquo;s all of it</span> : null}
           </div>
+          {split2 ? (
+            <div className="fw-sides" role="group" aria-label="Where they go">
+              <p className="fw-q">Where do the {round2(num!)} go?</p>
+              {line.parts.map((p, i) => {
+                const other = line.parts[i === 0 ? 1 : 0]?.placementId;
+                return (
+                  <div key={p.placementId} className="fw-side">
+                    <span><b>{p.side}</b> <small>requested {round2(p.need)}</small></span>
+                    <span className="pstep">
+                      <button type="button" onClick={() => other && moveOne(p.placementId, other)} disabled={(split2[p.placementId] ?? 0) <= 0} aria-label={`One less for ${p.side}`}><Icon name="minus" /></button>
+                      <b className="fw-n" aria-live="polite">{round2(split2[p.placementId] ?? 0)}</b>
+                      <button type="button" onClick={() => other && moveOne(other, p.placementId)} disabled={(split2[p.placementId] ?? 0) >= p.need || (split2[other!] ?? 0) <= 0} aria-label={`One more for ${p.side}`}><Icon name="plus" /></button>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
           <div className="fw-foot">
             <button type="button" className="btn fw-x" onClick={cancel}>Cancel</button>
             {tickOnly ? null : <button type="button" className="linkbtn fw-more" onClick={() => setMore(!more)} aria-expanded={more}>More options{dReason || dFlag ? ' (1+)' : ''}<Icon name={more ? 'up' : 'down'} /></button>}

@@ -42,6 +42,16 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   // Defrost: the rows "Mark remaining items not needed" marked, so they can be undone.
   const [bulk, setBulk] = useState<string[] | null>(null);
   const [openSecs, setOpenSecs] = useState<Record<string, boolean>>({});
+  // A stand checked side by side (e.g. the confection stand): the side staff are on, kept while they work
+  // through it (remembered per area on this device).
+  const [sideOn, setSideOn] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem('vr-stand-side') ?? '{}') as Record<string, string>; } catch { return {}; }
+  });
+  const pickSide = (areaId: string, secId: string) => setSideOn((s) => {
+    const next = { ...s, [areaId]: secId };
+    try { localStorage.setItem('vr-stand-side', JSON.stringify(next)); } catch { /* private mode */ }
+    return next;
+  });
   // Long subheading groups can be folded away (open by default; remembered on this device).
   const [shut, setShut] = useState<Record<string, boolean>>({});
   useEffect(() => { try { setShut(JSON.parse(localStorage.getItem('vr-shut-groups') ?? '{}')); } catch { /* private mode */ } }, []);
@@ -168,6 +178,8 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   // In a section (e.g. the upstairs Wine / Spirits cupboard): show what's already on the downstairs
   // list for the same product from anywhere in this restock (e.g. "Already 1 for Back bench").
   const alsoEntered = (p: (typeof cur.placements)[number]) => {
+    // Each side of a stand is entered on its own (the totals are added up on the collection list).
+    if (p.side) return null;
     // Refill FOH: what was grabbed here for front of house is suggested (and says so).
     const sug = ctx.suggested.get(p.placementId);
     if (sug && !sug.defrost) {
@@ -423,7 +435,29 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
             {renderList(rest(cur.own))}
           </div>
 
-          {cur.sections.map((sec) => {
+          {(() => {
+            // Sides of a stand: one switch, one side's list at a time (entries are saved as they're made).
+            const sides = cur.sections.filter((x) => x.mode === 'side');
+            if (!sides.length) return null;
+            const on = sides.find((x) => x.area.id === sideOn[cur.area.id]) ?? sides[0];
+            return (
+              <section className="stand-sides" aria-label="Sides of the stand">
+                <div className="side-switch" role="tablist" aria-label="Side">
+                  {sides.map((x) => {
+                    const n = x.placements.filter(chk).length;
+                    return (
+                      <button key={x.area.id} type="button" role="tab" aria-selected={x === on} className={x === on ? 'on' : ''} onClick={() => pickSide(cur.area.id, x.area.id)}>
+                        <b>{secName(x.area.name)}</b><small>{n ? `${n} entered` : 'Not started'}</small>
+                      </button>
+                    );
+                  })}
+                </div>
+                {on.area.guideText ? <p className="psec-hint"><Icon name="info" /><span>{on.area.guideText}</span></p> : null}
+                <div className="prows" role="tabpanel" aria-label={secName(on.area.name)}>{renderList(rest(on.placements))}</div>
+              </section>
+            );
+          })()}
+          {cur.sections.filter((x) => x.mode !== 'side').map((sec) => {
             const enteredHere = sec.placements.filter(chk).length;
             const open = openSecs[sec.area.id] ?? (sec.mode === 'open' || enteredHere > 0);
             return (

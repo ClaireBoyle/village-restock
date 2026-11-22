@@ -24,7 +24,7 @@ export interface CatArea {
   /** Shown as a section inside this area's screen (null = an area of its own). */
   parentAreaId?: string | null;
   /** open: shown expanded · collapsed: tap to show · optional: collapsed and never required. */
-  sectionMode?: 'open' | 'collapsed' | 'optional';
+  sectionMode?: 'open' | 'collapsed' | 'optional' | 'side';
 }
 export interface CatLocation {
   id: string; name: string; sortOrder: number;

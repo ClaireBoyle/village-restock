@@ -1453,3 +1453,32 @@ button.pnote.open span{display:block}
 /* Made in morning prep: "Add prep", clearly not stock to grab (dashed, accent colour, clock). */
 .padd.padd-prep{min-width:112px;border-style:dashed;border-color:color-mix(in srgb,var(--d-accent) 60%,transparent);background:transparent;color:var(--d-accent)}
 .padd.padd-prep.on{border-style:solid;background:color-mix(in srgb,var(--d-accent) 18%,transparent);border-color:var(--d-accent)}
+
+/* A stand checked and filled side by side (Candy Bar confection stand): Side A / Side B. */
+.side-switch{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:4px;border-radius:16px;background:var(--surface-2);position:sticky;top:64px;z-index:3}
+.side-switch button{min-height:52px;border-radius:12px;border:1px solid transparent;background:transparent;color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:16px}
+.side-switch button small{font-size:12px;color:var(--ink-2)}
+.side-switch button.on{background:var(--surface);border-color:var(--d-accent);box-shadow:var(--shadow-sm)}
+.side-switch button.on b{color:var(--d-accent)}
+.stand-sides{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.q-sides{position:static}
+.l-sides{display:flex;flex-direction:column;gap:2px}
+.l-split-sides{display:flex;flex-wrap:wrap;gap:2px 14px;font-size:13px;color:var(--ink-2)}
+.l-side b{color:var(--ink);font-weight:700}
+.fw-sides{display:flex;flex-direction:column;gap:6px;padding:8px 0 2px;border-top:1px dashed var(--hair);margin-top:6px}
+.fw-side{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.fw-side small{color:var(--ink-2)}
+.fw-n{min-width:36px;text-align:center;font-size:20px;font-variant-numeric:tabular-nums}
+.fill-sides{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.fill-btns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:8px}
+.fill-btns .btn{flex-direction:column;gap:0;min-height:56px}
+.fill-btns .btn small{font-size:12px;font-weight:500;opacity:.8}
+.fill-list{padding:10px 12px;border-radius:16px;border:1px solid var(--hair);background:var(--surface)}
+.theme-navy .fill-list{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12)}
+.fill-list ul{list-style:none;margin:0 0 6px;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr));gap:2px 16px}
+.fill-list li{display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px solid var(--hair);font-size:15px}
+.fill-list li small{color:var(--ink-2);font-size:12px;margin-left:auto}
+.fill-list li.todo .fill-n{opacity:.55}
+.fill-list li.short .fill-n{color:var(--warn)}
+.fill-n{min-width:28px;font-size:18px;font-variant-numeric:tabular-nums;text-align:right}
+.l-sides .l-link{margin-left:10px}

@@ -37,6 +37,8 @@ node tests/e2e/e2e-p2.js
 | `e2e-p21.js` | A catalogue saved by an earlier release (e.g. a database update run before the new release went live) is replaced, even at the same version; same release and version is still "unchanged"; None left here then shows on a laptop. **First** load `gcbar-refill-fixture.sql` after the reset |
 | `e2e-p22.js` | Quick Restock in every department: + and a number with its unit in each row, on Your list above zero, edit the same entry, zero/− takes it off, no Add step, search/filter/scroll kept, area instructions once, phone and iPad, Kitchen saved to the server. **First** load `candy-fixture.sql` then `candy-area-fixture.sql` after the reset |
 | `e2e-p23.js` | Kitchen Prep checklist: opened with no restock, grouped confirmed jobs, Unchecked → Ready / Needs prep, note, two devices on one service, Needs prep filter, Needs prep never on the opener's handover, Leave for morning on it (Done), next service fresh, Admin adds a job to both. After the reset (applies the Kitchen scripts) |
+| `e2e-p24.js` | Gold Class Kitchen: one next action through every area (Continue / Done → next), the collection list only after Dry stock. After the reset (applies the Kitchen scripts) |
+| `e2e-p25.js` | Candy Bar confection stand side by side: Side A / Side B switch (kept, saved, editable), one collection line with the split (kept after Got all), Got fewer with where the units go, Fill Side A / B before Finish, Quick Restock switch. **First** load `candy-fixture.sql` then `candy-area-fixture.sql` after the reset |
 | `e2e-stuck-lock.js` | A hung database connection holding a lock: the app says "Sync needs attention" (not "Offline") and uploads by itself once it clears |
 
 Screenshots go to `tests/e2e/out/` (not committed).

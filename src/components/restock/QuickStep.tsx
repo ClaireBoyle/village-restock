@@ -18,20 +18,25 @@ export function QuickStep({ ctx }: { ctx: RestockCtx }) {
   const [q, setQ] = useState('');
   const [by, setBy] = useState<'area' | 'cat'>('area');
   const [chip, setChip] = useState('all');
+  // A stand entered side by side (e.g. the confection stand): which side is showing.
+  const [sideId, setSideId] = useState<string | null>(null);
 
   const chips = useMemo(() => by === 'area'
     ? view.areas.map(({ area }) => [area.id, area.name] as const)
     : [...new Set(view.placements.filter(isQuickPick).map((p) => p.categoryName).filter(Boolean) as string[])].map((c) => [c, c] as const), [by, view]);
 
   const query = q.trim().toLowerCase();
+  // One area chosen: its instructions once, above its products (e.g. "Enter what this side needs.").
+  const area = by === 'area' && chip !== 'all' && !query ? view.areas.find((a) => a.area.id === chip) : undefined;
+  const sides = area ? area.sections.filter((x) => x.mode === 'side') : [];
+  const side = sides.find((x) => x.area.id === sideId) ?? sides[0];
   const results = view.placements.filter((p) => {
     if (!isQuickPick(p)) return false;
     if (query) return `${p.productName} ${p.areaName} ${p.categoryName ?? ''}`.toLowerCase().includes(query);
     if (chip === 'all') return true;
+    if (by === 'area' && side) return p.screenAreaId === chip && (!p.side || p.areaId === side.area.id);
     return by === 'area' ? p.screenAreaId === chip : p.categoryName === chip;
   });
-  // One area chosen: its instructions once, above its products (e.g. "Walk both sides. Enter the total needed.").
-  const area = by === 'area' && chip !== 'all' && !query ? view.areas.find((a) => a.area.id === chip) : undefined;
   const notes = useMemo(() => areaNotes(area ? area.placements.filter(isQuickPick) : results), [area, results]);
   const guide = area ? [area.area.guideText.trim(), ...(area.area.guideText.trim() ? [] : notes.shared)].filter(Boolean) : [];
 
@@ -61,6 +66,18 @@ export function QuickStep({ ctx }: { ctx: RestockCtx }) {
             <div className="chips">
               {[['all', 'All'] as const, ...chips].map(([v, l]) => <button key={v} className={`chip ${chip === v && !query ? 'on' : ''}`} onClick={() => { setChip(v); setQ(''); }}>{l}</button>)}
             </div>
+            {sides.length ? (
+              <div className="side-switch q-sides" role="tablist" aria-label="Side">
+                {sides.map((x) => {
+                  const n = x.placements.filter((p) => isOn(p, items.get(p.placementId) ?? EMPTY_ITEM)).length;
+                  return (
+                    <button key={x.area.id} type="button" role="tab" aria-selected={x === side} className={x === side ? 'on' : ''} onClick={() => setSideId(x.area.id)}>
+                      <b>{x.placements[0]?.side ?? x.area.name}</b><small>{n ? `${n} on your list` : 'Nothing yet'}</small>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
             {guide.length ? <p className="aguide-line q-guide"><Icon name="info" /><span>{guide.join(' ')}</span></p> : null}
             {results.length === 0 ? <p className="empty">{query ? <>No products match &ldquo;{q}&rdquo;. Try a shorter word.</> : 'No products here.'}</p> : (
               <div className="qlist">

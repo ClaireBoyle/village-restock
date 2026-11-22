@@ -56,6 +56,9 @@ export interface PlacementView {
   screenAreaId: string;
   /** In an optional section (e.g. Spirits cupboard): never required, collapsed by default. */
   optional: boolean;
+  /** In a side of a stand (e.g. the Candy Bar confection stand's "Side A"): staff enter what each side needs;
+   *  it's collected as one total and filled side by side. */
+  side?: string | null;
   /** Subheading shown above this product (starts a group, e.g. "Mixers, Water & Milk"). */
   heading?: string | null;
   /** Full restock: grabbed from this upstairs area for front of house ("Refill FOH"), not from downstairs. */
@@ -117,7 +120,10 @@ export const EMPTY_ITEM: ItemState = {
 };
 
 /** A section shown inside an area's screen (e.g. "Spirits cupboard" inside Back bench). */
-export interface AreaSection { area: CatArea; mode: 'open' | 'collapsed' | 'optional'; placements: PlacementView[] }
+export interface AreaSection { area: CatArea; mode: 'open' | 'collapsed' | 'optional' | 'side'; placements: PlacementView[] }
+
+/** A side's short name: "Confection stand · Side A" → "Side A". */
+export const sideLabel = (sectionName: string, parentName: string) => (sectionName.startsWith(`${parentName} · `) ? sectionName.slice(parentName.length + 3) : sectionName).trim();
 
 export interface DepartmentView {
   department: CatDepartment;
@@ -196,8 +202,9 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
   const areas = all.filter((a) => !parentOf(a)).map((area) => {
     const own = placementsOf(area, area.id, false);
     const sections: AreaSection[] = all.filter((a) => parentOf(a) === area.id).map((sec) => {
-      const mode = sec.sectionMode === 'optional' || sec.sectionMode === 'collapsed' ? sec.sectionMode : 'open';
-      return { area: sec, mode, placements: placementsOf(sec, area.id, mode === 'optional') };
+      const mode = sec.sectionMode === 'optional' || sec.sectionMode === 'collapsed' || sec.sectionMode === 'side' ? sec.sectionMode : 'open';
+      const list = placementsOf(sec, area.id, mode === 'optional');
+      return { area: sec, mode, placements: mode === 'side' ? list.map((p) => ({ ...p, side: sideLabel(sec.name, area.name) })) : list };
     });
     return { area, own, sections, placements: [...own, ...sections.flatMap((x) => x.placements)] };
   });
@@ -358,8 +365,9 @@ export interface CollectionLine {
   grabNote?: string | null;
   fallbackNote?: string | null;
   putNote?: string | null;
-  /** Each placement this line restocks, with how much it needs. label: what that share is for, on a merged line. */
-  parts: { placementId: string; areaName: string; need: number; label?: string }[];
+  /** Each placement this line restocks, with how much it needs. label: what that share is for, on a merged line.
+   *  side: the side of a stand it's for (e.g. "Side A"), so it can be filled side by side. */
+  parts: { placementId: string; areaName: string; need: number; label?: string; side?: string }[];
 }
 
 /**
@@ -405,7 +413,7 @@ export function collectionLines(placements: PlacementView[], items: Map<string, 
       ...(p.defrost ? { grabNote: p.grabNote ?? null, fallbackNote: p.fallbackNote ?? null, putNote: p.putNote ?? null } : {}),
     };
     line.total = round2(line.total + need);
-    line.parts.push({ placementId: p.placementId, areaName: p.areaName, need });
+    line.parts.push({ placementId: p.placementId, areaName: p.areaName, need, ...(p.side ? { side: p.side } : {}) });
     map.set(key, line);
   }
   // Defrost short upstairs + the same product going back into a freezer, from the same storeroom: one line
@@ -483,6 +491,49 @@ export function gotFewerUpdates(line: CollectionLine, got: number, reason: Short
     left = round2(left - share);
     return { placementId: p.placementId, fields: { collectedMode: 'partial' as const, collectedQty: share, shortfallReason: reason, flagged, noneOnDisplay: none } };
   });
+}
+
+/**
+ * Got fewer on a line split between sides of a stand: staff choose how many go to each side (e.g. 4 collected of
+ * 5: Side A 3, Side B 1). Each share is capped at what that side asked for.
+ */
+export function gotFewerSplitUpdates(line: CollectionLine, shares: Map<string, number>, reason: ShortReason | null, flagged: boolean, noneOnDisplay = false) {
+  const total = line.parts.reduce((s, p) => s + Math.min(Math.max(0, shares.get(p.placementId) ?? 0), p.need), 0);
+  const none = noneOnDisplay && total === 0;
+  return line.parts.map((p) => ({
+    placementId: p.placementId,
+    fields: { collectedMode: 'partial' as const, collectedQty: round2(Math.min(Math.max(0, shares.get(p.placementId) ?? 0), p.need)), shortfallReason: reason, flagged, noneOnDisplay: none },
+  }));
+}
+
+/** A line split between sides of a stand (two or more sides), or null. */
+export const isSideLine = (line: CollectionLine) => line.kind === 'qty' && line.parts.length > 0 && line.parts.every((p) => p.side);
+
+/** Each side's share of a line: what it asked for, and what was collected for it (null = not collected yet). */
+export function sideShares(line: CollectionLine, items: Map<string, ItemState>) {
+  return line.parts.map((p) => {
+    const i = items.get(p.placementId) ?? EMPTY_ITEM;
+    const got = i.collectedMode === 'all' ? p.need : i.collectedMode === 'partial' ? Math.min(i.collectedQty ?? 0, p.need) : null;
+    return { placementId: p.placementId, side: p.side ?? p.areaName, requested: p.need, collected: got };
+  });
+}
+
+/**
+ * Fill the stand: for each side, the products to put out there, in list order. The amount is what was collected
+ * for that side, or what it asked for while it's still to collect (a reference, nothing to tick).
+ */
+export function sideFillLists(lines: CollectionLine[], items: Map<string, ItemState>) {
+  const out = new Map<string, { productName: string; qty: number; requested: number; collected: number | null; unitSingular: string; unitPlural: string }[]>();
+  for (const l of lines) {
+    if (l.kind !== 'qty') continue;
+    for (const s of sideShares(l, items)) {
+      if (!l.parts.find((p) => p.placementId === s.placementId)?.side) continue;
+      const qty = s.collected ?? s.requested;
+      if (s.requested <= 0) continue;
+      out.set(s.side, [...(out.get(s.side) ?? []), { productName: l.productName, qty, requested: s.requested, collected: s.collected, unitSingular: l.unitSingular, unitPlural: l.unitPlural }]);
+    }
+  }
+  return [...out.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([side, list]) => ({ side, list }));
 }
 
 /**
