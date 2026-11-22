@@ -15,7 +15,14 @@ begin
     ('Make smoky sauerkraut aioli', 'Smoky sauerkraut aioli', 'Make sauces', 'sauces'),
     ('Make sesame XO dumpling sauce', 'Sesame XO dumpling sauce', 'Make sauces', 'sauces'),
     ('Make raspberry compote', 'Raspberry compote', 'Dessert prep', 'other'),
-    ('Make signature chip salt', 'Signature chip salt', 'Seasonings', 'other')
+    ('Make signature chip salt', 'Signature chip salt', 'Seasonings', 'other'),
+    ('Dice white onion for burgers', 'Diced white onion for burgers', 'Salad bar', 'vegetables'),
+    ('Dice tomato', 'Diced tomato', 'Salad bar', 'vegetables'),
+    ('Wash tubs of lettuce', 'Washed lettuce tubs', 'Salad bar', 'vegetables'),
+    ('Cut and shred lettuce', 'Cut and shredded lettuce', 'Salad bar', 'vegetables'),
+    ('Cut lemon wedges', 'Lemon wedges', 'Salad bar', 'other'),
+    ('Cut lime wedges', 'Lime wedges', 'Salad bar', 'other'),
+    ('Dice red onion', 'Diced red onion', 'Fridge under salad bar', 'vegetables')
   ) as jobs(task_name, label, section, handover_group)
   loop
     if not exists (
