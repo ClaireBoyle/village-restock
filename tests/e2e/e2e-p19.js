@@ -53,9 +53,9 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   // (case-insensitive: the test data's own "Tomato sauce" is reused)
   const names = async (c) => (await P.locator(`.psec:has(.psec-t b:text-is("${c}")) article.prow h3`).allInnerTexts()).map((n) => n.toLowerCase());
   ok((await names('Top sauce shelf')).join('|') === 'tomato sauce|garlic sauce / aioli|tzatziki|chipotle|vegan aioli|hollandaise dressing|sriracha|buttermilk ranch|american mustard', 'top sauce shelf (American Mustard last)');
-  ok((await names('Second sauce shelf')).join('|') === 'sweet chilli sauce|burger sauce|xo sauce|sesame mayo|sriracha mayo|tartare|bbq sauce|soy sauce'
+  ok((await names('Second sauce shelf')).join('|') === 'sweet chilli sauce|burger sauce|xo sauce|sesame mayo|sriracha mayo|tartare|bbq sauce|maple aioli|soy sauce'
     && await sees(P, `${sec('Second sauce shelf', 'Soy Sauce')} .pnote`, 'Far right of the shelf'), 'second sauce shelf, soy sauce at the far right');
-  ok((await names('Sauces (shelf to confirm)')).join('|') === 'vodka sauce|maple aioli', 'vodka sauce and maple aioli: shelf to confirm');
+  ok((await names('Sauces (shelf to confirm)')).join('|') === 'vodka sauce', 'vodka sauce: lower spare sauces shelf (maple aioli moved to the second sauce shelf)');
   const shelf = async (s) => P.$$eval(`.psec:has(.psec-t b:text-is("${s}")) article.prow h3`, (e) => e.map((x) => x.textContent));
   const third = await shelf('Third shelf'), fourth = await shelf('Fourth shelf'), herbs = await shelf('Right rack top shelf');
   ok(third.join(', ') === 'Maple Syrup, Sauerkraut, Sesame Kewpie, Tomato Passata, Feta, Brie, Cheddar, Quince Paste, Strawberries, Raspberries', 'third shelf: ' + third.join(', '));
@@ -67,6 +67,9 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   ok(fresh.join(', ') === 'Carrots, Cucumbers, Celery, Radishes, Tomatoes, Red Onion, White Onion', 'fresh produce: ' + fresh.join(', '));
   ok(!(await P.locator('.psec:has(.psec-t b:text-is("Fresh produce"))').innerText()).includes('Uncut'), 'fresh produce: no "Uncut, for the cut …" notes');
   ok(left.join(', ') === "Cornichons, Pickled Ginger, Hellmann's Mayonnaise", 'left rack lower shelves: ' + left.join(', '));
+  const second = await shelf('Second sauce shelf');
+  ok(second[second.length - 2] === 'Maple Aioli' && second[second.length - 1] === 'Soy Sauce' && await P.locator(row('Maple Aioli')).count() === 1
+    && (await P.locator(`${sec('Second sauce shelf', 'Maple Aioli')} button.padd`).innerText()).trim() === 'Add prep', 'Maple Aioli: once, on the second sauce shelf before the soy sauce, "Add prep"');
   ok(await P.locator(row('Sticky Date')).count() === 0 && await P.locator(row('Green Goddess')).count() === 0, 'no desserts in the walk-in (they\'re on Defrost); no Green Goddess');
   const [dup] = await sql`select count(*)::int as n from products where department_id = ${k.id} and name in ('Sticky Date', 'Buns (Portioned Tubs)', 'Vodka Sauce')`;
   ok(dup.n === 3, 'existing products reused (no duplicates)');

@@ -4,6 +4,8 @@
 --   Fresh produce (was Spare produce)  Carrots, Cucumbers, Celery, Radishes, Tomatoes, Red Onion, White Onion
 --                                     (the "Uncut, for the cut …" notes are removed)
 --   Left rack lower shelves            Cornichons (was Sliced Pickles / Cucumbers), Pickled Ginger, Hellmann's Mayonnaise
+--   Second sauce shelf                 Maple Aioli, made in morning prep ("Add prep" → "Make maple aioli"); moved
+--                                     from the lower spare sauces shelf, so it's listed once
 --
 -- * The section and the pickles product are renamed (same records: past restocks and Admin settings are kept).
 -- * New products (Red Onion, White Onion, Pickled Ginger): "staff enter", with these units (change them in Admin if
@@ -11,7 +13,7 @@
 do $$
 declare
   dept uuid := (select id from departments where lower(name) = 'gold class kitchen');
-  walk uuid; fresh uuid; lrack uuid; area uuid; p uuid; pl uuid; i int; norm text; added int := 0;
+  walk uuid; fresh uuid; lrack uuid; second uuid; mtask uuid; area uuid; p uuid; pl uuid; i int; norm text; added int := 0;
   -- section, product, unit (one), unit (more)
   items text[][] := array[
     ['fresh', 'Red Onion', 'onion', 'onions'],
@@ -76,6 +78,31 @@ begin
   end loop;
   -- Hellmann's after the pickles.
   update product_placements x set sort_order = 50 from products q where q.id = x.product_id and x.check_area_id = lrack and q.name ilike 'hellmann%';
+
+  -- 4. Maple Aioli: prepped, on the second sauce shelf (its morning prep task kept), listed once.
+  second := (select id from check_areas where department_id = dept and parent_area_id = walk and lower(name) = lower('Walk in fridge · Second sauce shelf') limit 1);
+  p := (select id from products where department_id = dept and status = 'active' and regexp_replace(lower(name), '[^a-z0-9]', '', 'g') = 'mapleaioli' order by created_at limit 1);
+  mtask := (select id from prep_tasks where department_id = dept and lower(name) = lower('Make maple aioli'));
+  if second is not null and p is not null then
+    pl := (select id from product_placements where product_id = p and check_area_id = second limit 1);
+    if pl is null then
+      pl := (select x.id from product_placements x join check_areas c on c.id = x.check_area_id
+             where x.product_id = p and (c.id = walk or c.parent_area_id = walk) order by (x.prep_task_id is not null) desc, x.sort_order limit 1);
+      if pl is not null then update product_placements set check_area_id = second where id = pl;
+      else insert into product_placements (product_id, check_area_id, sort_order) values (p, second, 0) returning id into pl; end if;
+    end if;
+    -- After the other sauces, before the soy sauce (it's at the far right); made in morning prep (never collected).
+    update product_placements x set sort_order = 101 from products q where q.id = x.product_id and x.check_area_id = second and q.name ilike 'soy sauce';
+    update product_placements set sort_order = 100, location_id = null, prep_task_id = coalesce(mtask, prep_task_id),
+      instructions = coalesce(nullif(trim(instructions), ''), 'Made in morning prep')
+      where id = pl;
+    -- Any other walk-in row for it goes (it's on the second sauce shelf now).
+    delete from product_placements x using check_areas c where c.id = x.check_area_id and x.product_id = p and x.id <> pl and (c.id = walk or c.parent_area_id = walk);
+    -- The spare sauces shelf's note no longer mentions it.
+    update check_areas set guide_text = 'Spare sauce tubs. Vodka sauce is made in morning prep (Add prep); the relish spare tub is stock (Add).'
+      where department_id = dept and parent_area_id = walk and guide_text = 'Spare sauce tubs. Vodka sauce and maple aioli are made in morning prep (Add prep); the relish spare tub is stock (Add).';
+    raise notice 'Maple Aioli: second sauce shelf, made in morning prep (%)', coalesce((select name from prep_tasks where id = mtask), 'no task found');
+  end if;
 
   raise notice 'Fresh produce: %', (select string_agg(q.name, ', ' order by x.sort_order) from product_placements x join products q on q.id = x.product_id where x.check_area_id = fresh);
   raise notice 'Left rack lower shelves: %', (select string_agg(q.name, ', ' order by x.sort_order) from product_placements x join products q on q.id = x.product_id where x.check_area_id = lrack);
