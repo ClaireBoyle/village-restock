@@ -22,7 +22,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   // As on the live site: the Kitchen starts with no areas, and the downstairs walk-in freezer is a storeroom.
   await sql`delete from check_areas where department_id = (select id from departments where name = 'Gold Class Kitchen')`;
   await sql`insert into storage_locations (name, sort_order) values ('Walk in freezer(Downstairs)', 3), ('Walk in fridge(Downstairs)', 2) on conflict do nothing`;
-  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep', 'defrost-compact', 'defrost-pulls', 'freezers', 'refills', 'portion-prep', 'defrost-compact', 'freezer-1-first', 'refills', 'freezer-1-first']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
+  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep', 'defrost-compact', 'defrost-pulls', 'freezers', 'refills', 'portion-prep', 'defrost-compact', 'freezer-1-first', 'refills', 'freezer-1-first', 'no-walk-in-desserts', 'no-walk-in-desserts', 'walk-in-shelves', 'refills']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
   // Targets on two items (the rest have none: manual entry). Beef: 8 portions a 1 kg bag.
   await sql`update product_placements x set ready_targets = '[{"min":0,"max":150,"qty":24},{"min":151,"qty":36}]'::jsonb
     from products p, check_areas a where p.id = x.product_id and a.id = x.check_area_id and a.name = 'Defrost' and p.name = '9" Pizza Bases'`;
@@ -172,14 +172,11 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   await P.click(`${S('Arancini')} button.padd`);
   await P.click(`${S('Vegetarian Spring Rolls')} button.padd`);
   await P.screenshot({ path: `${OUT}/p18-freezer2.png`, fullPage: true });
-  // 5d. Walk-in dessert shelf: what's already planned in Defrost, one total.
+  // 5d. Walk-in fridge: no dessert shelf (desserts are on Defrost only); burger buns still linked to Defrost.
   await P.click('.area-btn:has-text("Walk in fridge")'); await P.waitForSelector('.area-btn.cur:has-text("Walk in fridge")');
-  ok(await sees(P, `${sec('Dessert shelf', 'Sticky Date')} .ps`, 'Already planned in Defrost: 2 portions'), 'sticky date: "Already planned in Defrost: 2 portions"');
   ok(await sees(P, `${sec('Right rack top shelf', 'Buns (Portioned Tubs)')} .ps`, 'Not planned in Defrost yet'), 'burger buns: linked to Defrost too');
-  await P.click(`${sec('Dessert shelf', 'Sticky Date')} button[aria-label="One more Sticky Date"]`);
-  ok(await sees(P, `${sec('Dessert shelf', 'Sticky Date')} .ps`, '3 portions'), 'changed here: 3');
-  await P.click('.area-btn:has-text("Defrost")'); await P.waitForSelector('.area-btn.cur:has-text("Defrost")');
-  ok(await sees(P, `${drow('Sticky Date')} .ps`, '3 portions'), '...and the same total on Defrost');
+  ok(!(await P.locator('.psec-t b').allInnerTexts()).includes('Dessert shelf') && await P.locator(row('Sticky Date')).count() === 0 && await P.locator(row('Brownie')).count() === 0,
+    'walk-in fridge: no dessert shelf, no desserts (not doubled up with Defrost)');
 
   // 6. The collection list is the downstairs run.
   await P.click('.rbar .stage:has-text("Collect")'); await P.waitForSelector('.line');
@@ -190,7 +187,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   const beef = await split('Pulled Beef (Bao)'), chick = await split('Grilled Chicken');
   ok(beef.join(' | ') === '4 to defrost → Upstairs walk-in fridge | 4 back into Freezer 1 · Lower left', 'beef, one line: ' + beef.join(' | '));
   ok(chick.length === 2 && chick[0] === '2 to defrost → Upstairs walk-in fridge' && chick[1] === '6 back into Freezer 2 spare stock', 'chicken, one line: ' + chick.join(' | '));
-  ok(await sees(P, line('Sticky Date'), '3') && await P.locator(line('Sticky Date')).count() === 1 && await sees(P, `${line('Sticky Date')} .dr-dest`, 'Upstairs walk-in fridge'), 'sticky date: one line of 3 (not doubled)');
+  ok(await sees(P, line('Sticky Date'), '2') && await P.locator(line('Sticky Date')).count() === 1 && await sees(P, `${line('Sticky Date')} .dr-dest`, 'Upstairs walk-in fridge'), 'sticky date: one line of 2, from Defrost (not doubled)');
   ok(await sees(P, `.room:has(h3:text-is("Walk in freezer(Downstairs)")) ${line('Cauliflower Popcorn')}`, '1'), 'cauliflower popcorn: on the downstairs list (walk-in freezer)');
   ok(await sees(P, line('Arancini'), '1') && await P.locator(line('Chicken tenders')).count() === 0 && await P.locator(line('Nuggets')).count() === 0, 'refills add nothing: only the spare stock amount (arancini 1)');
   ok(await sees(P, '.rr-pending', 'Chicken tenders') && await sees(P, '.rr-pending', 'Tender box in Freezer 2, lower left'), 'after collecting: "Back upstairs: refill" lists the tenders drawer');

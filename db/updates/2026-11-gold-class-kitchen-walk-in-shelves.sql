@@ -182,3 +182,15 @@ begin
     (select count(*) from product_placements x join check_areas c on c.id = x.check_area_id join products q on q.id = x.product_id
        where (c.parent_area_id = walk or c.id = walk) and q.unit_plural = 'bottles');
 end $$;
+
+-- Desserts are on Defrost only now (…-no-walk-in-desserts.sql): running this again never brings the walk-in dessert shelf back.
+do $$
+declare
+  dept uuid := (select id from departments where lower(name) = 'gold class kitchen');
+  shelf uuid := (select c.id from check_areas c where c.department_id = dept and lower(c.name) = lower('Walk in fridge · Dessert shelf') limit 1);
+begin
+  if shelf is not null then
+    delete from product_placements where check_area_id = shelf;
+    update check_areas set active = false where id = shelf;
+  end if;
+end $$;

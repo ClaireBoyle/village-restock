@@ -27,7 +27,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   const [k] = await sql`select id from departments where name = 'Gold Class Kitchen'`;
   await sql`delete from check_areas where department_id = ${k.id}`;
   await sql`insert into storage_locations (name, sort_order) values ('Walk in freezer(Downstairs)', 3), ('Walk in fridge(Downstairs)', 2) on conflict do nothing`;
-  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep', 'defrost-compact', 'freezer-1-first']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
+  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep', 'defrost-compact', 'freezer-1-first', 'no-walk-in-desserts']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
 
   const b = await chromium.launch(); const errs = [];
   const P = await (await b.newContext({ ...devices['iPhone 13'] })).newPage(); P.on('pageerror', (e) => errs.push(e.message));
@@ -44,7 +44,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   // 1. The walk-in fridge, on its confirmed shelves.
   await P.click('.area-btn:has-text("Walk in fridge")'); await P.waitForSelector('.area-btn.cur:has-text("Walk in fridge")');
   const secs = await P.locator('.psec-t b').allInnerTexts();
-  ok(secs.join('|') === 'Top sauce shelf|Second sauce shelf|Cheeseboard tub|Bottom cheese shelf|Right rack top shelf|Prep tubs|Spare produce|Left rack lower shelves|Dessert shelf|Sauces (shelf to confirm)',
+  ok(secs.join('|') === 'Top sauce shelf|Second sauce shelf|Cheeseboard tub|Bottom cheese shelf|Right rack top shelf|Prep tubs|Spare produce|Left rack lower shelves|Sauces (shelf to confirm)',
     `walk-in shelves: ${secs.join(', ')}`);
   // (case-insensitive: the test data's own "Tomato sauce" is reused)
   const names = async (c) => (await P.locator(`.psec:has(.psec-t b:text-is("${c}")) article.prow h3`).allInnerTexts()).map((n) => n.toLowerCase());
@@ -55,7 +55,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   ok(await sees(P, '.psec:has(.psec-t b:text-is("Cheeseboard tub")) .psec-hint', 'the white cheeseboard tub, with the strawberries beside it') && await P.locator(sec('Cheeseboard tub', 'Strawberries')).count() === 1, 'cheeseboard tub, strawberries beside it');
   ok(await P.locator(sec('Bottom cheese shelf', 'Portioned Napoli Cheese')).count() === 1 && await P.locator(sec('Right rack top shelf', 'Buns (Portioned Tubs)')).count() === 1, 'cheeses; burger buns in tubs on the right rack');
   ok(await P.locator(sec('Spare produce', 'Tomatoes')).count() === 1 && await P.locator('.psec:has(.psec-t b:text-is("Left rack lower shelves")) article.prow h3').filter({ hasText: 'Hellmann' }).count() === 1, 'tomatoes; pickles and mayonnaise on the left rack');
-  ok(await P.locator(sec('Dessert shelf', 'Sticky Date')).count() === 1 && await P.locator(row('Green Goddess')).count() === 0, 'desserts on their shelf; no Green Goddess');
+  ok(await P.locator(row('Sticky Date')).count() === 0 && await P.locator(row('Green Goddess')).count() === 0, 'no desserts in the walk-in (they\'re on Defrost); no Green Goddess');
   const [dup] = await sql`select count(*)::int as n from products where department_id = ${k.id} and name in ('Sticky Date', 'Buns (Portioned Tubs)', 'Vodka Sauce')`;
   ok(dup.n === 3, 'existing products reused (no duplicates)');
   const [vs] = await sql`select coalesce(x.location_id, q.default_location_id) as loc from product_placements x join products q on q.id = x.product_id where q.name = 'Vodka Sauce'`;
