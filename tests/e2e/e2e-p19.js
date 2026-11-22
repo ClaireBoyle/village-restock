@@ -27,8 +27,12 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   const [k] = await sql`select id from departments where name = 'Gold Class Kitchen'`;
   await sql`delete from check_areas where department_id = ${k.id}`;
   await sql`insert into storage_locations (name, sort_order) values ('Walk in freezer(Downstairs)', 3), ('Walk in fridge(Downstairs)', 2) on conflict do nothing`;
-  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep', 'defrost-compact', 'freezer-1-first', 'no-walk-in-desserts', 'walk-in-third-shelf', 'walk-in-shelves', 'walk-in-third-shelf']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
+  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep', 'defrost-compact', 'freezer-1-first', 'no-walk-in-desserts', 'walk-in-third-shelf', 'walk-in-shelves', 'walk-in-third-shelf', 'relish-prep']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
 
+  // Portioned sauces are counted in bottles.
+  const portioned = await sql`select distinct q.name, q.unit_plural from products q join product_placements x on x.product_id = q.id join prep_tasks t on t.id = x.prep_task_id
+    where t.grp = 'sauces' and t.name ilike 'Portion %'`;
+  ok(portioned.length >= 3 && portioned.every((r) => r.unitPlural === 'bottles'), 'portioned sauces in bottles: ' + portioned.map((r) => `${r.name} (${r.unitPlural})`).join(', '));
   const b = await chromium.launch(); const errs = [];
   const P = await (await b.newContext({ ...devices['iPhone 13'] })).newPage(); P.on('pageerror', (e) => errs.push(e.message));
   await P.goto(B + '/'); await P.waitForSelector('.dcard2');
@@ -74,6 +78,12 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   await P.click(`${sec('Prep tubs', 'Cut Radish')} button.padd`); await P.waitForTimeout(400);
   await P.click(`${sec('Prep tubs', 'Cut Radish')} button[aria-label="One less Cut Radish"]`); await P.waitForTimeout(300);
   await P.click(`${sec('Prep tubs', 'Cut Radish')} button[aria-label="Clear Cut Radish"]`);
+  // Made in morning prep: "Add prep" (never mistaken for stock to grab); stock: "Add".
+  const btn = async (s, n) => (await P.locator(`${sec(s, n)} button.padd`).innerText()).trim();
+  const sauceBtns = [await btn('Second sauce shelf', 'BBQ Sauce'), await btn('Second sauce shelf', 'Sweet Chilli Sauce')];
+  ok(sauceBtns.every((t) => t === 'Add prep') && await btn('Prep tubs', 'Cut Cucumber') === 'Add prep' && await btn('Third shelf', 'Brie') === 'Add'
+    && await P.locator(`${sec('Third shelf', 'Brie')} button.padd-prep`).count() === 0, 'prep rows say "Add prep" (portioned sauces, Harvest Hommus veg); stock says "Add": ' + JSON.stringify({ sauceBtns, cuc: await btn('Prep tubs', 'Cut Cucumber').catch(() => '?'), brie: await btn('Third shelf', 'Brie').catch(() => '?') }));
+  await P.screenshot({ path: `${OUT}/p19-add-prep.png`, fullPage: true });
   await P.click(`${sec('Third shelf', 'Brie')} button.padd`);
   await P.click(`${sec('Second sauce shelf', 'Soy Sauce')} button.padd`);
   await P.screenshot({ path: `${OUT}/p19-walk-in.png`, fullPage: true });

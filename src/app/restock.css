@@ -1450,3 +1450,5 @@ button.pnote.open span{display:block}
 .l-split{display:flex;flex-direction:column;gap:1px}
 .l-split small{font-size:13px;color:var(--ink-2)}
 .l-split small b{color:var(--ink);font-weight:700}
+/* Made in morning prep: "Add prep", clearly not stock to grab (dashed, accent colour, clock). */
+.padd.padd-prep{min-width:112px;border-style:dashed;border-color:color-mix(in srgb,var(--d-accent) 60%,transparent);background:transparent;color:var(--d-accent)}

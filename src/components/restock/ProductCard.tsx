@@ -107,8 +107,10 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
   else if (p.method === 'manual') {
     // Untouched: one compact Add. Leaving it alone already means nothing is needed.
     controls = value === null && !err
-      ? <button type="button" className="padd" onClick={() => commit(1)}
-          aria-label={`Add ${p.productName}`}><Icon name="plus" />Add</button>
+      // Made in morning prep (e.g. portioned sauces, cut veg for the Harvest Hommus): "Add prep", so it's never
+      // mistaken for stock to grab.
+      ? <button type="button" className={`padd ${p.prepTaskId ? 'padd-prep' : ''}`} onClick={() => commit(1)}
+          aria-label={p.prepTaskId ? `Add prep: ${p.productName}` : `Add ${p.productName}`}><Icon name={p.prepTaskId ? 'clock' : 'plus'} />{p.prepTaskId ? 'Add prep' : 'Add'}</button>
       : stepper;
   } else if (p.method === 'par') {
     const full = value !== null && p.par !== null && value >= p.par;
