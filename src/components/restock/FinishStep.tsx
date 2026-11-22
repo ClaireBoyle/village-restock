@@ -254,7 +254,7 @@ function StockReport({ outcomes, displayRule = false, onCorrect }: {
         {o.upstairs ? (
           // Gold Class Bar: from the "None left here" ticks and what was collected downstairs.
           <small>{kind === 'out' ? <>Out of stock &middot; {q(o, o.short)} short</>
-            : kind === 'low' ? <>Low stock &middot; {q(o, o.short)} short &middot; {o.got > 0 ? `${q(o, o.got)} collected` : 'Still available upstairs'}</>
+            : kind === 'low' ? <>Low stock &middot; {q(o, o.short)} short &middot; Still available {o.availableAt === 'bar' ? 'at the bar' : 'upstairs'}</>
             : <>Top-up incomplete &middot; {q(o, o.short)} short &middot; Upstairs stock not confirmed</>}
             {o.overridden ? <> &middot; Changed</> : null}
             {onCorrect && o.got === 0 ? <button type="button" className="linkbtn sr-change" aria-expanded={changing === o.productName}

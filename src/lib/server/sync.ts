@@ -23,8 +23,15 @@ const COLUMN: Record<keyof ItemFields, string> = {
   currentQty: 'current_qty', requestedQty: 'requested_qty', routineChoice: 'routine_choice',
   collectedMode: 'collected_mode', collectedQty: 'collected_qty', shortfallReason: 'shortfall_reason', flagged: 'flagged',
   noneOnDisplay: 'none_on_display', refillStatus: 'refill_status', upstairsQty: 'upstairs_qty',
-  noneLeftHere: 'none_left_here', statusOverride: 'status_override',
+  noneLeftHere: 'none_left_here', statusOverride: 'status_override', leftHere: 'left_here',
 };
+
+/** Migration 023 adds "Some left" / "None left" (Gold Class Bar). */
+let hasLeftHere = false;
+async function leftHereReady(tx: Tx) {
+  if (!hasLeftHere) hasLeftHere = (await tx`select 1 from information_schema.columns where table_name = 'session_items' and column_name = 'left_here'`).length > 0;
+  return hasLeftHere;
+}
 
 /** Migration 020 adds "None left here" and Finish corrections (Gold Class Bar). */
 let hasNoneLeft = false;
@@ -161,6 +168,8 @@ async function apply(tx: Tx, op: SyncOp, deviceId: string): Promise<{ mergedInto
         }
       }
       // Before migration 013: a cleared "None on display" is simply not stored; a set one waits for the update.
+      // Before migration 023: "Some left" simply isn't kept ("None left" still is, as none_left_here).
+      if ('leftHere' in f && !(await leftHereReady(tx))) delete f.leftHere;
       if (('noneLeftHere' in f || 'statusOverride' in f) && !(await noneLeftReady(tx))) {
         if (f.noneLeftHere || f.statusOverride) throw new OpError('The server needs a database update (020_none_left_here.sql)', false);
         delete f.noneLeftHere; delete f.statusOverride;
@@ -401,6 +410,7 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
     refillStatus: (r.refillStatus as ItemState['refillStatus']) ?? null,
     upstairsQty: r.upstairsQty === null || r.upstairsQty === undefined ? null : Number(r.upstairsQty),
     noneLeftHere: Boolean(r.noneLeftHere), statusOverride: (r.statusOverride as ItemState['statusOverride']) ?? null,
+    leftHere: (r.leftHere as ItemState['leftHere']) ?? null,
     conflict: (r.conflict as Conflict | null) ?? null,
   }]));
   const recorded = new Map<string, AreaStatus>(areaRows.map((r) => [String(r.checkAreaId), r.status as AreaStatus]));
@@ -500,6 +510,7 @@ function toRemote(s: Record<string, unknown>, areas: Record<string, unknown>[], 
       flagged: Boolean(r.flagged), noneOnDisplay: Boolean(r.noneOnDisplay), refillStatus: (r.refillStatus as RemoteSession['items'][number]['refillStatus']) ?? null,
       upstairsQty: r.upstairsQty === null || r.upstairsQty === undefined ? null : Number(r.upstairsQty),
       noneLeftHere: Boolean(r.noneLeftHere), statusOverride: (r.statusOverride as RemoteSession['items'][number]['statusOverride']) ?? null,
+      leftHere: (r.leftHere as RemoteSession['items'][number]['leftHere']) ?? null,
       conflict: (r.conflict as Conflict | null) ?? null,
     })),
   };

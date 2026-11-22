@@ -90,6 +90,7 @@ export async function restockDetail(id: string) {
     flagged: Boolean(r.flagged), noneOnDisplay: Boolean(r.noneOnDisplay), refillStatus: (r.refillStatus as ItemState['refillStatus']) ?? null,
     upstairsQty: r.upstairsQty === null || r.upstairsQty === undefined ? null : Number(r.upstairsQty),
     noneLeftHere: Boolean(r.noneLeftHere), statusOverride: (r.statusOverride as ItemState['statusOverride']) ?? null,
+    leftHere: (r.leftHere as ItemState['leftHere']) ?? null,
     conflict: (r.conflict as Conflict | null) ?? null,
   }]));
   const recorded = new Map<string, AreaStatus>(areas.map((a) => [String(a.checkAreaId), a.status as AreaStatus]));

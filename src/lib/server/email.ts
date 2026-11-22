@@ -81,7 +81,7 @@ export function buildRestockEmail(i: RestockEmailInput): { subject: string; html
   // Gold Class Bar: "Out of stock · 3 bottles short", "Low stock · 2 bottles short", "Top-up incomplete · 3 bottles short".
   const qn = (o: StockOutcome, x: number) => `${n(x)} ${unit(o, x)}`;
   const barDetail = (o: StockOutcome) => o.status === 'out' ? `Out of stock \u00b7 ${qn(o, o.short)} short \u00b7 None left upstairs or downstairs`
-    : o.status === 'low' ? `Low stock \u00b7 ${qn(o, o.short)} short \u00b7 ${o.got > 0 ? `${qn(o, o.got)} collected` : 'Still available upstairs'}`
+    : o.status === 'low' ? `Low stock \u00b7 ${qn(o, o.short)} short \u00b7 Still available ${o.availableAt === 'bar' ? 'at the bar' : 'upstairs'}`
     : `Top-up incomplete \u00b7 ${qn(o, o.short)} short \u00b7 Upstairs stock not confirmed`;
   const detail = (o: StockOutcome, plain: (o: StockOutcome) => string) => (o.upstairs ? `${barDetail(o)}${o.overridden ? ' (changed on Finish)' : ''}` : plain(o));
   const lowTitle = bar ? 'Low stock \u00b7 Still available' : i.lowStockWording ? 'Low stock' : 'Running low';

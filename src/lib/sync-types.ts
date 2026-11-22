@@ -23,6 +23,8 @@ export const itemFieldsSchema = z.object({
   upstairsQty: qty.optional(),
   /** Gold Class Bar: staff ticked "None left here" for this spot (an open bottle still in use counts as stock). */
   noneLeftHere: z.boolean().optional(),
+  /** Gold Class Bar: what's left at that spot, said when entering a top-up there (null = not said). */
+  leftHere: z.enum(['some', 'none']).nullable().optional(),
   /** Gold Class Bar: a shortage status chosen on the Finish screen (null = worked out from the checks). */
   statusOverride: z.enum(['out', 'low', 'unconfirmed']).nullable().optional(),
 }).strict();

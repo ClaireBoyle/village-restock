@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Catalogue } from './catalogue-types';
 import {
   EMPTY_ITEM, collectPlacements, collectionLines, departmentView, gotAllUpdates, gotFewerUpdates, outcomeLine, restockOutcomes, shortageCount,
-  summaryText, upstairsCheck, upstairsStatus, type AreaStatus, type CollectionLine, type ItemState,
+  summaryText, upstairsCheck, upstairsStatus, withSuggestions, type AreaStatus, type CollectionLine, type ItemState,
 } from './restock-logic';
 import { buildRestockEmail } from './server/email';
 
@@ -40,7 +40,7 @@ describe('None left here (Gold Class Bar)', () => {
     const m = need3(true, true);
     const o = outcome(collect(m, lineOf(m, 'Raspberry Cordial'), 1));
     expect(o).toMatchObject({ status: 'low', short: 2, got: 1, upstairs: 'empty' });
-    expect(outcomeLine(o)).toBe('Raspberry Cordial: Low stock · 2 bottles short (1 bottle collected)');
+    expect(outcomeLine(o)).toBe('Raspberry Cordial: Low stock · 2 bottles short (still available upstairs)');
   });
 
   it('both spots empty and none collected: Out of stock · 3 bottles short', () => {
@@ -113,6 +113,48 @@ describe('None left here (Gold Class Bar)', () => {
   });
 });
 
+describe('Some left / None left (Gold Class Bar)', () => {
+  // Maraschino Cherries in the upstairs walk-in fridge; Spiced Rum on the back bench, grabbed from the upstairs cupboard.
+  const P2 = (id: string, name: string, unit: [string, string]) => ({ id, departmentId: 'gb', categoryId: null, name, unitSingular: unit[0], unitPlural: unit[1], method: 'manual' as const, allowDecimal: false, instructions: '', defaultLocationId: 'dry', sortOrder: 1, affects: [], photoPath: null });
+  const cat2: Catalogue = {
+    ...cat,
+    areas: [A('bench', 'Back bench', 1), A('walk', 'Walk in fridge', 2), A('cup', 'Upstairs cupboards', 3)],
+    products: [P2('mc', 'Maraschino Cherries', ['jar', 'jars']), P2('rum', 'Spiced Rum', ['bottle', 'bottles']), P2('lime', 'Limes', ['lime', 'limes'])],
+    // (Limes are grabbed from the walk-in for the bench, so the walk-in is an upstairs stop, as on the live bar.)
+    placements: [pl('mc-walk', 'mc', 'walk'), pl('rum-bench', 'rum', 'bench', { pickupAreaId: 'cup', pickupSuggest: true }), pl('rum-cup', 'rum', 'cup'),
+      pl('lime-bench', 'lime', 'bench', { pickupAreaId: 'walk', pickupSuggest: true }), pl('lime-walk', 'lime', 'walk')],
+  };
+  const v2 = departmentView(cat2, 'gb')!;
+  const all: Map<string, AreaStatus> = new Map([['bench', 'complete'], ['walk', 'complete'], ['cup', 'complete']]);
+  const run = (m: Map<string, ItemState>, name: string) => {
+    const it = withSuggestions('full', v2, m, all);
+    const line = collectionLines(collectPlacements('full', v2.placements, all), it).find((l) => l.productName === name)!;
+    for (const u of gotFewerUpdates(line, 0, 'insufficient', false)) it.set(u.placementId, { ...(it.get(u.placementId) ?? EMPTY_ITEM), ...u.fields });
+    return restockOutcomes('full', v2, v2.placements, all, it).find((o) => o.productName === name)!;
+  };
+
+  it('Maraschino Cherries: an open jar upstairs, 1 extra requested (Some left), 0 downstairs → Low stock · 1 jar short · Still available upstairs', () => {
+    const o = run(items({ 'mc-walk': { requestedQty: 1, leftHere: 'some' } }), 'Maraschino Cherries');
+    expect(o).toMatchObject({ status: 'low', short: 1, availableAt: 'upstairs' });
+    expect(outcomeLine(o)).toBe('Maraschino Cherries: Low stock · 1 jar short (still available upstairs)');
+  });
+
+  it('the last bottle moved to the bar: bench needs 3, 1 grabbed, cupboard empty, 0 downstairs → Low stock · 2 bottles short · Still available at the bar', () => {
+    const o = run(items({ 'rum-bench': { requestedQty: 3, leftHere: 'none', collectedMode: 'partial', collectedQty: 1, shortfallReason: 'insufficient' }, 'rum-cup': { leftHere: 'none' } }), 'Spiced Rum');
+    expect(o).toMatchObject({ status: 'low', short: 2, availableAt: 'bar' });
+    expect(outcomeLine(o)).toBe('Spiced Rum: Low stock · 2 bottles short (still available at the bar)');
+  });
+
+  it('None left everywhere, nothing grabbed, 0 downstairs → Out of stock; nothing said → Top-up incomplete; all collected → not listed', () => {
+    expect(run(items({ 'mc-walk': { requestedQty: 2, leftHere: 'none' } }), 'Maraschino Cherries')).toMatchObject({ status: 'out', short: 2 });
+    expect(run(items({ 'mc-walk': { requestedQty: 2 } }), 'Maraschino Cherries')).toMatchObject({ status: 'unconfirmed', short: 2 });
+    const m = items({ 'mc-walk': { requestedQty: 2, leftHere: 'some' } });
+    const line = collectionLines(collectPlacements('full', v2.placements, all), m)[0];
+    for (const u of gotAllUpdates(line)) m.set(u.placementId, { ...m.get(u.placementId)!, ...u.fields });
+    expect(restockOutcomes('full', v2, v2.placements, all, m)).toEqual([]);
+  });
+});
+
 describe('manager email (Gold Class Bar wording)', () => {
   it('Out of stock, Low stock · Still available, and Top-up incomplete', () => {
     const m = need3(true, true);
@@ -122,7 +164,7 @@ describe('manager email (Gold Class Bar wording)', () => {
     const outcomes = [...restockOutcomes('full', view, view.placements, done, m), ...restockOutcomes('full', view, view.placements, done, h)];
     const e = buildRestockEmail({ departmentName: 'Gold Class Bar', finishedLabel: 'Sat 21 Nov, 11:40 pm', people: [], exceptionReason: null, outcomes, notChecked: [], link: null, lowStockWording: true });
     expect(e.subject).toBe('Gold Class Bar restock Sat 21 Nov, 11:40 pm: 1 low stock, 1 top-up incomplete');
-    expect(e.text).toContain('LOW STOCK · STILL AVAILABLE (1)\n- Raspberry Cordial: Low stock · 2 bottles short · 1 bottle collected');
+    expect(e.text).toContain('LOW STOCK · STILL AVAILABLE (1)\n- Raspberry Cordial: Low stock · 2 bottles short · Still available upstairs');
     expect(e.text).toContain('TOP-UP INCOMPLETE (1)\n- Heineken: Top-up incomplete · 12 bottles short · Upstairs stock not confirmed');
     expect(e.html).toContain('Top-up incomplete (1)');
     const out = need3(true, true);

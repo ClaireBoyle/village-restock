@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
   EMPTY_ITEM, SHORT_REASONS, activePlacements, clearCollectedUpdates, collectPlacements, refillLines, collectionLines, gotAllUpdates, gotFewerUpdates,
-  groupByStoreroom, isChecked, isRequired, isSideLine, lineGot, lineInfo, lineState, pendingRefills, sideShares, storeLabel, upstairsCheck, upstairsStatus, gotFewerSplitUpdates,
+  groupByStoreroom, isChecked, isRequired, isSideLine, lineGot, lineInfo, lineState, pendingRefills, sideShares, storeLabel, upstairsDetail, upstairsStatus, gotFewerSplitUpdates,
   type CollectionLine, type ItemState, type ShortReason, type UpstairsCheck,
 } from '@/lib/restock-logic';
 import { formatQty, round2 } from '@/lib/restock-math';
@@ -34,8 +34,8 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
   // Kitchen: drawers answered "Needs stock", to fill once the stock is up.
   const refills = pendingRefills(session.kind, placements, recorded, items);
   // Gold Class Bar: what the Bar and Upstairs checks said ("None left here"), for each line's label.
-  const up = view.department.noneLeftCheck ? upstairsCheck(session.kind, placements, recorded, items) : null;
-  const checkOf = up ? (l: CollectionLine) => up.get(view.byId.get(l.parts[0].placementId)?.productId ?? '') ?? 'unknown' : undefined;
+  const up = view.department.noneLeftCheck ? upstairsDetail(session.kind, placements, recorded, items, view.bohScreenIds) : null;
+  const checkOf = up ? (l: CollectionLine) => up.get(view.byId.get(l.parts[0].placementId)?.productId ?? '') ?? { check: 'unknown' as const, where: null } : undefined;
 
   return (
     <>
@@ -84,7 +84,7 @@ function Room({ name, lines, items, write, note, oneArea, tickOnly = false, disp
   /** Candy Bar: short is Low stock (even at zero); "None on display" makes it Out of stock. */
   displayRule?: boolean;
   /** Gold Class Bar: the upstairs checks for a line's product. */
-  checkOf?: (l: CollectionLine) => UpstairsCheck;
+  checkOf?: (l: CollectionLine) => { check: UpstairsCheck; where: 'bar' | 'upstairs' | null };
 }) {
   const doneN = lines.filter((l) => ['done', 'short'].includes(lineState(l, items))).length;
   const complete = doneN === lines.length;
@@ -99,14 +99,16 @@ function Room({ name, lines, items, write, note, oneArea, tickOnly = false, disp
         <Icon name={open ? 'up' : 'down'} />
       </button>
       {open && note ? <p className="room-note"><Icon name="info" /><span>{note}</span></p> : null}
-      {open ? <div className="room-lines">{lines.map((l) => <Line key={l.key} line={l} items={items} write={write} oneArea={oneArea} tickOnly={tickOnly} displayRule={displayRule} barCheck={checkOf?.(l)} />)}</div> : null}
+      {open ? <div className="room-lines">{lines.map((l) => <Line key={l.key} line={l} items={items} write={write} oneArea={oneArea} tickOnly={tickOnly} displayRule={displayRule} barCheck={checkOf?.(l).check} barWhere={checkOf?.(l).where ?? null} />)}</div> : null}
     </section>
   );
 }
 
-export function Line({ line, items, write, oneArea, tickOnly = false, displayRule = false, verb = 'Grabbed', barCheck }: { line: CollectionLine; items: Map<string, ItemState>; write: (u: { placementId: string; fields: Partial<ItemState> }[]) => void; oneArea: string | null; tickOnly?: boolean; displayRule?: boolean;
+export function Line({ line, items, write, oneArea, tickOnly = false, displayRule = false, verb = 'Grabbed', barCheck, barWhere = null }: { line: CollectionLine; items: Map<string, ItemState>; write: (u: { placementId: string; fields: Partial<ItemState> }[]) => void; oneArea: string | null; tickOnly?: boolean; displayRule?: boolean;
   /** Gold Class Bar: what the Bar and Upstairs checks said about this product (Out of stock / Low stock / Top-up incomplete). */
   barCheck?: UpstairsCheck;
+  /** …and where it's still available (at the bar, or upstairs). */
+  barWhere?: 'bar' | 'upstairs' | null;
   /** Tick-only lines: what taking it is called ("Grabbed" for the bar, "Pulled" from a freezer for defrost). */
   verb?: 'Grabbed' | 'Pulled' }) {
   const st = lineState(line, items);
@@ -188,7 +190,7 @@ export function Line({ line, items, write, oneArea, tickOnly = false, displayRul
   const toggleNone = () => write(gotFewerUpdates(line, got, info.reason, info.flagged, !info.noneOnDisplay));
   const stockShort = st === 'short' && info.reason === 'insufficient';
   const barSt = barCheck ? upstairsStatus(got, barCheck, (items.get(line.parts[0].placementId) ?? EMPTY_ITEM).statusOverride ?? null) : null;
-  const stockLabel = barSt ? (barSt === 'out' ? 'Out of stock' : barSt === 'low' ? 'Low stock · Still available' : 'Top-up incomplete') : displayRule ? (stockShort && got === 0 && info.noneOnDisplay ? 'Out of stock' : 'Low stock') : (got === 0 ? 'Out of stock' : 'Running low');
+  const stockLabel = barSt ? (barSt === 'out' ? 'Out of stock' : barSt === 'low' ? `Low stock · Still available ${barWhere === 'bar' ? 'at the bar' : 'upstairs'}` : 'Top-up incomplete') : displayRule ? (stockShort && got === 0 && info.noneOnDisplay ? 'Out of stock' : 'Low stock') : (got === 0 ? 'Out of stock' : 'Running low');
   const askNone = displayRule && stockShort && got === 0 && !open;
   const undo = () => { write(clearCollectedUpdates(line)); setEditing(false); setMore(false); };
 

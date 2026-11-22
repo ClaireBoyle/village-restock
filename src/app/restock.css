@@ -1482,3 +1482,11 @@ button.pnote.open span{display:block}
 .fill-list li.short .fill-n{color:var(--warn)}
 .fill-n{min-width:28px;font-size:18px;font-variant-numeric:tabular-nums;text-align:right}
 .l-sides .l-link{margin-left:10px}
+/* Gold Class Bar: Some left / None left beside a top-up (Some left chosen when the amount is typed in). */
+.pleft{display:inline-flex;gap:6px;align-self:flex-start;margin-top:4px}
+.pleft-b{display:inline-flex;align-items:center;gap:4px;min-height:34px;padding:2px 12px;border-radius:999px;border:1px solid var(--hair);background:var(--surface);color:var(--ink-2);font-size:13px;font-weight:600}
+.pleft-b .ic{width:14px;height:14px}
+.pleft-b.some.on{color:var(--ok);border-color:var(--ok-line);background:color-mix(in srgb,var(--ok) 12%,var(--surface))}
+.pleft-b.none.on{color:var(--bad);border-color:var(--bad-line);background:color-mix(in srgb,var(--bad) 10%,var(--surface))}
+.pleft{flex-wrap:wrap}
+.pleft-b{white-space:nowrap}

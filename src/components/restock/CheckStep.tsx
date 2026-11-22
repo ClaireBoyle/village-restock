@@ -183,7 +183,8 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
     // Refill FOH: what was grabbed here for front of house is suggested (and says so).
     const sug = ctx.suggested.get(p.placementId);
     if (sug && !sug.defrost) {
-      const taken = ctx.refill ? `${round2(sug.qty)} taken for ${sug.from.map((f) => f.areaName).join(', ')}` : `${round2(sug.qty)} to replace what's going to defrost`;
+      const taken = !ctx.refill ? `${round2(sug.qty)} to replace what's going to defrost`
+        : sug.from.map((f) => (f.short ? `${round2(f.need)} still needed for ${f.areaName} (not enough here)` : `${round2(f.need)} taken for ${f.areaName}`)).join(' · ');
       const raw = ctx.rawItems.get(p.placementId)?.requestedQty ?? null;
       return raw === null ? `Suggested: ${taken}. Add any more this freezer needs, or remove it.` : raw === sug.qty ? taken : `${taken} (suggested ${round2(sug.qty)})`;
     }
@@ -394,7 +395,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
             </section>
           ) : null}
           {noneLeftOn && cur.placements.some((p) => p.method === 'manual' && (needOf(p, items.get(p.placementId) ?? EMPTY_ITEM) ?? 0) > 0) ? (
-            <p className="aguide-line nl-hint"><Icon name="info" /><span>Tick <b>None left here</b> only when that spot is empty. An open bottle that can still be used counts as stock.</span></p>
+            <p className="aguide-line nl-hint"><Icon name="info" /><span>Entered a top-up? <b>Some left</b> is chosen for you: an open bottle or jar with usable stock counts. Tap <b>None left</b> if the spot is empty.</span></p>
           ) : null}
           {usesAdmits(cur.placements) ? (
             // Tomorrow's forecast admits: once per restock, for every suggested amount.

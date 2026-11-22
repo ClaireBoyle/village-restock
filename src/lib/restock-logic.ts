@@ -108,6 +108,8 @@ export interface ItemState {
   upstairsQty?: number | null;
   /** Gold Class Bar: "None left here" ticked on the check (an open bottle that can still be used counts as stock). */
   noneLeftHere?: boolean;
+  /** Gold Class Bar: "Some left" / "None left" at that spot (an open bottle or jar with usable stock is Some left). Null = not said. */
+  leftHere?: 'some' | 'none' | null;
   /** Gold Class Bar: shortage status chosen on the Finish screen (null = worked out from the checks). */
   statusOverride?: 'out' | 'low' | 'unconfirmed' | null;
   /** Set when two people entered different counts; cleared when someone chooses. */
@@ -116,7 +118,7 @@ export interface ItemState {
 
 export const EMPTY_ITEM: ItemState = {
   currentQty: null, requestedQty: null, routineChoice: null,
-  collectedMode: null, collectedQty: null, shortfallReason: null, flagged: false, noneOnDisplay: false, refillStatus: null, upstairsQty: null, noneLeftHere: false, statusOverride: null, conflict: null,
+  collectedMode: null, collectedQty: null, shortfallReason: null, flagged: false, noneOnDisplay: false, refillStatus: null, upstairsQty: null, noneLeftHere: false, leftHere: null, statusOverride: null, conflict: null,
 };
 
 /** A section shown inside an area's screen (e.g. "Spirits cupboard" inside Back bench). */
@@ -701,7 +703,8 @@ export function refillLines(kind: SessionKind, placements: PlacementView[], reco
 }
 
 export interface Suggestion {
-  qty: number; from: { areaName: string; need: number }[];
+  /** short: not enough here for that bar spot, so this is what it still needs (from downstairs, via here). */
+  qty: number; from: { areaName: string; need: number; short?: boolean }[];
   /** Defrost rows: worked out from tomorrow's admits and what's already ready. */
   defrost?: DefrostSuggestion;
 }
@@ -733,16 +736,19 @@ export function suggestions(kind: SessionKind, view: DepartmentView, items: Map<
     const want = needOf(p, i) ?? 0;
     // Defrost: everything set to defrost goes back into its freezer from downstairs, as soon as it's set
     // (whether it was there or not: none upstairs = 2 to defrost + 2 back into the freezer).
-    // Elsewhere (Bar): what was collected upstairs.
+    // Bar: what was grabbed here is replaced. Not enough here (e.g. the last bottle taken for the back bench):
+    // what the bar still needs comes up from downstairs instead (3 needed, 1 grabbed: 2 more).
+    const grabbed = i.collectedMode === 'partial' ? Math.min(want, i.collectedQty ?? 0) : 0;
+    const short = !p.defrost && i.collectedMode === 'partial' && grabbed < want;
     const need = p.defrost ? want
-      : i.collectedMode === 'all' ? want : i.collectedMode === 'partial' ? Math.min(want, i.collectedQty ?? 0) : 0;
+      : i.collectedMode === 'all' ? want : short ? round2(want - grabbed) : 0;
     if (need <= 0) continue;
     // The same product in the pickup spot, counted in the same unit and entered by staff.
     const t = view.placements.find((x) => x.areaId === p.pickupAreaId && x.productId === p.productId && x.method === 'manual' && x.unitPlural === p.unitPlural);
     if (!t) continue;
     const s = out.get(t.placementId) ?? { qty: 0, from: [] };
     s.qty = round2(s.qty + need);
-    s.from.push({ areaName: p.areaName, need });
+    s.from.push({ areaName: p.areaName, need, ...(short ? { short: true } : {}) });
     out.set(t.placementId, s);
   }
   return out;
@@ -777,25 +783,43 @@ export type StockStatus = 'out' | 'low' | 'unconfirmed' | 'not_topped_up';
 export type UpstairsCheck = 'stock' | 'empty' | 'unknown';
 
 export function upstairsCheck(kind: SessionKind, placements: PlacementView[], recordedAreas: Map<string, AreaStatus>, items: Map<string, ItemState>): Map<string, UpstairsCheck> {
-  const seen = new Map<string, UpstairsCheck[]>();
+  return new Map([...upstairsDetail(kind, placements, recordedAreas, items)].map(([id, d]) => [id, d.check]));
+}
+
+/**
+ * Gold Class Bar: per product, what the checks say (stock / empty / unknown) and where usable stock was confirmed:
+ * 'bar' (e.g. the last bottle grabbed for the back bench, or "Some left" at a bar spot), 'upstairs' (e.g. an open jar
+ * in the walk-in fridge), or null (only implied, e.g. a checked spot that needed nothing). `boh`: the upstairs screens.
+ */
+export function upstairsDetail(kind: SessionKind, placements: PlacementView[], recordedAreas: Map<string, AreaStatus>, items: Map<string, ItemState>, boh?: Set<string>) {
+  type Seen = { v: UpstairsCheck; sure: boolean; bar: boolean };
+  const seen = new Map<string, Seen[]>();
   for (const p of placements) {
     if (p.method === 'routine' || p.defrost || p.refillSource || p.linkedPlacementId) continue;
     const i = items.get(p.placementId) ?? EMPTY_ITEM;
     const area = recordedAreas.get(p.screenAreaId ?? p.areaId);
     const need = needOf(p, i);
-    let v: UpstairsCheck;
+    const bar = boh ? !boh.has(p.screenAreaId) : false;
+    const said = i.leftHere ?? (i.noneLeftHere ? 'none' : null);
+    let v: UpstairsCheck, sure = false;
     if (asFull(kind) && area === 'skipped') v = 'unknown';
-    // Grabbed for the bar: that stock is upstairs now.
-    else if (isPickup(kind, p) && (i.collectedMode === 'all' ? (need ?? 0) > 0 : i.collectedMode === 'partial' && (i.collectedQty ?? 0) > 0)) v = 'stock';
-    else if (p.method === 'par' && i.currentQty !== null) v = i.currentQty > 0 ? 'stock' : 'empty';
-    else if (need !== null && need > 0) v = i.noneLeftHere ? 'empty' : 'unknown';
+    // Grabbed for the bar: that stock is at the bar now (e.g. the last bottle from the cupboard).
+    else if (isPickup(kind, p) && (i.collectedMode === 'all' ? (need ?? 0) > 0 : i.collectedMode === 'partial' && (i.collectedQty ?? 0) > 0)) { v = 'stock'; sure = true; }
+    else if (p.method === 'par' && i.currentQty !== null) { v = i.currentQty > 0 ? 'stock' : 'empty'; sure = i.currentQty > 0; }
+    // A top-up entered there: "Some left" (an open bottle or jar counts) or "None left"; not said = unknown.
+    else if (need !== null && need > 0) { v = said === 'some' ? 'stock' : said === 'none' ? 'empty' : 'unknown'; sure = said === 'some'; }
     // Checked and nothing needed (0, or left blank in a checked area): there's stock there.
     else if (need === 0 || (need === null && (!asFull(kind) || area === 'complete'))) v = 'stock';
     else v = 'unknown';
-    seen.set(p.productId, [...(seen.get(p.productId) ?? []), v]);
+    seen.set(p.productId, [...(seen.get(p.productId) ?? []), { v, sure, bar }]);
   }
-  const out = new Map<string, UpstairsCheck>();
-  for (const [id, vs] of seen) out.set(id, vs.includes('stock') ? 'stock' : vs.every((v) => v === 'empty') ? 'empty' : 'unknown');
+  const out = new Map<string, { check: UpstairsCheck; where: 'bar' | 'upstairs' | null }>();
+  for (const [id, vs] of seen) {
+    const check: UpstairsCheck = vs.some((x) => x.v === 'stock') ? 'stock' : vs.every((x) => x.v === 'empty') ? 'empty' : 'unknown';
+    const sure = vs.filter((x) => x.v === 'stock' && x.sure);
+    const where = !boh ? null : sure.some((x) => x.bar) ? 'bar' : sure.length ? 'upstairs' : null;
+    out.set(id, { check, where });
+  }
   return out;
 }
 
@@ -824,6 +848,8 @@ export interface StockOutcome {
   noneOnDisplay?: boolean;
   /** Gold Class Bar: what the checks said upstairs, whether staff changed the status on Finish, and the line's placements. */
   upstairs?: UpstairsCheck;
+  /** Low stock: where it's still available to serve ("at the bar" or "upstairs"). */
+  availableAt?: 'bar' | 'upstairs';
   auto?: 'out' | 'low' | 'unconfirmed';
   overridden?: boolean;
   placementIds?: string[];
@@ -837,8 +863,8 @@ export interface StockOutcome {
  * Worst first: out, then low, then not topped up.
  */
 export function stockOutcomes(lines: CollectionLine[], items: Map<string, ItemState>, byId: Map<string, PlacementView>, displayRule = false,
-  /** Gold Class Bar: the upstairs checks per product (see upstairsCheck). */
-  upstairs?: Map<string, UpstairsCheck>): StockOutcome[] {
+  /** Gold Class Bar: the upstairs checks per product (see upstairsCheck), and where stock was confirmed (upstairsDetail). */
+  upstairs?: Map<string, UpstairsCheck>, where?: Map<string, 'bar' | 'upstairs' | null>): StockOutcome[] {
   const out: StockOutcome[] = [];
   for (const l of lines) {
     if (l.kind !== 'qty') continue;
@@ -867,7 +893,8 @@ export function stockOutcomes(lines: CollectionLine[], items: Map<string, ItemSt
       noneOnDisplay: confirmed && got === 0 && info.noneOnDisplay,
       needed: l.total, got, short, onShelf, target, reason: info.reason, flagged: info.flagged,
       affects: first?.affects ?? [],
-      ...(bar ? { upstairs: bar.upstairs, auto: bar.auto, overridden: bar.overridden, placementIds: bar.placementIds } : {}),
+      ...(bar ? { upstairs: bar.upstairs, auto: bar.auto, overridden: bar.overridden, placementIds: bar.placementIds,
+        ...(bar.status === 'low' ? { availableAt: (where?.get(first?.productId ?? '') ?? 'upstairs') as 'bar' | 'upstairs' } : {}) } : {}),
     });
   }
   const rank: Record<StockStatus, number> = { out: 0, low: 1, unconfirmed: 2, not_topped_up: 3 };
@@ -877,8 +904,10 @@ export function stockOutcomes(lines: CollectionLine[], items: Map<string, ItemSt
 /** The stock outcomes of a restock, with the department's rule (Candy Bar "None on display", Gold Class Bar "None left here"). */
 export function restockOutcomes(kind: SessionKind, view: DepartmentView, placements: PlacementView[], recordedAreas: Map<string, AreaStatus>, items: Map<string, ItemState>, lines?: CollectionLine[]): StockOutcome[] {
   const ls = lines ?? collectionLines(collectPlacements(kind, placements, recordedAreas), items);
-  const up = view.department.noneLeftCheck ? upstairsCheck(kind, placements, recordedAreas, items) : undefined;
-  return stockOutcomes(ls, items, view.byId, !!view.department.noneOnDisplay, up);
+  const detail = view.department.noneLeftCheck ? upstairsDetail(kind, placements, recordedAreas, items, view.bohScreenIds) : undefined;
+  const up = detail ? new Map([...detail].map(([id, d]) => [id, d.check])) : undefined;
+  const where = detail ? new Map([...detail].map(([id, d]) => [id, d.where])) : undefined;
+  return stockOutcomes(ls, items, view.byId, !!view.department.noneOnDisplay, up, where);
 }
 
 /** A storeroom shortage: out of stock, low, or (Gold Class Bar) top-up incomplete with upstairs unconfirmed. */
@@ -898,7 +927,7 @@ export function outcomeLine(o: StockOutcome): string {
   if (o.upstairs) {
     // Gold Class Bar wording (same as the Finish screen and the email).
     const what = o.status === 'out' ? 'Out of stock' : o.status === 'low' ? 'Low stock' : 'Top-up incomplete';
-    const why = o.status === 'out' ? 'none upstairs or downstairs' : o.status === 'low' ? (o.got > 0 ? `${q(o.got)} collected` : 'still available upstairs') : 'upstairs stock not confirmed';
+    const why = o.status === 'out' ? 'none upstairs or downstairs' : o.status === 'low' ? `still available ${o.availableAt === 'bar' ? 'at the bar' : 'upstairs'}` : 'upstairs stock not confirmed';
     return `${o.productName}: ${what} \u00b7 ${q(o.short)} short (${why})${o.overridden ? ' [changed on Finish]' : ''}`;
   }
   const shelf = o.onShelf !== null && o.target !== null ? ` \u00b7 ${round2(o.onShelf)} of ${round2(o.target)} on the shelf` : '';

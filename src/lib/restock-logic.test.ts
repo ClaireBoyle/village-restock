@@ -386,12 +386,13 @@ describe('Refill FOH: grab upstairs for front of house, then replace it from dow
     // A skipped front-of-house area suggests nothing.
     expect(suggestions('full', v, items(base), recorded({ bench: 'skipped' })).has('shz-wine')).toBe(false);
   });
-  it('Shiraz: what was actually grabbed upstairs is what gets suggested', () => {
+  it('Shiraz: what was grabbed upstairs is replaced; what the bar still needs when the cupboard runs short comes from downstairs', () => {
     const sug = (shz: Partial<ItemState>) => suggestions('full', v, items({ 'shz-bench': { requestedQty: 2, ...shz } }), recorded({})).get('shz-wine')?.qty ?? null;
     expect(sug({})).toBeNull(); // not ticked on Collect upstairs yet
     expect(sug({ collectedMode: 'all', collectedQty: 2 })).toBe(2);
-    expect(sug({ collectedMode: 'partial', collectedQty: 1, shortfallReason: 'insufficient' })).toBe(1); // only 1 in the cupboard
-    expect(sug({ collectedMode: 'partial', collectedQty: 0, shortfallReason: 'insufficient' })).toBeNull(); // none grabbed: nothing to replace
+    expect(sug({ collectedMode: 'partial', collectedQty: 1, shortfallReason: 'insufficient' })).toBe(1); // only 1 in the cupboard: the bench still needs 1
+    expect(sug({ collectedMode: 'partial', collectedQty: 0, shortfallReason: 'insufficient' })).toBe(2); // none in the cupboard: the bench still needs both
+    expect(sug({ requestedQty: 3, collectedMode: 'partial', collectedQty: 1, shortfallReason: 'insufficient' })).toBe(2); // the last bottle taken: 2 more
     // Took 1 → 1 suggested; changed to 3 → 3 on the downstairs list; removed → off the list.
     const one = items({ 'shz-bench': { requestedQty: 1, collectedMode: 'all', collectedQty: 1 } });
     const down = (m: Map<string, ItemState>) => collectionLines(collectPlacements('full', v.placements, recorded({})), withSuggestions('full', v, m, recorded({})))

@@ -39,13 +39,20 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
   const [noteOpen, setNoteOpen] = useState(false);
   const focused = useRef(false);
   useEffect(() => { if (!focused.current) setText(fmt(value)); }, [value]);
-  // "None left here" shows the tap straight away (the saved value catches up a moment later).
-  const [tick, setTick] = useState<boolean | null>(null);
-  useEffect(() => setTick(null), [item.noneLeftHere]);
-  const ticked = tick ?? !!item.noneLeftHere;
+  // Gold Class Bar: "Some left" / "None left", shown straight away when tapped (the saved value catches up a moment later).
+  const [tick, setTick] = useState<'some' | 'none' | null | undefined>(undefined);
+  useEffect(() => setTick(undefined), [item.leftHere, item.noneLeftHere]);
+  const said = tick !== undefined ? tick : item.leftHere ?? (item.noneLeftHere ? 'none' : null);
 
-  // Nothing to collect any more: "None left here" goes too (it's only shown with an amount).
-  const withTick = (v: number | null): Partial<ItemState> => (item.noneLeftHere && field === 'requestedQty' && !v ? { [field]: v, noneLeftHere: false } : { [field]: v });
+  // A top-up typed in here (not a suggested amount): "Some left" is chosen for it, until staff say otherwise.
+  // Kept when the amount changes; cleared with the amount (it's only shown with one).
+  const withTick = (v: number | null): Partial<ItemState> => {
+    if (field !== 'requestedQty' || !noneLeft) return { [field]: v };
+    if (!v) return item.leftHere || item.noneLeftHere ? { [field]: v, leftHere: null, noneLeftHere: false } : { [field]: v };
+    const first = !value && suggestedQty === undefined && !item.leftHere && !item.noneLeftHere;
+    return first ? { [field]: v, leftHere: 'some', noneLeftHere: false } : { [field]: v };
+  };
+  const choose = (v: 'some' | 'none') => { setTick(v); onChange({ leftHere: v, noneLeftHere: v === 'none' }); };
   const commit = (v: number | null) => { setErr(''); setText(fmt(v)); onChange(withTick(v)); };
   const onType = (raw: string) => {
     setText(raw);
@@ -169,9 +176,13 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
         {quiet && !showArea ? <p className="ps" id={`s-${p.placementId}`}>{status}</p>
           : <p className="ps" id={`s-${p.placementId}`}>{showArea ? <span className="parea">{p.areaName}{quiet ? '' : ' · '}</span> : null}{status}</p>}
         {showNone ? (
-          <label className={`pnone ${ticked ? 'on' : ''}`} title="Only if this spot is empty. An open bottle that can still be used counts as stock.">
-            <input type="checkbox" checked={ticked} onChange={(e) => { setTick(e.target.checked); onChange({ noneLeftHere: e.target.checked }); }}
-              aria-label={`None left here: ${p.productName} in ${p.areaName}`} />None left here</label>
+          // What's left at this spot: an open bottle or jar with usable stock is Some left.
+          <span className="pleft" role="radiogroup" aria-label={`${p.productName}: what's left here`}>
+            {(['some', 'none'] as const).map((v) => (
+              <button key={v} type="button" role="radio" aria-checked={said === v} className={`pleft-b ${v} ${said === v ? 'on' : ''}`} onClick={() => choose(v)}>
+                {said === v ? <Icon name="check" /> : null}{v === 'some' ? 'Some left' : 'None left'}</button>
+            ))}
+          </span>
         ) : null}
         {routineText ? <p className="pnote task"><Icon name="task" />{routineText}</p> : null}
         {note ? <button type="button" className={`pnote ${noteOpen ? 'open' : ''}`} onClick={() => setNoteOpen(!noteOpen)} aria-expanded={noteOpen}><Icon name="info" /><span>{note}</span></button> : null}
