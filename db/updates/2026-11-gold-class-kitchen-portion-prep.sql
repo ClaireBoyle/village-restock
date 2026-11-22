@@ -1,5 +1,6 @@
 -- Gold Class Kitchen: portioned lamb, cauliflower popcorn and Fisherman's Baskets are Freezer 1 stock,
--- and portioning them is a morning prep task. Safe to run more than once. Run AFTER
+-- and portioning them is a morning prep task. Safe to run more than once (run it again to put back a portioning
+-- check that was changed, e.g. after "Portioned Lamb" was renamed "Lamb"). Run AFTER
 -- 2026-11-gold-class-kitchen-refills.sql. Only touches Gold Class Kitchen.
 --
 -- * Freezer 2: no refill or spare stock row. Instead, at the end of "Refill working drawers and tubs",
@@ -14,9 +15,9 @@ do $$
 declare
   dept uuid := (select id from departments where lower(name) = 'gold class kitchen');
   f1 uuid; f2 uuid; area uuid; p uuid; pl uuid; t uuid; i int; norm text; down uuid; refill uuid; chk uuid;
-  -- product, Freezer 1 section, task, group, note beside it
+  -- product (or its other names, split by |), Freezer 1 section, task, group, note beside it
   list text[][] := array[
-    ['Portioned Lamb', 'Freezer 1 · Lower right', 'Portion lamb', 'proteins', 'Overflow'],
+    ['Portioned Lamb|Lamb', 'Freezer 1 · Lower right', 'Portion lamb', 'proteins', 'Overflow'],
     ['Cauliflower Popcorn', 'Freezer 1 · Lower right', 'Portion cauliflower popcorn', 'vegetables', 'Overflow'],
     ['Fisherman''s Basket', 'Freezer 1 · Fisherman''s Basket spares', 'Portion Fisherman''s Baskets', 'proteins', 'Prepared portions']
   ];
@@ -40,8 +41,10 @@ begin
       update prep_tasks set active = true, grp = list[i][4] where id = t;
     end if;
 
-    norm := regexp_replace(lower(list[i][1]), '[^a-z0-9]', '', 'g');
-    p := (select id from products where department_id = dept and status = 'active' and regexp_replace(lower(name), '[^a-z0-9]', '', 'g') = norm order by created_at limit 1);
+    -- Renamed in Admin (e.g. "Portioned Lamb" → "Lamb")? Still found.
+    p := (select id from products where department_id = dept and status = 'active'
+          and regexp_replace(lower(name), '[^a-z0-9]', '', 'g') = any(array(select regexp_replace(lower(x), '[^a-z0-9]', '', 'g') from unnest(string_to_array(list[i][1], '|')) x))
+          order by created_at limit 1);
     area := (select id from check_areas where department_id = dept and lower(name) = lower(list[i][2]));
     if p is null or area is null then continue; end if;
 
