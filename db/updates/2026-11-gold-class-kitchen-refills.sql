@@ -2,7 +2,7 @@
 -- Safe to run more than once. Run AFTER db/migrations/018_refills_and_linked_rows.sql and the earlier
 -- Gold Class Kitchen scripts (…-freezers.sql and …-walk-in-shelves.sql). Only touches Gold Class Kitchen.
 --
---   Defrost → Freezer 2 → Freezer 1 → Chest freezer → Walk in fridge → Dry stock
+--   Defrost → Freezer 1 → Freezer 2 → Chest freezer → Walk in fridge → Dry stock   (Freezer 1 first since …-freezer-1-first.sql)
 --
 -- Freezer 2, in two sections:
 --   Refill working drawers and tubs   Refilled · Already full · Needs stock (the task only: no amount,
@@ -72,9 +72,9 @@ begin
   walk := (select id from check_areas where department_id = dept and active and parent_area_id is null and regexp_replace(lower(name), '[^a-z0-9]', '', 'g') in ('walkinfridge', 'walkinfridgeupstairs') limit 1);
   if defrost is null or f1 is null or f2 is null then raise exception 'Run the earlier Gold Class Kitchen scripts first (…-defrost, …-upstairs-areas, …-freezers)'; end if;
 
-  -- 1. Walking order: Defrost, Freezer 2, Freezer 1, Chest freezer, Walk in fridge, then the rest.
+  -- 1. Walking order: Defrost, Freezer 1, Freezer 2, Chest freezer, Walk in fridge, then the rest.
   k := 0;
-  for a in select x from unnest(array[defrost, f2, f1, chest, walk]) x where x is not null loop
+  for a in select x from unnest(array[defrost, f1, f2, chest, walk]) x where x is not null loop
     k := k + 1; update check_areas set sort_order = k where id = a;
   end loop;
   for a in select id from check_areas where department_id = dept and parent_area_id is null and not (id = any(array[defrost, f2, f1, chest, walk])) order by active desc, sort_order loop
