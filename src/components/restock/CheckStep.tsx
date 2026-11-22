@@ -215,7 +215,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   const photoOf = (p: (typeof cur.placements)[number]) => (p.photoPath ? <ProductThumb src={p.photoPath} name={p.productName} credit={p.photoCredit} className="pphoto" /> : <span className="pphoto ph" aria-hidden="true"><Icon name="box" /></span>);
   const linkedTo = (p: (typeof cur.placements)[number]) => (p.linkedPlacementId ? whole.byId.get(p.linkedPlacementId) : undefined);
   const portionTask = (p: (typeof cur.placements)[number]) => (p.refillSource && p.prepTaskId && session.kind === 'full' ? ctx.prepTasks.find((t) => t.id === p.prepTaskId) : undefined);
-  const renderRow = (p: (typeof cur.placements)[number], showArea = false) => portionTask(p) ? (
+  const stockRow = (p: (typeof cur.placements)[number], showArea = false) => portionTask(p) ? (
     // Portioning check while refilling: one tick puts its task on tomorrow's morning prep (nothing in the restock).
     <PortionCheckRow key={p.placementId} p={p} taskName={portionTask(p)!.name} photo={photoOf(p)}
       on={handover?.status === 'needed' && handover.items.some((i) => i.taskId === p.prepTaskId)}
@@ -238,6 +238,21 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
       suggestedQty={ctx.suggested.get(p.placementId)?.qty} noneLeft={noneLeftOn}
       onChange={(fields, resolve) => void onItem(p, fields, resolve)} />
   );
+  const renderRow = (p: (typeof cur.placements)[number], showArea = false) => {
+    const row = stockRow(p, showArea);
+    if (session.kind !== 'full' || whole.department.name !== 'Gold Class Kitchen' ||
+        cur.area.name !== 'Freezer 2' || p.productName.toLowerCase() !== 'zucchini wedges' || portionTask(p)) return row;
+    const name = 'Portion zucchini wedges';
+    const task = ctx.prepTasks.find(t => t.name.toLowerCase() === name.toLowerCase()) ??
+      { id: null, name, group: 'vegetables' as const };
+    const selected = handover?.items.some(i => i.name.toLowerCase() === name.toLowerCase()) ?? false;
+    return <div key={p.placementId}>{row}
+      <button type="button" className="btn small" aria-pressed={selected}
+        aria-label="Zucchini wedges: needs portioning" onClick={() => void tickPrep(session, task, !selected, who)}>
+        {selected ? '✓ Portion zucchini wedges' : 'Portion zucchini wedges'}
+      </button>
+    </div>;
+  };
   /**
    * A list with its subheadings. A heading starts a group; groups of 15 or more products can be
    * folded with a tap on the heading (they start open, so nothing needs an extra tap).
