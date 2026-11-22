@@ -101,6 +101,10 @@ declare
   freezer uuid; fridge uuid; task uuid; kind text;
 begin
   if dept is null then raise notice 'Gold Class Kitchen not found: nothing changed'; return; end if;
+  -- Superseded by …-walk-in-third-shelf.sql (third and fourth shelves): once that has run, this changes nothing.
+  if exists (select 1 from check_areas where department_id = dept and lower(name) = lower('Walk in fridge · Third shelf')) then
+    raise notice 'Walk-in shelves already set out (third and fourth shelves): nothing changed'; return;
+  end if;
   if to_regclass('public.prep_tasks') is null then raise exception 'Run db/migrations/017_morning_prep.sql first'; end if;
   walk := (select id from check_areas where department_id = dept and active and parent_area_id is null and regexp_replace(lower(name), '[^a-z0-9]', '', 'g') in ('walkinfridge', 'walkinfridgeupstairs') limit 1);
   if walk is null then raise exception 'Run 2026-11-gold-class-kitchen-upstairs-areas.sql and -walk-in-and-prep.sql first'; end if;
