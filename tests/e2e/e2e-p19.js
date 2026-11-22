@@ -115,7 +115,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   // 2. Collect: brie and soy sauce (bottles, storeroom still to set); not the prepared sauce or cut carrot.
   await P.click('.rbar .stage:has-text("Collect")'); await P.waitForSelector('.line');
   ok(await P.locator(line('Brie')).count() === 1 && await P.locator(line('Cut Carrot')).count() === 0 && await P.locator(line('Vodka Sauce')).count() === 0, 'collection list: brie, not the prepared sauce or cut carrot');
-  ok(await sees(P, `.room:has(h3:text-is("Dry storage")) ${line('Taco Seasoning')}`, '1') && await P.locator(line('Portioned Chocolate Sauce')).count() === 0, 'taco seasoning from Dry storage; portioned chocolate sauce is prep (not collected)');
+  ok(await sees(P, `.room:has(h3:text-matches("Alcohol storeroom", "i")) ${line('Taco Seasoning')}`, '1') && await P.locator(line('Portioned Chocolate Sauce')).count() === 0, 'taco seasoning from the Alcohol storeroom; portioned chocolate sauce is prep (not collected)');
   ok(await sees(P, `.room:has(h3:text-is("No storeroom set")) ${line('Soy Sauce')}`, 'bottle'), 'soy sauce: 1 bottle, under "No storeroom set" until its storeroom is confirmed');
   ok(await P.locator(line('Pulled Beef (Bao)')).count() === 1, 'the 2 bags pulled for defrost are replaced from downstairs');
   for (const n of ['Brie', 'Pulled Beef (Bao)', 'Soy Sauce', 'Taco Seasoning']) await P.click(`${line(n)} button.l-all`);

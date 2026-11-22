@@ -105,17 +105,20 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
     writeItems(bulk.filter((id) => ctx.rawItems.get(id)?.requestedQty === 0).map((id) => ({ placementId: id, fields: { requestedQty: null } })));
     setBulk(null);
   };
-  // After the bar: upstairs. After upstairs: the downstairs list, or straight to sign-off when it's empty.
-  const nextStep = phase === 'foh' ? 'boh' as const : !downstairs.length && phase === 'boh' ? 'finish' as const : 'collect' as const;
   // Refill FOH flow: one next action. "Done → <next area>" marks this area done (nothing entered is fine)
   // and moves on; once every area here is done or skipped, it's the next step.
   const flow = phase !== 'all';
+  // Kitchen (a full restock with Defrost): the same one next action through every area (Defrost → Freezer 1 →
+  // … → Dry stock), so no area is skipped by jumping straight to the collection list.
+  const walk = flow || (session.kind === 'full' && !ctx.refill && ctx.placements.some((p) => p.defrost));
+  // After the bar: upstairs. After upstairs (or the Kitchen's last area): the collection list, or sign-off when it's empty.
+  const nextStep = phase === 'foh' ? 'boh' as const : !downstairs.length && (phase === 'boh' || walk) ? 'finish' as const : 'collect' as const;
   const curIdx = view.areas.findIndex((a) => a.area.id === cur.area.id);
   const after = [...view.areas.slice(curIdx + 1), ...view.areas.slice(0, curIdx)];
   const nextOpen = after.find(({ area }) => !['complete', 'skipped'].includes(statusOf(area.id)));
   // Every area checked (done or skipped).
   const allChecked = view.areas.every(({ area }) => ['complete', 'skipped'].includes(statusOf(area.id)));
-  const stepName = phase === 'foh' ? 'Upstairs' : nextStep === 'finish' ? 'Finish' : 'Collect downstairs';
+  const stepName = phase === 'foh' ? 'Upstairs' : nextStep === 'finish' ? 'Finish' : flow ? 'Collect downstairs' : 'Collection list';
   // What to show as progress. Target-level products need a count; everything else is exception-based,
   // so we count what was entered rather than "checked".
   const progressOf = (ps: typeof active) => {
@@ -301,7 +304,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   };
 
   // (Defrost: the footer's "Continue →" is the one way on, so no second button here.)
-  const nextBtn = flow || isDefrost ? null : next
+  const nextBtn = walk || isDefrost ? null : next
     ? <button className="btn primary" onClick={() => goArea(next.area.id)}>Next: {next.area.name}<Icon name="next" /></button>
     : <button className="btn primary" onClick={() => ctx.go(byArea && !lines.length ? 'finish' : 'collect')}>{byArea && !lines.length ? 'Finish' : 'Collection list'}<Icon name="next" /></button>;
 
@@ -497,18 +500,16 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
         title={isDefrost ? <span className="dr-progress"><b>{reviewed} of {defrostRows.length}</b> reviewed &middot; <b>{toPull}</b> {toPull === 1 ? 'item' : 'items'} to pull</span> : <>{all.req ? <>{`${all.counted} of ${all.req} counted`}<span className="dock-sep"> &middot; </span></> : null}
           <button type="button" className="dock-2 dock-review" onClick={() => setReview(!review)} disabled={!lines.length} aria-expanded={review} aria-controls="entered-list">
             {lines.length ? `${lines.length} to collect` : 'Nothing added to the collection list'}{lines.length ? <Icon name={review ? 'down' : 'up'} /> : null}</button></>}
-        sub={flow ? undefined : next && st === 'complete' ? `Next area: ${next.area.name}` : byArea && !lines.length ? 'Tap + Add on anything that needs topping up' : undefined}>
+        sub={walk ? undefined : next && st === 'complete' ? `Next area: ${next.area.name}` : byArea && !lines.length ? 'Tap + Add on anything that needs topping up' : undefined}>
         <button className="btn save-exit" onClick={ctx.saveAndExit} aria-label="Save and exit"><Icon name="save" /><span className="lg">Save and exit</span><span className="sm">Save &amp; exit</span></button>
         {isDefrost && !flow ? (
-          // Defrost: carry on to the next area; the collection list is there but secondary.
+          // Defrost: carry on to the next area (Defrost counts as done); the collection list is there but secondary.
           <>
             <button className="btn dr-list" onClick={() => ctx.go('collect')}><span className="lg">Collection list</span><span className="sm">List</span></button>
-            {view.areas[curIdx + 1]
-              ? <button className="btn primary big flow-next" onClick={() => goArea(view.areas[curIdx + 1].area.id)}>
-                  <span className="fn-l">Continue</span><span className="fn-to" aria-hidden="true">&rarr;</span><span className="fn-n">{view.areas[curIdx + 1].area.name}</span><Icon name="next" /></button>
-              : <button className="btn primary big" onClick={() => ctx.go('collect')}>Collection list<Icon name="next" /></button>}
+            <button className="btn primary big flow-next" onClick={() => void doneAndNext()}>
+              <span className="fn-l">Continue</span><span className="fn-to" aria-hidden="true">&rarr;</span><span className="fn-n">{nextOpen ? nextOpen.area.name : stepName}</span><Icon name="next" /></button>
           </>
-        ) : flow ? (
+        ) : walk ? (
           // One primary next action, the same on phone, iPad and laptop.
           reqLeft > 0 && !['complete', 'skipped'].includes(st)
             ? <button className="btn primary big" onClick={firstUnchecked}><span>Count {reqLeft} left</span><Icon name="down" /></button>

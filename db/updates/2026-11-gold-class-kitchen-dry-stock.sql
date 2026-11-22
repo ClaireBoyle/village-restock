@@ -8,8 +8,8 @@
 --     Shelf above      Portioned Chocolate Sauce (prepped: "Add prep" → "Portion chocolate sauce"),
 --                      Peanut Butter Sauce, Cinnamon Sugar
 --
--- * Stock items: "staff enter" (Add only what's needed), collected from Dry storage. Units as below (change them in
---   Admin if needed).
+-- * Stock items: "staff enter" (Add only what's needed), collected from the Alcohol storeroom (not Dry storage
+--   downstairs). Units as below (change them in Admin if needed).
 -- * Prepped items (GC Seasoning, Portioned Chocolate Sauce): needed or not, never collected; the tick puts the task
 --   on the next morning's prep list. Both tasks are also on the Prep checklist (Seasonings, Dessert prep).
 -- * Existing products and rows are reused, never duplicated; notes changed in Admin are kept.
@@ -44,7 +44,10 @@ begin
   if to_regclass('public.prep_tasks') is null then raise exception 'Run db/migrations/017_morning_prep.sql first'; end if;
   dry := (select id from check_areas where department_id = dept and active and parent_area_id is null and regexp_replace(lower(name), '[^a-z0-9]', '', 'g') = 'drystock' limit 1);
   if dry is null then raise exception 'Run 2026-11-gold-class-kitchen-upstairs-areas.sql first (Dry stock)'; end if;
-  store := (select id from storage_locations where active and regexp_replace(lower(name), '[^a-z0-9]', '', 'g') in ('drystorage', 'drystore') order by sort_order limit 1);
+  -- Dry stock comes from the Alcohol storeroom (not Dry storage downstairs).
+  store := (select id from storage_locations where active and regexp_replace(lower(name), '[^a-z0-9]', '', 'g') in ('alcoholstoreroom', 'alcoholstore') order by sort_order limit 1);
+  update check_areas set guide_text = 'Add only what needs topping up. It comes up from the Alcohol storeroom.'
+    where id = dry and guide_text = 'Add only what needs topping up. It comes up from Dry storage.';
 
   -- The two sections, on the Dry stock screen.
   salad := (select id from check_areas where department_id = dept and lower(name) = lower('Dry stock · Above salad bar') limit 1);
@@ -94,7 +97,16 @@ begin
     if t is not null then update products set default_location_id = null where id = p; end if;
   end loop;
 
+  -- Stock already set to Dry storage (an earlier run of this script) moves to the Alcohol storeroom.
+  if store is not null then
+    update products q set default_location_id = store
+      where q.department_id = dept and (q.default_location_id is null or q.default_location_id in (select id from storage_locations where regexp_replace(lower(name), '[^a-z0-9]', '', 'g') in ('drystorage', 'drystore')))
+        and exists (select 1 from product_placements x where x.product_id = q.id and x.check_area_id in (salad, dessert) and x.prep_task_id is null);
+    update product_placements x set location_id = null
+      where x.check_area_id in (salad, dessert) and x.location_id in (select id from storage_locations where regexp_replace(lower(name), '[^a-z0-9]', '', 'g') in ('drystorage', 'drystore'));
+  end if;
+
   raise notice 'Above salad bar: %', (select string_agg(q.name || case when x.prep_task_id is not null then ' (prep)' else '' end, ', ' order by x.sort_order) from product_placements x join products q on q.id = x.product_id where x.check_area_id = salad);
   raise notice 'Dessert station: %', (select string_agg(q.name || case when x.prep_task_id is not null then ' (prep)' else '' end, ', ' order by x.sort_order) from product_placements x join products q on q.id = x.product_id where x.check_area_id = dessert);
-  raise notice '% new products; stock from %', added, coalesce((select name from storage_locations where id = store), 'no storeroom (Dry storage not found)');
+  raise notice '% new products; stock from %', added, coalesce((select name from storage_locations where id = store), 'no storeroom (Alcohol storeroom not found)');
 end $$;
