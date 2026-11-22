@@ -27,7 +27,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   const [k] = await sql`select id from departments where name = 'Gold Class Kitchen'`;
   await sql`delete from check_areas where department_id = ${k.id}`;
   await sql`insert into storage_locations (name, sort_order) values ('Walk in freezer(Downstairs)', 3), ('Walk in fridge(Downstairs)', 2) on conflict do nothing`;
-  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep', 'defrost-compact', 'freezer-1-first', 'no-walk-in-desserts', 'walk-in-third-shelf', 'walk-in-shelves', 'walk-in-third-shelf', 'relish-prep']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
+  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep', 'defrost-compact', 'freezer-1-first', 'no-walk-in-desserts', 'walk-in-third-shelf', 'walk-in-shelves', 'walk-in-third-shelf', 'relish-prep', 'walk-in-fresh-produce', 'walk-in-fresh-produce']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
 
   // Portioned sauces are counted in bottles.
   const portioned = await sql`select distinct q.name, q.unit_plural from products q join product_placements x on x.product_id = q.id join prep_tasks t on t.id = x.prep_task_id
@@ -48,7 +48,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   // 1. The walk-in fridge, on its confirmed shelves.
   await P.click('.area-btn:has-text("Walk in fridge")'); await P.waitForSelector('.area-btn.cur:has-text("Walk in fridge")');
   const secs = await P.locator('.psec-t b').allInnerTexts();
-  ok(secs.join('|') === 'Top sauce shelf|Second sauce shelf|Third shelf|Fourth shelf|Right rack top shelf|Prep tubs|Spare produce|Left rack lower shelves|Sauces (shelf to confirm)',
+  ok(secs.join('|') === 'Top sauce shelf|Second sauce shelf|Third shelf|Fourth shelf|Right rack top shelf|Prep tubs|Fresh produce|Left rack lower shelves|Sauces (shelf to confirm)',
     `walk-in shelves: ${secs.join(', ')}`);
   // (case-insensitive: the test data's own "Tomato sauce" is reused)
   const names = async (c) => (await P.locator(`.psec:has(.psec-t b:text-is("${c}")) article.prow h3`).allInnerTexts()).map((n) => n.toLowerCase());
@@ -63,7 +63,10 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   ok(herbs.join(', ') === 'Buns (Portioned Tubs), Mint, Parsley, Spring Onion, Dill', 'right rack top shelf: ' + herbs.join(', '));
   const heads = await P.$$eval('.psec:has(.psec-t b:text-is("Third shelf")) .phead, .psec:has(.psec-t b:text-is("Right rack top shelf")) .phead', (e) => e.map((x) => x.textContent.trim()));
   ok(['Spare sauce ingredients', 'Feta and cheeseboard', 'Fresh herbs'].every((h) => heads.some((x) => x.startsWith(h))), 'subheadings: ' + heads.join(', '));
-  ok(await P.locator(sec('Spare produce', 'Tomatoes')).count() === 1 && await P.locator('.psec:has(.psec-t b:text-is("Left rack lower shelves")) article.prow h3').filter({ hasText: 'Hellmann' }).count() === 1, 'tomatoes; pickles and mayonnaise on the left rack');
+  const fresh = await shelf('Fresh produce'), left = await shelf('Left rack lower shelves');
+  ok(fresh.join(', ') === 'Carrots, Cucumbers, Celery, Radishes, Tomatoes, Red Onion, White Onion', 'fresh produce: ' + fresh.join(', '));
+  ok(!(await P.locator('.psec:has(.psec-t b:text-is("Fresh produce"))').innerText()).includes('Uncut'), 'fresh produce: no "Uncut, for the cut …" notes');
+  ok(left.join(', ') === "Cornichons, Pickled Ginger, Hellmann's Mayonnaise", 'left rack lower shelves: ' + left.join(', '));
   ok(await P.locator(row('Sticky Date')).count() === 0 && await P.locator(row('Green Goddess')).count() === 0, 'no desserts in the walk-in (they\'re on Defrost); no Green Goddess');
   const [dup] = await sql`select count(*)::int as n from products where department_id = ${k.id} and name in ('Sticky Date', 'Buns (Portioned Tubs)', 'Vodka Sauce')`;
   ok(dup.n === 3, 'existing products reused (no duplicates)');
