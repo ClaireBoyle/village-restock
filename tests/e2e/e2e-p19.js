@@ -26,8 +26,8 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   // As on the live site: the Kitchen starts with no areas; the downstairs walk-ins are storerooms.
   const [k] = await sql`select id from departments where name = 'Gold Class Kitchen'`;
   await sql`delete from check_areas where department_id = ${k.id}`;
-  await sql`insert into storage_locations (name, sort_order) values ('Walk in freezer(Downstairs)', 3), ('Walk in fridge(Downstairs)', 2) on conflict do nothing`;
-  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep', 'defrost-compact', 'freezer-1-first', 'no-walk-in-desserts', 'walk-in-third-shelf', 'walk-in-shelves', 'walk-in-third-shelf', 'relish-prep', 'walk-in-fresh-produce', 'walk-in-fresh-produce', 'bottom-sauce-shelf', 'bottom-sauce-shelf']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
+  await sql`insert into storage_locations (name, sort_order) values ('Walk in freezer(Downstairs)', 3), ('Walk in fridge(Downstairs)', 2), ('Dry storage', 4) on conflict do nothing`;
+  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep', 'defrost-compact', 'freezer-1-first', 'no-walk-in-desserts', 'walk-in-third-shelf', 'walk-in-shelves', 'walk-in-third-shelf', 'relish-prep', 'walk-in-fresh-produce', 'walk-in-fresh-produce', 'bottom-sauce-shelf', 'bottom-sauce-shelf', 'prep-checklist', 'dry-stock', 'dry-stock']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
 
   // Portioned sauces are counted in bottles.
   const portioned = await sql`select distinct q.name, q.unit_plural from products q join product_placements x on x.product_id = q.id join prep_tasks t on t.id = x.prep_task_id
@@ -100,21 +100,34 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   await P.click(`${sec('Second sauce shelf', 'Soy Sauce')} button.padd`);
   await P.screenshot({ path: `${OUT}/p19-walk-in.png`, fullPage: true });
 
+  // Dry stock: above the salad bar (GC seasoning prepped), the dessert station and the shelf above (portioned chocolate sauce prepped).
+  await P.click('.area-btn:has-text("Dry stock")'); await P.waitForSelector('.area-btn.cur:has-text("Dry stock")');
+  const salad = await shelf('Above salad bar'), dessert = await shelf('Dessert station');
+  ok(salad.join(', ') === 'Baking Paper, Smokey Paprika, Oregano, Taco Seasoning, Hot Honey, Olive Oil, Vinegar Powder, Chicken Salt, GC Seasoning', 'above salad bar: ' + salad.join(', '));
+  ok(dessert.join(', ') === 'Chocolate Sauce, Lavosh Crackers, GF Crackers, Peanuts, Sesame Seeds, Corn Chips, Portioned Chocolate Sauce, Peanut Butter Sauce, Cinnamon Sugar', 'dessert station: ' + dessert.join(', '));
+  ok(await btn('Above salad bar', 'GC Seasoning') === 'Add prep' && await btn('Dessert station', 'Portioned Chocolate Sauce') === 'Add prep'
+    && await btn('Dessert station', 'Chocolate Sauce') === 'Add' && await btn('Above salad bar', 'Chicken Salt') === 'Add', 'GC seasoning and portioned chocolate sauce: Add prep; the rest: Add');
+  await P.click(`${sec('Above salad bar', 'Taco Seasoning')} button.padd`);
+  const dheads = await P.$$eval('.psec:has(.psec-t b:text-is("Above salad bar")) .phead', (e) => e.map((x) => x.textContent.trim()));
+  ok(dheads[0]?.startsWith('Dry goods and seasonings') && dheads[1]?.startsWith('Prepped'), 'above salad bar subheadings: ' + dheads.join(' | '));
+  await P.screenshot({ path: `${OUT}/p19-dry-stock.png`, fullPage: true });
+
   // 2. Collect: brie and soy sauce (bottles, storeroom still to set); not the prepared sauce or cut carrot.
   await P.click('.rbar .stage:has-text("Collect")'); await P.waitForSelector('.line');
   ok(await P.locator(line('Brie')).count() === 1 && await P.locator(line('Cut Carrot')).count() === 0 && await P.locator(line('Vodka Sauce')).count() === 0, 'collection list: brie, not the prepared sauce or cut carrot');
+  ok(await sees(P, `.room:has(h3:text-is("Dry storage")) ${line('Taco Seasoning')}`, '1') && await P.locator(line('Portioned Chocolate Sauce')).count() === 0, 'taco seasoning from Dry storage; portioned chocolate sauce is prep (not collected)');
   ok(await sees(P, `.room:has(h3:text-is("No storeroom set")) ${line('Soy Sauce')}`, 'bottle'), 'soy sauce: 1 bottle, under "No storeroom set" until its storeroom is confirmed');
   ok(await P.locator(line('Pulled Beef (Bao)')).count() === 1, 'the 2 bags pulled for defrost are replaced from downstairs');
-  for (const n of ['Brie', 'Pulled Beef (Bao)', 'Soy Sauce']) await P.click(`${line(n)} button.l-all`);
+  for (const n of ['Brie', 'Pulled Beef (Bao)', 'Soy Sauce', 'Taco Seasoning']) await P.click(`${line(n)} button.l-all`);
   // Count once everything ticked so far has reached the server.
-  const itemsBefore = (await waitDb(() => sql`select count(*)::int as n from session_items i where i.collected_mode is not null`, (r) => r[0].n >= 3)).length
+  const itemsBefore = (await waitDb(() => sql`select count(*)::int as n from session_items i where i.collected_mode is not null`, (r) => r[0].n >= 4)).length
     && (await waitDb(async () => { const a = await sql`select count(*)::int as n from session_items`; await new Promise((r) => setTimeout(r, 1500)); const b = await sql`select count(*)::int as n from session_items`; return [a[0].n, b[0].n]; }, ([a, b]) => a === b))[1];
 
   // 3. Finish: Morning prep needed.
   await P.click('.dock .dock-acts button:has-text("Review")'); await P.waitForSelector('#morning-prep');
   const groups = await P.locator('.prep-group legend').allTextContents();
   ok(groups.join('|') === 'Vegetables|Proteins|Sauces|Other', `grouped: ${groups.join(', ')}`);
-  ok((await P.locator('.prep-row').count()) === 18, '18 tasks on the checklist');
+  ok((await P.locator('.prep-row').count()) === 20, '20 tasks on the checklist (incl. Make GC seasoning, Portion chocolate sauce)');
   ok(await sees(P, '.prep-group:has(legend:text-is("Proteins"))', 'Portion lamb') && await sees(P, '.prep-group:has(legend:text-is("Proteins"))', "Portion Fisherman's Baskets")
     && await sees(P, '.prep-group:has(legend:text-is("Vegetables"))', 'Portion cauliflower popcorn'), 'portion tasks: lamb and Fisherman\'s Baskets (proteins), cauliflower popcorn (vegetables)');
   // Entered to prepare: already ticked, with the amount. Cleared again: not there.

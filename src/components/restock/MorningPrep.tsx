@@ -67,7 +67,22 @@ export function MorningPrepPicker({ tasks, handover, onSave, leftForMorning = []
       <SaveText className="prep-note" aria-label={`${i.name}: note (optional)`} placeholder="Note (optional)" maxLength={200} value={i.note ?? ''} onSave={(v) => edit(i.id, { note: v || null })} />
     </div>
   );
-  const groups = PREP_GROUPS.map(([g, label]) => ({ g, label, tasks: tasks.filter((t) => t.group === g) })).filter((x) => x.tasks.length);
+  // "Other" tasks (e.g. Make GC seasoning) go in the one Other group, with anything typed in.
+  const groups = PREP_GROUPS.filter(([g]) => g !== 'other').map(([g, label]) => ({ g, label, tasks: tasks.filter((t) => t.group === g) })).filter((x) => x.tasks.length);
+  const otherTasks = tasks.filter((t) => t.group === 'other');
+  const taskRow = (t: PrepTask) => {
+    const it = byTask.get(t.id);
+    return (
+      <div key={t.id} className={`prep-row ${it ? 'on' : ''}`} data-task={t.name}>
+        <label className="prep-pick">
+          <input type="checkbox" checked={!!it} onChange={() => toggle(t)} />
+          <span><b>{t.name}</b></span>
+          {it ? <em className="prep-tag">Needs prep</em> : null}
+        </label>
+        {it ? extra(it) : null}
+      </div>
+    );
+  };
 
   return (
     <section className={`prep ${status ? '' : 'unanswered'}`} aria-labelledby="prep-h" id="morning-prep">
@@ -80,23 +95,12 @@ export function MorningPrepPicker({ tasks, handover, onSave, leftForMorning = []
       {groups.map(({ g, label, tasks: ts }) => (
         <fieldset key={g} className="prep-group">
           <legend>{label}</legend>
-          {ts.map((t) => {
-            const it = byTask.get(t.id);
-            return (
-              <div key={t.id} className={`prep-row ${it ? 'on' : ''}`} data-task={t.name}>
-                <label className="prep-pick">
-                  <input type="checkbox" checked={!!it} onChange={() => toggle(t)} />
-                  <span><b>{t.name}</b></span>
-                  {it ? <em className="prep-tag">Needs prep</em> : null}
-                </label>
-                {it ? extra(it) : null}
-              </div>
-            );
-          })}
+          {ts.map(taskRow)}
         </fieldset>
       ))}
       <fieldset className="prep-group">
         <legend>Other</legend>
+        {otherTasks.map(taskRow)}
         {typed.map((it) => (
           <div key={it.id} className="prep-row on" data-task={it.name}>
             <label className="prep-pick">
