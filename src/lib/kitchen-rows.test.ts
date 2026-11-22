@@ -74,15 +74,27 @@ describe('defrost pulls', () => {
       { id: 'pz-f1', productId: 'base', checkAreaId: 'f1ll', parLevel: null, locationId: null, instructions: null, sortOrder: 1 }],
   };
   const v = departmentView(dcat, 'k')!;
-  // As the app counts them: with suggestions (what was pulled is suggested for the freezer's top-up).
-  const lines = (m: Map<string, ItemState>) => collectionLines(collectPlacements('full', v.placements, none), withSuggestions('full', v, m, none)).map((l) => `${l.productName} ${l.total} ${l.locationName}`);
-  it('setting an amount is planning: nothing is collected until it\'s pulled (or upstairs runs short)', () => {
-    expect(lines(items({ 'pz-def': { requestedQty: 5 } }))).toEqual([]);
-    expect(lines(items({ 'pz-def': { requestedQty: 5, upstairsQty: 5 } }))).toEqual(['9" Pizza Bases 5 Walk in freezer(Downstairs)']); // the freezer top-up, suggested from what was pulled
+  // As the app counts them: with suggestions (what's set to defrost is suggested for the freezer's top-up).
+  const lines = (m: Map<string, ItemState>, view = v) => collectionLines(collectPlacements('full', view.placements, none), withSuggestions('full', view, m, none)).map((l) => `${l.productName} ${l.total} ${l.locationName}`);
+  it('setting an amount puts the same amount on the freezer\'s stock list straight away (to replace from downstairs)', () => {
+    expect(lines(items({ 'pz-def': { requestedQty: 5 } }))).toEqual(['9" Pizza Bases 5 Walk in freezer(Downstairs)']);
+    expect(lines(items({ 'pz-def': { requestedQty: 5, upstairsQty: 5 } }))).toEqual(['9" Pizza Bases 5 Walk in freezer(Downstairs)']);
+    expect(lines(items({ 'pz-def': { requestedQty: 0 } }))).toEqual([]);
   });
-  it('not enough upstairs: the rest is collected from downstairs, and only what was pulled is replaced', () => {
+  it('not enough upstairs: the rest of the defrost comes from downstairs too, and the freezer still gets the full amount back', () => {
     const m = items({ 'pz-def': { requestedQty: 5, upstairsQty: 2 } });
-    expect(lines(m).sort()).toEqual(['9" Pizza Bases 2 Walk in freezer(Downstairs)', '9" Pizza Bases 3 Walk in freezer(Downstairs)']);
+    // Both from the downstairs walk-in freezer: one line of 8 (3 to defrost + 5 back into the freezer).
+    expect(lines(m)).toEqual(['9" Pizza Bases 8 Walk in freezer(Downstairs)']);
+  });
+  it('none upstairs, same storeroom: one line, "2 to defrost" and "2 back into Freezer 1"', () => {
+    const fv = departmentView({ ...dcat, placements: dcat.placements.map((p) => (p.id === 'pz-def' ? { ...p, fallbackLocationId: 'down' } : p)) }, 'k')!;
+    const m = withSuggestions('full', fv, items({ 'pz-def': { requestedQty: 2, upstairsQty: 0 } }), none);
+    const ls = collectionLines(collectPlacements('full', fv.placements, none), m);
+    expect(ls.map((l) => `${l.productName} ${l.total} ${l.locationName}`)).toEqual(['9" Pizza Bases 4 Walk in freezer(Downstairs)']);
+    expect(ls[0].parts.map((p) => `${p.need} ${p.label}`)).toEqual(['2 to defrost → Upstairs walk-in fridge', '2 back into Freezer 1 · Lower left']);
+    // Pulled after all: just the 2 back into the freezer.
+    const pulled = withSuggestions('full', fv, items({ 'pz-def': { requestedQty: 2, upstairsQty: 2 } }), none);
+    expect(collectionLines(collectPlacements('full', fv.placements, none), pulled).map((l) => `${l.total} ${l.parts.map((p) => p.label ?? p.areaName).join('+')}`)).toEqual(['2 Freezer 1 · Lower left']);
   });
   it('an empty upstairs compartment is not a shortage; only collecting less downstairs is', () => {
     const empty = items({ 'pz-def': { requestedQty: 5, upstairsQty: 0 } });

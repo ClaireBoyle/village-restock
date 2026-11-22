@@ -130,7 +130,7 @@ export function DefrostRow({ p, item, rawQty, suggestion, admits, onChange, phot
     : info.canSuggest && item.currentQty === null ? <>Count what&rsquo;s ready for a suggestion</>
     : <span className="sr-only">Not reviewed</span>;
   else if (v > 0 && pickup && ps.state === 'pulled') status = <><Icon name="check" />Pulled {q(v)}</>;
-  else if (v > 0 && pickup && ps.state === 'short') status = <><Icon name="warn" />Pulled {round2(ps.pulled!)} of {q(v)} &middot; {round2(ps.rest)} from downstairs</>;
+  else if (v > 0 && pickup && ps.state === 'short') status = <><Icon name="warn" />{ps.pulled ? <>Pulled {round2(ps.pulled)} of {q(v)}</> : <>Not upstairs</>} &middot; {round2(ps.rest)} from downstairs</>;
   else if (v > 0) status = <><b>{q(v)}</b><span>&nbsp;to {pickup ? 'pull' : 'collect'}{suggestion && rawQty === null ? ' · suggested' : ''}</span></>;
   else status = <><Icon name="check" />{suggestion && rawQty === null ? 'Not needed: enough is ready' : 'Not needed'}</>;
 
@@ -235,7 +235,7 @@ export function DefrostPullList({ rows, freezerOrder, onChange }: {
   return (
     <section className="grab pull dpull" aria-labelledby="pull-h">
       <h3 className="sec-title" id="pull-h"><Icon name="up" />Pull for defrost{pickups.length ? <small>{done} of {pickups.length} pulled</small> : null}</h3>
-      <p className="grab-hint">Tap Pulled once it&rsquo;s moved. If the freezer runs short, tap Not enough upstairs: the rest goes on the collection list.</p>
+      <p className="grab-hint">Tap <b>Pulled</b> once it&rsquo;s moved. None there? Tap <b>Not upstairs</b>. Only some? Tap <b>Only some</b> and say how many. What&rsquo;s missing goes on the collection list, and everything you defrost is also on it to put back in the freezer.</p>
       {names.map((g) => {
         const gl = list.filter((r) => groupOf(r) === g);
         const down = !gl[0].pickup;
@@ -265,14 +265,15 @@ export function DefrostPullList({ rows, freezerOrder, onChange }: {
                     </div>
                   ) : ps.state === 'todo' ? (
                     <div className="dp-acts">
-                      <button type="button" className="dr-b dp-few" onClick={() => { setEditing(r.p.placementId); setDraft(''); }} aria-label={`Not enough upstairs: ${r.p.productName}`}>Not enough upstairs</button>
+                      <button type="button" className="dr-b dp-none" onClick={() => onChange(r.p, { upstairsQty: 0 })} aria-label={`Not upstairs: ${r.p.productName}`}>Not upstairs</button>
+                      <button type="button" className="dr-b dp-few" onClick={() => { setEditing(r.p.placementId); setDraft(''); }} aria-label={`Only some upstairs: ${r.p.productName}`}>Only some</button>
                       <button type="button" className="dr-b dp-ok" onClick={() => onChange(r.p, { upstairsQty: ps.need })} aria-label={`Pulled ${round2(ps.need)} ${r.p.productName}`}><Icon name="check" />Pulled</button>
                     </div>
                   ) : (
                     <div className="dp-done">
                       {ps.state === 'pulled' ? <p className="dp-state"><Icon name="check" />Pulled</p> : (
                         <div className="dp-short">
-                          <p className="dp-state"><Icon name="warn" />Pulled {round2(ps.pulled!)} &middot; {q(ps.rest)} more from {storeLabel(r.p.fallbackLocationName ?? r.p.locationName)} (on the collection list)</p>
+                          <p className="dp-state"><Icon name="warn" />{ps.pulled ? <>Pulled {round2(ps.pulled)} &middot; {q(ps.rest)} more</> : <>Not upstairs &middot; all {q(ps.rest)}</>} from {storeLabel(r.p.fallbackLocationName ?? r.p.locationName)} (on the collection list)</p>
                           {r.p.fallbackNote && !sameText(r.p.fallbackNote, storeLabel(r.p.fallbackLocationName ?? r.p.locationName)) ? <p className="dr-detail">{r.p.fallbackNote}</p> : null}
                         </div>
                       )}

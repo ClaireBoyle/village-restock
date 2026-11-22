@@ -186,6 +186,8 @@ export function Line({ line, items, write, oneArea, tickOnly = false, displayRul
   }
   const sub = line.kind === 'task' ? (line.instructions || forTxt)
     : oneArea && line.parts.length === 1 ? null : `For ${forTxt}`;
+  // Kitchen: part to defrost, part back into its freezer (e.g. "2 to defrost → Upstairs walk-in fridge · 2 back into Freezer 1").
+  const split = line.kind === 'qty' && line.parts.some((p) => p.label);
 
   return (
     <div ref={rowRef} tabIndex={-1} className={`line ${st === 'done' ? 'done' : st === 'short' ? (info.reason === 'insufficient' ? 'short' : 'short op') : 'todo'} ${open ? 'editing' : ''}`} data-line={line.productName}>
@@ -203,11 +205,15 @@ export function Line({ line, items, write, oneArea, tickOnly = false, displayRul
               <button type="button" className="linkbtn l-link" onClick={openEditor}>Change</button></small>
           ) : st === 'done' ? (
             <small className="l-ok">{line.kind === 'task' ? 'Done' : tickOnly ? verb : 'Collected'}<button type="button" className="linkbtn l-link" onClick={undo}>Undo</button></small>
+          ) : split ? (
+            <span className="l-split">{line.parts.map((p) => <small key={p.placementId}><b>{round2(p.need)}</b> {p.label}</small>)}</span>
           ) : sub ? <small><span>{sub}</span></small> : null}
         </div>
         {act}
       </div>
-      {st !== 'done' && (line.grabNote || line.putNote || line.fallbackNote) ? (
+      {st !== 'done' && split && line.grabNote && !sameText(line.grabNote, storeLabel(line.locationName)) ? (
+        <div className="l-dnotes"><p className="dr-detail">{line.grabNote}</p></div>
+      ) : st !== 'done' && !split && (line.grabNote || line.putNote || line.fallbackNote) ? (
         // Defrost: from → to in one line, then any detail (e.g. the downstairs route when upstairs ran short).
         <div className="l-dnotes">
           <p className="dr-route"><span className="dr-src">{storeLabel(line.locationName)}</span>{line.putNote ? <><span className="dr-arrow" aria-label="to">&rarr;</span><span className="dr-dest">{line.putNote}</span></> : null}</p>
