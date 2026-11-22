@@ -281,6 +281,15 @@ const parValue = (raw: FormDataEntryValue | null, allowDecimal: boolean): number
   return Math.round(n * 100) / 100;
 };
 
+/** Migration 024 adds the collection reminder and storeroom spot; until it runs, products save without them. */
+let hasCollectColumns = false;
+async function collectColumns(sql: postgres.Sql<Record<string, unknown>> | postgres.TransactionSql<Record<string, unknown>>): Promise<boolean> {
+  if (!hasCollectColumns) {
+    hasCollectColumns = (await sql`select 1 from information_schema.columns where table_name = 'product_placements' and column_name = 'collect_note'`).length > 0;
+  }
+  return hasCollectColumns;
+}
+
 /** Migration 016 adds the defrost details; until it runs, products still save (without them). */
 let hasDefrostColumns = false;
 async function defrostColumns(sql: postgres.Sql<Record<string, unknown>> | postgres.TransactionSql<Record<string, unknown>>): Promise<boolean> {
@@ -363,12 +372,20 @@ export async function saveProduct(_: ActionResult, form: FormData): Promise<Acti
         await tx`insert into product_placements (product_id, check_area_id, par_level, location_id, sort_order)
           values (${id}, ${pl.areaId}, ${pl.par}, ${pl.locationId}, ${Number(n)})
           on conflict (product_id, check_area_id) do update set par_level = excluded.par_level, location_id = excluded.location_id`;
+        if (form.has(`cnote_${pl.areaId}`) && await collectColumns(tx)) {
+          const note = String(form.get(`cnote_${pl.areaId}`) ?? '').trim().slice(0, 120) || null;
+          await tx`update product_placements set collect_note = ${d.method === 'routine' ? null : note} where product_id = ${id} and check_area_id = ${pl.areaId}`;
+        }
         const df = defrost.get(pl.areaId);
         if (df && await defrostColumns(tx)) {
           await tx`update product_placements set grab_note = ${df.grab}, fallback_note = ${df.fallback}, put_note = ${df.put},
             ready_unit_singular = ${df.rus}, ready_unit_plural = ${df.rup}, ready_per = ${df.per}, ready_targets = ${tx.json(df.targets as unknown as Parameters<typeof tx.json>[0])}
             where product_id = ${id} and check_area_id = ${pl.areaId}`;
         }
+      }
+      if (form.has('collectReminder') && await collectColumns(tx)) {
+        const reminder = String(form.get('collectReminder') ?? '').trim().slice(0, 120) || null;
+        await tx`update products set collect_reminder = ${d.method === 'routine' ? null : reminder} where id = ${id}`;
       }
       return id;
     });

@@ -94,7 +94,7 @@ const rooms = (P) => P.$$eval('.room', (els) => els.map((r) => [r.querySelector(
   ok(await sees(P, `.grab ${line('Grey Goose')} .l-why`, 'Grabbed 0 of 1') && await sees(P, '.grab .sec-title', '4 of 4'), 'Grey Goose: "Grabbed 0 of 1"; all 4 done');
   const top = await P.$$eval('.area > .prows > *', (els) => els.map((e) => (e.matches('.phead') ? `# ${e.querySelector('span')?.textContent ?? e.textContent}` : e.querySelector('h3')?.textContent)));
   ok(JSON.stringify(top.slice(0, 3)) === JSON.stringify(['# Replace what you grabbed', 'Red Claw Shiraz', 'Patron Silver']), 'Bring up: what was grabbed, first: ' + top.slice(0, 3).join(', '));
-  ok(await P.locator(`.prows ${row('Grey Goose')} button.padd`).count() === 1, 'Grey Goose: none grabbed, so nothing suggested');
+  ok(await valueIs(P, 'Grey Goose', '1') && await sees(P, `.prows ${row('Grey Goose')}`, '1 still needed for Back shelves (not enough here)'), 'Grey Goose: none grabbed, so the 1 still needed comes from downstairs');
   ok(await valueIs(P, 'Red Claw Shiraz', '1'), 'Shiraz: took 1 from the Wine cupboard → 1 suggested');
   await P.click(`.prows ${row('Red Claw Shiraz')} button[aria-label="One more Red Claw Shiraz"]`); await P.click(`.prows ${row('Red Claw Shiraz')} button[aria-label="One more Red Claw Shiraz"]`);
   ok(await sees(P, `.prows ${row('Red Claw Shiraz')} .pnote`, '(suggested 1)') && await sees(P, `.prows ${row('Red Claw Shiraz')} .ps`, '3 bottles'), 'changed to 3: 3 in total');
@@ -117,12 +117,12 @@ const rooms = (P) => P.$$eval('.room', (els) => els.map((r) => [r.querySelector(
   // Collect downstairs
   const r2 = await rooms(P);
   ok(JSON.stringify(r2.map(([a, l]) => [a.toLowerCase(), [...l].sort()])) === JSON.stringify([
-    ['alcohol storeroom', ['1 bottle Vanilla Syrup', '2 cans Curatif Negroni', '3 bottles Red Claw Shiraz']],
+    ['alcohol storeroom', ['1 bottle Grey Goose', '1 bottle Vanilla Syrup', '2 cans Curatif Negroni', '3 bottles Red Claw Shiraz']],
     ['walk in fridge(downstairs)', ['1 pack Kirks Indian Tonic Water', '1 slab Mount Franklin Still Water', '4 bottles Mount Franklin Sparkling Water 330ml']]]), 'downstairs list: ' + JSON.stringify(r2));
-  ok(!JSON.stringify(r2).includes('Heineken') && !JSON.stringify(r2).includes('Patron') && !JSON.stringify(r2).includes('Grey Goose'),
-    'no beer singles; the removed Patron is off the list; nothing for the Grey Goose that wasn\'t there');
-  for (const l of ['Red Claw Shiraz', 'Curatif Negroni', 'Vanilla Syrup', 'Kirks Indian Tonic Water', 'Mount Franklin Sparkling Water 330ml', 'Mount Franklin Still Water']) await P.click(`${line(l)} button.l-all`);
-  ok(await sees(P, '.dock', '6 of 6 resolved'), 'all 6 collected');
+  ok(!JSON.stringify(r2).includes('Heineken') && !JSON.stringify(r2).includes('Patron'),
+    'no beer singles; the removed Patron is off the list');
+  for (const l of ['Grey Goose', 'Red Claw Shiraz', 'Curatif Negroni', 'Vanilla Syrup', 'Kirks Indian Tonic Water', 'Mount Franklin Sparkling Water 330ml', 'Mount Franklin Still Water']) await P.click(`${line(l)} button.l-all`);
+  ok(await sees(P, '.dock', '7 of 7 resolved'), 'all 7 collected');
   await P.screenshot({ path: `${OUT}/p13-collect.png`, fullPage: true });
 
   // Finish

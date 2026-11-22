@@ -35,6 +35,8 @@ export async function loadCatalogue(): Promise<Catalogue> {
              p.allow_decimal, p.instructions, p.default_location_id, p.sort_order, p.photo_path,
              -- read via jsonb so the app still works before migration 003 adds the column
              coalesce(to_jsonb(p)->'affects', '[]'::jsonb) as affects,
+             -- Collection reminder (migration 024)
+             nullif(trim(to_jsonb(p)->>'collect_reminder'), '') as collect_reminder,
              ${hasPhotos ? tx`(select to_jsonb(ph)->>'credit' from photos ph where p.photo_path = '/api/photos/' || ph.id::text)` : tx`null`} as photo_credit
       from products p join departments d on d.id = p.department_id and d.active
       where p.status = 'active' order by p.sort_order, p.name`;
@@ -51,7 +53,9 @@ export async function loadCatalogue(): Promise<Catalogue> {
              -- Morning prep (migration 017)
              (to_jsonb(pl)->>'prep_task_id') as prep_task_id,
              -- Refill tasks and linked rows (migration 018)
-             (to_jsonb(pl)->>'refill_source') as refill_source, (to_jsonb(pl)->>'linked_placement_id') as linked_placement_id
+             (to_jsonb(pl)->>'refill_source') as refill_source, (to_jsonb(pl)->>'linked_placement_id') as linked_placement_id,
+             -- Where to reach in the storeroom (migration 024)
+             nullif(trim(to_jsonb(pl)->>'collect_note'), '') as collect_note
       from product_placements pl
       join products p on p.id = pl.product_id and p.status = 'active'
       join check_areas a on a.id = pl.check_area_id and a.active

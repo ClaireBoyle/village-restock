@@ -42,6 +42,8 @@ export interface CatProduct {
   photoPath: string | null;
   /** Credit line for openly licensed photos (e.g. Open Food Facts, CC BY-SA). */
   photoCredit?: string | null;
+  /** Shown at the top of the collection list while this product is on it (e.g. "Take tubs and boxes for the burger patties"). */
+  collectReminder?: string | null;
 }
 export interface CatPlacement {
   id: string; productId: string; checkAreaId: string; parLevel: number | null;
@@ -72,6 +74,8 @@ export interface CatPlacement {
   refillSource?: string | null;
   /** This row shows and edits another row's requirement (e.g. a dessert already planned in Defrost). */
   linkedPlacementId?: string | null;
+  /** Where to reach in the storeroom, shown on the collection line (e.g. "Lower-right compartment, beside the zucchini wedges"). */
+  collectNote?: string | null;
 }
 
 /** A ready-stock target for a range of forecast admits (max null = and above). */

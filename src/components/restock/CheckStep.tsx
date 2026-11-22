@@ -191,9 +191,10 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
     if (!p.optional && p.areaId === p.screenAreaId) return null;
     // Grabbed upstairs (e.g. the FOH bar fridge inside the Back bench stop), or refilled from another
     // compartment (e.g. the chicken tenders drawer, from the box): it says where it comes from instead.
-    if (p.pickupAreaId) return null;
-    // Pickups grabbed upstairs aren't on the downstairs list, so they don't count here.
-    const others = view.placements.filter((x) => x.productId === p.productId && x.placementId !== p.placementId && !(session.kind === 'full' && x.pickupAreaId))
+    if (p.pickupAreaId || p.prepTaskId) return null;
+    // Pickups grabbed upstairs aren't on the downstairs list, so they don't count here; nor is a "Needs prep"
+    // tick (e.g. pizza cheese to portion in Freezer 2): that's a prep job, not an amount.
+    const others = view.placements.filter((x) => x.productId === p.productId && x.placementId !== p.placementId && !(session.kind === 'full' && x.pickupAreaId) && !x.prepTaskId)
       .map((x) => ({ x, need: needOf(x, items.get(x.placementId) ?? EMPTY_ITEM) })).filter((o) => (o.need ?? 0) > 0);
     return others.length ? `Already ${others.map((o) => `${Math.round(o.need! * 100) / 100} for ${o.x.areaName}`).join(', ')}` : null;
   };

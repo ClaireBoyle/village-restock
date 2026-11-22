@@ -68,6 +68,9 @@ export interface PlacementView {
   pickupSuggest?: boolean;
   photoPath: string | null;
   photoCredit?: string | null;
+  /** Where to reach in the storeroom (collection line), and what to take down for this product (top of the list). */
+  collectNote?: string | null;
+  collectReminder?: string | null;
   /** Defrost rows (Gold Class Kitchen): pull an amount or "Not needed", with where it's from and where it goes. */
   defrost?: boolean;
   grabNote?: string | null;
@@ -190,6 +193,8 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
         affects: p.affects ?? [],
         photoPath: p.photoPath ?? null,
         photoCredit: p.photoCredit ?? null,
+        collectNote: pl.collectNote?.trim() || null,
+        collectReminder: p.collectReminder?.trim() || null,
         heading: pl.heading?.trim() || null,
         screenAreaId, optional,
         refillSource: pl.refillSource?.trim() || null,
@@ -367,6 +372,10 @@ export interface CollectionLine {
   grabNote?: string | null;
   fallbackNote?: string | null;
   putNote?: string | null;
+  /** Where to reach in the storeroom (e.g. "Lower-right compartment, beside the zucchini wedges"). */
+  collectNote?: string | null;
+  /** What to take down for it (e.g. "Take tubs and boxes for the burger patties"), shown at the top of the list. */
+  collectReminder?: string | null;
   /** Each placement this line restocks, with how much it needs. label: what that share is for, on a merged line.
    *  side: the side of a stand it's for (e.g. "Side A"), so it can be filled side by side. */
   parts: { placementId: string; areaName: string; need: number; label?: string; side?: string }[];
@@ -387,6 +396,7 @@ export function collectionLines(placements: PlacementView[], items: Map<string, 
       map.set(`task:${p.placementId}`, {
         key: `task:${p.placementId}`, kind: 'task', productName: p.productName, unitSingular: p.unitSingular,
         unitPlural: p.unitPlural, locationId: p.locationId, locationName, total: 0, instructions: p.instructions, photoPath: p.photoPath ?? null, photoCredit: p.photoCredit ?? null,
+        collectNote: p.collectNote ?? null, collectReminder: p.collectReminder ?? null,
         parts: [{ placementId: p.placementId, areaName: p.areaName, need: 0 }],
       });
       continue;
@@ -401,6 +411,7 @@ export function collectionLines(placements: PlacementView[], items: Map<string, 
         key, kind: 'qty', productName: p.productName, unitSingular: p.unitSingular, unitPlural: p.unitPlural,
         locationId: locId, locationName: p.fallbackLocationName ?? p.locationName ?? 'No storeroom set', total: ps.rest, instructions: '',
         photoPath: p.photoPath ?? null, photoCredit: p.photoCredit ?? null, grabNote: p.fallbackNote ?? null, fallbackNote: null, putNote: p.putNote ?? null,
+        collectReminder: p.collectReminder ?? null,
         parts: [{ placementId: p.placementId, areaName: p.areaName, need: ps.rest }],
       });
       continue;
@@ -413,7 +424,10 @@ export function collectionLines(placements: PlacementView[], items: Map<string, 
       key, kind: 'qty' as const, productName: p.productName, unitSingular: p.unitSingular, unitPlural: p.unitPlural,
       locationId: p.locationId, locationName, total: 0, instructions: p.instructions, photoPath: p.photoPath ?? null, photoCredit: p.photoCredit ?? null, parts: [],
       ...(p.defrost ? { grabNote: p.grabNote ?? null, fallbackNote: p.fallbackNote ?? null, putNote: p.putNote ?? null } : {}),
+      collectNote: null as string | null, collectReminder: p.collectReminder ?? null,
     };
+    // Where to reach: the first row that says (rows for the same product and storeroom are kept in one place).
+    line.collectNote = line.collectNote ?? p.collectNote ?? null;
     line.total = round2(line.total + need);
     line.parts.push({ placementId: p.placementId, areaName: p.areaName, need, ...(p.side ? { side: p.side } : {}) });
     map.set(key, line);
@@ -432,6 +446,24 @@ export function collectionLines(placements: PlacementView[], items: Map<string, 
     map.delete(key);
   }
   return [...map.values()];
+}
+
+/**
+ * What to take down for the run (e.g. "Take tubs and boxes for the burger patties"): one per reminder, for
+ * products still to collect, in the order of the list. Nothing to collect for a product (e.g. Freezer 1 had
+ * enough patties), or already collected: no reminder.
+ */
+export function collectReminders(lines: CollectionLine[], items: Map<string, ItemState>): { text: string; products: string[] }[] {
+  const out = new Map<string, { text: string; products: string[] }>();
+  for (const l of lines) {
+    const text = l.collectReminder?.trim();
+    if (!text || l.kind !== 'qty' || lineState(l, items) === 'done') continue;
+    const k = text.toLowerCase();
+    const r = out.get(k) ?? { text, products: [] };
+    if (!r.products.includes(l.productName)) r.products.push(l.productName);
+    out.set(k, r);
+  }
+  return [...out.values()];
 }
 
 /** Lines grouped by storeroom, storerooms in the admin's order. */

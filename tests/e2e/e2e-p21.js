@@ -37,7 +37,7 @@ const ok = (c, m) => { if (!c) throw new Error('FAIL: ' + m); console.log('PASS:
   await P.click('.dcard2:has-text("Bar") >> nth=0'); await P.click('.type-full button.btn.primary'); await P.waitForSelector('article.prow');
   await P.click('.area-btn:has-text("Back bench")'); await P.waitForTimeout(400);
   await P.click('article.prow:has(h3:text-is("Noilly Prat")) .padd');
-  ok(await P.locator('article.prow:has(h3:text-is("Noilly Prat")) .pnone').waitFor({ timeout: 4000 }).then(() => true, () => false), 'Back bench on a laptop: "None left here" on Noilly Prat');
+  ok(await P.locator('article.prow:has(h3:text-is("Noilly Prat")) .pleft').waitFor({ timeout: 4000 }).then(() => true, () => false), 'Back bench on a laptop: "Some left / None left" on Noilly Prat');
   ok(!errs.length, 'no page errors ' + errs.join(' | '));
   await b.close(); await sql.end();
 })().catch(async (e) => { console.error(e); await sql.end(); process.exit(1); });

@@ -7,7 +7,9 @@ export interface ProductFormData {
   id?: string; name: string; categoryId: string | null; unitSingular: string; unitPlural: string;
   method: 'par' | 'manual' | 'routine'; allowDecimal: boolean; instructions: string; defaultLocationId: string | null;
   affects: string[];
-  placements: { areaId: string; par: number | null; locationId: string | null; defrost?: DefrostFormData }[];
+  /** Shown at the top of the collection list while this product is on it (migration 024). */
+  collectReminder?: string;
+  placements: { areaId: string; par: number | null; locationId: string | null; collectNote?: string; defrost?: DefrostFormData }[];
 }
 
 /** Defrost details for one area (all text as typed; blank = not set). */
@@ -95,6 +97,12 @@ export function ProductForm({ departmentId, product, areas, categories, location
           <textarea id="affects" name="affects" defaultValue={product?.affects.join('\n')} maxLength={800} style={{ minHeight: 70 }}
             placeholder={'One per line, e.g.\nGolden Harvest Burger'} />
           <small>Shown to staff and in the manager email as &ldquo;Set as sold out&rdquo; when this product is out of stock.</small></div>
+        {method !== 'routine' ? (
+          <div className="field"><label htmlFor="collectReminder">Take with you (optional)</label>
+            <input id="collectReminder" name="collectReminder" defaultValue={product?.collectReminder ?? ''} maxLength={120}
+              placeholder="e.g. Take tubs and boxes for the burger patties" />
+            <small>Shown at the top of the collection list, before staff head to the storeroom, only when this product needs collecting. Include the number of containers only once it&rsquo;s confirmed.</small></div>
+        ) : null}
       </section>
 
       <section className="panel" style={section}>
@@ -134,6 +142,10 @@ export function ProductForm({ departmentId, product, areas, categories, location
                       {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
                     </select></div>
                 ) : <span />}
+                {on && method !== 'routine' ? (
+                  <div className="field" style={{ gridColumn: '1 / -1' }}><label htmlFor={`cnote_${a.id}`}>Where in the storeroom (optional)</label>
+                    <input id={`cnote_${a.id}`} name={`cnote_${a.id}`} defaultValue={pl?.collectNote ?? ''} maxLength={120} placeholder="e.g. Lower-right compartment, beside the zucchini wedges" /></div>
+                ) : null}
                 {on && method === 'manual' ? <DefrostFields areaId={a.id} d={pl?.defrost} unitPlural={unitPlural} /> : null}
               </div>
             );

@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
   EMPTY_ITEM, SHORT_REASONS, activePlacements, clearCollectedUpdates, collectPlacements, refillLines, collectionLines, gotAllUpdates, gotFewerUpdates,
-  groupByStoreroom, isChecked, isRequired, isSideLine, lineGot, lineInfo, lineState, pendingRefills, sideShares, storeLabel, upstairsDetail, upstairsStatus, gotFewerSplitUpdates,
+  collectReminders, groupByStoreroom, isChecked, isRequired, isSideLine, lineGot, lineInfo, lineState, pendingRefills, sideShares, storeLabel, upstairsDetail, upstairsStatus, gotFewerSplitUpdates,
   type CollectionLine, type ItemState, type ShortReason, type UpstairsCheck,
 } from '@/lib/restock-logic';
 import { formatQty, round2 } from '@/lib/restock-math';
@@ -22,6 +22,8 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
   // Upstairs pickups were on Refill FOH; this is the downstairs run.
   const lines = collectionLines(collectPlacements(session.kind, placements, recorded), items);
   const groups = groupByStoreroom(lines, view.locationOrder);
+  // What to take down (e.g. tubs and boxes for the burger patties), above the first storeroom.
+  const reminders = collectReminders(lines, items);
   const handled = lines.filter((l) => ['done', 'short'].includes(lineState(l, items))).length;
   const shorts = lines.filter((l) => lineState(l, items) === 'short' && lineInfo(l, items).reason === 'insufficient').length;
   // Only missing target counts: a blank "staff enter" product just didn't need anything.
@@ -48,6 +50,13 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
         {lines.length === 0 ? <p className="empty">{session.kind === 'area' ? 'Nothing to collect. Nothing was entered as needed.'
           : checksPending ? 'Nothing added to the collection list yet. Some areas haven’t been checked.' : 'Nothing to collect. Every area is checked and nothing is needed.'}</p> : (
           <div className="rooms">
+            {reminders.length ? (
+              <section className="take-down" aria-labelledby="take-down-h">
+                <Icon name="box" />
+                <div><h3 id="take-down-h">Before you go</h3>
+                  <ul>{reminders.map((r) => <li key={r.text}>{r.text}</li>)}</ul></div>
+              </section>
+            ) : null}
             {groups.map((g) => <Room key={g.lines[0].locationId ?? g.name} name={g.name} lines={g.lines} items={items} write={write} oneArea={oneArea} displayRule={!!view.department.noneOnDisplay} checkOf={checkOf}
               note={roomNote(g.lines, view.locationNotes)} />)}
           </div>
@@ -254,6 +263,9 @@ export function Line({ line, items, write, oneArea, tickOnly = false, displayRul
           <p className="dr-route"><span className="dr-src">{storeLabel(line.locationName)}</span>{line.putNote ? <><span className="dr-arrow" aria-label="to">&rarr;</span><span className="dr-dest">{line.putNote}</span></> : null}</p>
           {line.key.startsWith('rest:') ? <p className="dr-detail">Not enough upstairs{line.grabNote && !sameText(line.grabNote, storeLabel(line.locationName)) ? `: ${line.grabNote}` : ''}</p> : line.grabNote ? <p className="dr-detail">{line.grabNote}</p> : null}
         </div>
+      ) : st !== 'done' && line.collectNote && !sameText(line.collectNote, storeLabel(line.locationName)) ? (
+        // Where to reach in the storeroom (e.g. "Lower-right compartment, beside the zucchini wedges").
+        <div className="l-dnotes"><p className="dr-detail l-where">{line.collectNote}</p></div>
       ) : null}
       {askNone ? (
         // Nothing collected: is there really none left out front? Then it's out of stock.
