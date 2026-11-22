@@ -79,7 +79,9 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   ok(await sees(P, `.room:has(h3:text-is("No storeroom set")) ${line('Soy Sauce')}`, 'bottle'), 'soy sauce: 1 bottle, under "No storeroom set" until its storeroom is confirmed');
   ok(await P.locator(line('Pulled Beef (Bao)')).count() === 1, 'the 2 bags pulled for defrost are replaced from downstairs');
   for (const n of ['Brie', 'Pulled Beef (Bao)', 'Soy Sauce']) await P.click(`${line(n)} button.l-all`);
-  const [{ n: itemsBefore }] = await sql`select count(*)::int as n from session_items`;
+  // Count once everything ticked so far has reached the server.
+  const itemsBefore = (await waitDb(() => sql`select count(*)::int as n from session_items i where i.collected_mode is not null`, (r) => r[0].n >= 3)).length
+    && (await waitDb(async () => { const a = await sql`select count(*)::int as n from session_items`; await new Promise((r) => setTimeout(r, 1500)); const b = await sql`select count(*)::int as n from session_items`; return [a[0].n, b[0].n]; }, ([a, b]) => a === b))[1];
 
   // 3. Finish: Morning prep needed.
   await P.click('.dock .dock-acts button:has-text("Review")'); await P.waitForSelector('#morning-prep');

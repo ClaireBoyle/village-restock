@@ -1351,9 +1351,10 @@ button.pnote.open span{display:block}
 .dp-amt small{font-size:11.5px;color:var(--ink-2)}
 .dp-t{display:flex;flex-direction:column;min-width:0}
 .dp-t small{font-size:13px;color:var(--ink-2)}
-.dp-acts{display:flex;gap:8px}
+.dp-acts{display:flex;gap:8px;flex-wrap:wrap}
+.dp-acts .dp-none{flex:1 1 110px}
 .dp-acts .dp-ok{border-color:var(--ok);flex:1 1 120px}
-.dp-acts .dp-few{flex:1 1 150px}
+.dp-acts .dp-few{flex:1 1 100px}
 .dp-edit{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .dp-edit label{flex-basis:100%;font-size:13.5px;font-weight:600}
 .dp-done{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
@@ -1445,3 +1446,7 @@ button.pnote.open span{display:block}
   .pcl-seg button{flex:1;justify-content:center}
 }
 .q-step button.q-hide{visibility:hidden}
+/* Kitchen: one collection line split between defrost and the freezer it goes back into. */
+.l-split{display:flex;flex-direction:column;gap:1px}
+.l-split small{font-size:13px;color:var(--ink-2)}
+.l-split small b{color:var(--ink);font-weight:700}

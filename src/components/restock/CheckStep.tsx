@@ -168,9 +168,9 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
     // Refill FOH: what was grabbed here for front of house is suggested (and says so).
     const sug = ctx.suggested.get(p.placementId);
     if (sug && !sug.defrost) {
-      const taken = `${round2(sug.qty)} ${ctx.refill ? 'taken' : 'pulled'} for ${sug.from.map((f) => f.areaName).join(', ')}`;
+      const taken = ctx.refill ? `${round2(sug.qty)} taken for ${sug.from.map((f) => f.areaName).join(', ')}` : `${round2(sug.qty)} to replace what's going to defrost`;
       const raw = ctx.rawItems.get(p.placementId)?.requestedQty ?? null;
-      return raw === null ? `Suggested: ${taken}. Change it if more is needed, or remove it.` : raw === sug.qty ? taken : `${taken} (suggested ${round2(sug.qty)})`;
+      return raw === null ? `Suggested: ${taken}. Add any more this freezer needs, or remove it.` : raw === sug.qty ? taken : `${taken} (suggested ${round2(sug.qty)})`;
     }
     if (!p.optional && p.areaId === p.screenAreaId) return null;
     // Grabbed upstairs (e.g. the FOH bar fridge inside the Back bench stop), or refilled from another
@@ -396,7 +396,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
               // Refill FOH: everything taken for front of house first, so none of it is lost in a long list.
               // A row stays here even after it's changed or removed, so it never jumps away mid-tap.
               <>
-                <h3 className="phead taken-h"><span>{ctx.refill ? 'Replace what you grabbed' : 'Replace what you pulled'}</span><small>{taken.length} suggested</small></h3>
+                <h3 className="phead taken-h"><span>{ctx.refill ? 'Replace what you grabbed' : 'Replace what’s going to defrost'}</span><small>{taken.length} suggested</small></h3>
                 {taken.map((p) => renderRow({ ...p, areaName: secName(p.areaName) }, p.areaId !== cur.area.id))}
                 {/* The rest starts with its own subheading if it has one; otherwise a plain divider. */}
                 {rest(cur.own).length && !rest(cur.own).some((x) => x.heading) ? <h3 className="phead">Everything else</h3> : null}

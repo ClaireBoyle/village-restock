@@ -358,8 +358,8 @@ export interface CollectionLine {
   grabNote?: string | null;
   fallbackNote?: string | null;
   putNote?: string | null;
-  /** Each placement this line restocks, with how much it needs. */
-  parts: { placementId: string; areaName: string; need: number }[];
+  /** Each placement this line restocks, with how much it needs. label: what that share is for, on a merged line. */
+  parts: { placementId: string; areaName: string; need: number; label?: string }[];
 }
 
 /**
@@ -407,6 +407,19 @@ export function collectionLines(placements: PlacementView[], items: Map<string, 
     line.total = round2(line.total + need);
     line.parts.push({ placementId: p.placementId, areaName: p.areaName, need });
     map.set(key, line);
+  }
+  // Defrost short upstairs + the same product going back into a freezer, from the same storeroom: one line
+  // ("4 tubs: 2 to defrost · 2 back into Freezer 1"), defrost first so it's collected first.
+  for (const [key, l] of [...map]) {
+    if (!key.startsWith('rest:')) continue;
+    const p = placements.find((x) => x.placementId === l.parts[0].placementId);
+    const other = p ? map.get(`${p.productId}|${l.locationId ?? ''}|${l.unitPlural}`) : undefined;
+    if (!p || !other || other.kind !== 'qty') continue;
+    map.set(`${p.productId}|${l.locationId ?? ''}|${l.unitPlural}`, {
+      ...other, total: round2(l.total + other.total), grabNote: l.grabNote, fallbackNote: null, putNote: l.putNote,
+      parts: [{ ...l.parts[0], label: `to defrost${l.putNote ? ` → ${l.putNote}` : ''}` }, ...other.parts.map((x) => ({ ...x, label: `back into ${x.areaName.replace(/ · Check remaining spare stock$/i, ' spare stock')}` }))],
+    });
+    map.delete(key);
   }
   return [...map.values()];
 }
@@ -667,8 +680,10 @@ export function suggestions(kind: SessionKind, view: DepartmentView, items: Map<
     const ds = out.get(p.placementId);
     const i = raw.requestedQty === null && ds?.defrost ? { ...raw, requestedQty: ds.qty } : raw;
     const want = needOf(p, i) ?? 0;
-    // Defrost: what was actually pulled from upstairs. Elsewhere (Bar): what was collected upstairs.
-    const need = p.defrost ? Math.min(want, i.upstairsQty ?? 0)
+    // Defrost: everything set to defrost goes back into its freezer from downstairs, as soon as it's set
+    // (whether it was there or not: none upstairs = 2 to defrost + 2 back into the freezer).
+    // Elsewhere (Bar): what was collected upstairs.
+    const need = p.defrost ? want
       : i.collectedMode === 'all' ? want : i.collectedMode === 'partial' ? Math.min(want, i.collectedQty ?? 0) : 0;
     if (need <= 0) continue;
     // The same product in the pickup spot, counted in the same unit and entered by staff.
