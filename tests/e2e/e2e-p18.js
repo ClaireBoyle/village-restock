@@ -145,7 +145,18 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
     && await P.locator('.psec:has(.psec-t b:text-is("Refill working drawers and tubs")) article.pcrow').count() === 3
     && await P.locator(S('Portioned Lamb')).count() === 0, 'Freezer 2: "Check the portioning" (3), no stock rows for them');
   await P.click(`${R('Portioned Lamb')} .pc-tick`);
-  ok(await sees(P, `${R('Portioned Lamb')} .ps`, 'On tomorrow') && await sees(P, `${R('Portioned Lamb')} .ps`, 'Portion lamb'), 'ticked: "On tomorrow\'s prep list: Portion lamb"');
+  ok(await sees(P, `${R('Portioned Lamb')} .ps`, 'On the prep checklist') && await sees(P, `${R('Portioned Lamb')} .ps`, 'Portion lamb'), 'portioning selection acknowledged');
+  const checklist = await P.context().newPage();
+  await checklist.goto(B + '/d/' + k.id + '/prep');
+  const portions = checklist.getByRole('region', { name: 'Portioning from restock' });
+  await portions.getByText('Portion lamb', { exact: true }).waitFor();
+  const zucchini = P.getByRole('button', { name: 'Zucchini wedges: needs portioning' });
+  await zucchini.click();
+  await portions.getByRole('button', { name: 'Portion zucchini wedges: mark ready' }).click();
+  await portions.getByRole('button', { name: 'Portion zucchini wedges: mark needs prep' }).waitFor();
+  await zucchini.click();
+  await portions.getByText('Portion zucchini wedges', { exact: true }).waitFor({ state: 'detached' });
+  await checklist.close();
   const [{ n: noItem }] = await sql`select count(*)::int as n from session_items i join product_placements x on x.id = i.placement_id join products q on q.id = x.product_id where q.name = 'Portioned Lamb'`;
   ok(noItem === 0, 'the tick only updates the handover (nothing in the restock)');
   ok(await P.locator(`${R('Arancini')} button.padd`).count() === 0 && (await P.locator(`${R('Arancini')} .rr-b`).allInnerTexts()).join('|') === 'Refilled|Already full|Needs stock', 'refill: Refilled · Already full · Needs stock (no Add)');
