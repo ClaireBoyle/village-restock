@@ -75,7 +75,8 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
   if (c) status = <><Icon name="warn" />Two different {p.method === 'routine' ? 'answers' : 'counts'}: choose below</>;
   else if (st === 'none') status = p.method === 'par' ? <>Not checked &middot; {target ?? 'no target set'}</> : <span className="sr-only">Not entered</span>;
   // Made or portioned in morning prep (e.g. cut carrot): it goes to the morning team, not the collection list.
-  else if (progressive && (need ?? 0) > 0 && p.prepTaskId) status = <><Icon name="clock" /><b>{formatQty(need!, p.unitSingular, p.unitPlural)}</b>{' '}<span>for morning prep</span></>;
+  // Made in morning prep: needed or not (no amount); it goes on the next morning's prep list.
+  else if (progressive && p.prepTaskId) status = (need ?? 0) > 0 ? <><Icon name="clock" /><b>Needs prep</b>{' '}<span>&middot; on tomorrow&rsquo;s prep list</span></> : <span className="sr-only">Not needed</span>;
   else if (progressive && (need ?? 0) > 0) status = <><b>{formatQty(need!, p.unitSingular, p.unitPlural)}</b><span>to collect</span></>;
   else if (progressive && sug) status = <><Icon name="check" />Removed: none needed</>;
   else if (progressive) status = <><Icon name="check" />None needed</>;
@@ -104,7 +105,15 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
 
   let controls: React.ReactNode = null;
   if (c) controls = null;
-  else if (p.method === 'manual') {
+  else if (p.method === 'manual' && p.prepTaskId) {
+    // One tap: Needs prep (on tomorrow's prep list), tap again to undo. Never an amount.
+    const on = (need ?? 0) > 0;
+    controls = (
+      <button type="button" className={`padd padd-prep ${on ? 'on' : ''}`} aria-pressed={on} onClick={() => onChange({ requestedQty: on ? null : 1 })}
+        aria-label={on ? `${p.productName}: needs prep (tap to undo)` : `Add prep: ${p.productName}`}>
+        <Icon name={on ? 'check' : 'clock'} />{on ? 'Needs prep' : 'Add prep'}</button>
+    );
+  } else if (p.method === 'manual') {
     // Untouched: one compact Add. Leaving it alone already means nothing is needed.
     controls = value === null && !err
       // Made in morning prep (e.g. portioned sauces, cut veg for the Harvest Hommus): "Add prep", so it's never

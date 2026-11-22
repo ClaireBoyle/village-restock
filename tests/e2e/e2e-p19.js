@@ -75,15 +75,16 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   ok(dup.n === 3, 'existing products reused (no duplicates)');
   const [vs] = await sql`select coalesce(x.location_id, q.default_location_id) as loc from product_placements x join products q on q.id = x.product_id where q.name = 'Vodka Sauce'`;
   ok(vs.loc === null, 'prepared sauces: no assumed collection source');
-  // A prepared sauce: entering how much to make adds its prep task, with that amount.
-  await addTwo(P, sec('Sauces (shelf to confirm)', 'Vodka Sauce'), 'Vodka Sauce');
-  ok(await sees(P, `${sec('Sauces (shelf to confirm)', 'Vodka Sauce')} .ps`, '2 tubs for morning prep'), 'vodka sauce: "2 tubs for morning prep"');
-  await P.click(`${sec('Sauces (shelf to confirm)', 'Vodka Sauce')} button[aria-label="One more Vodka Sauce"]`);
-  await addTwo(P, sec('Prep tubs', 'Cut Carrot'), 'Cut Carrot');
-  // Entered then cleared: the task goes again.
-  await P.click(`${sec('Prep tubs', 'Cut Radish')} button.padd`); await P.waitForTimeout(400);
-  await P.click(`${sec('Prep tubs', 'Cut Radish')} button[aria-label="One less Cut Radish"]`); await P.waitForTimeout(300);
-  await P.click(`${sec('Prep tubs', 'Cut Radish')} button[aria-label="Clear Cut Radish"]`);
+  // A prepared sauce: one tap, Needs prep (no amount), puts its task on tomorrow's prep list.
+  const vodka = sec('Sauces (shelf to confirm)', 'Vodka Sauce');
+  await P.click(`${vodka} button.padd-prep`);
+  ok(await sees(P, `${vodka} .ps`, 'Needs prep') && await sees(P, `${vodka} .ps`, 'on tomorrow’s prep list') && await P.locator(`${vodka} .qty-input`).count() === 0
+    && (await P.locator(`${vodka} button.padd-prep`).innerText()).trim() === 'Needs prep', 'vodka sauce: "Needs prep · on tomorrow’s prep list" (no amount)');
+  await P.click(`${sec('Prep tubs', 'Cut Carrot')} button.padd-prep`);
+  // Ticked then unticked: the task goes again.
+  await P.click(`${sec('Prep tubs', 'Cut Radish')} button.padd-prep`); await P.waitForTimeout(400);
+  await P.click(`${sec('Prep tubs', 'Cut Radish')} button.padd-prep`); await P.waitForTimeout(300);
+  ok((await P.locator(`${sec('Prep tubs', 'Cut Radish')} button.padd-prep`).innerText()).trim() === 'Add prep', 'tap again to undo');
   // Made in morning prep: "Add prep" (never mistaken for stock to grab); stock: "Add".
   const btn = async (s, n) => (await P.locator(`${sec(s, n)} button.padd`).innerText()).trim();
   const sauceBtns = [await btn('Second sauce shelf', 'BBQ Sauce'), await btn('Second sauce shelf', 'Sweet Chilli Sauce')];
