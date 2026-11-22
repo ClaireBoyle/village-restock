@@ -152,7 +152,8 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   await P.click(`${R('Portioned Lamb')} .pc-tick`);
   ok(await sees(P, `${R('Portioned Lamb')} .ps`, 'On the prep checklist') && await sees(P, `${R('Portioned Lamb')} .ps`, 'Portion lamb'), 'portioning selection acknowledged');
   const checklist = await P.context().newPage();
-  await checklist.goto(B + '/d/' + k.id + '/prep');
+  const [kitchen] = await sql`select id from departments where name = 'Gold Class Kitchen'`;
+  await checklist.goto(B + '/d/' + kitchen.id + '/prep');
   const portions = checklist.getByRole('region', { name: 'Portioning from restock' });
   await portions.getByText('Portion lamb', { exact: true }).waitFor();
   const zucchini = P.getByRole('button', { name: 'Zucchini wedges: needs portioning' });
