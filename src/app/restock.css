@@ -372,7 +372,9 @@ button.pill:hover{background:var(--surface-2)}
 .note-box { display: flex; flex-direction: column; gap: 6px; margin: 16px 0 4px; padding: 16px; background: #fff; border: 1px solid var(--hair); border-radius: 16px; }
 .note-box label { font-size: 16px; }
 .note-box .meta { margin: 0; }
-.note-box textarea { width: 100%; min-height: 88px; font: inherit; font-size: 16px; line-height: 1.45; padding: 12px 14px; border: 1.5px solid var(--hair); border-radius: 12px; background: #fff; color: inherit; resize: vertical; }
+.note-box textarea { width: 100%; min-height: 88px; font: inherit; font-size: 16px; line-height: 1.45; padding: 12px 14px; border: 1.5px solid var(--hair); border-radius: 12px; background: #fff; color: #17213B; caret-color: #17213B; resize: vertical; }
+/* A white field: always dark text, also on the dark (navy) theme where the page text is light. */
+.note-box textarea::placeholder, .by-box input::placeholder { color: #6B7280; opacity: 1; }
 .note-box textarea:focus { outline: none; border-color: #2446B8; box-shadow: 0 0 0 3px rgba(36,70,184,.15); }
 .note-sent { margin: 12px 0; padding: 14px 16px; border-radius: 16px; background: #EEF3FD; border: 1.5px solid #C9D6F5; }
 .note-sent h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 15px; color: #2446B8; }
