@@ -65,7 +65,7 @@ const label = (d) => new Date(`${d}T12:00:00`).toLocaleDateString('en-AU', { wee
   await P.screenshot({ path: `${OUT}/p31-finish.png`, fullPage: true });
 
   // The API leaves out the restock being finished.
-  const [cur] = await sql`select id from restock_sessions where department_id = ${d.id} and status = 'open' order by started_at desc limit 1`;
+  let cur; for (let k = 0; k < 50 && !cur; k++) { [cur] = await sql`select id from restock_sessions where department_id = ${d.id} and id not in (${s1}, ${s2}) order by started_at desc limit 1`; if (!cur) await P.waitForTimeout(300); }
   const api = await (await fetch(`${B}/api/shortages/board?dept=${d.id}&session=${cur.id}`)).json();
   ok(JSON.stringify(api.items.map((i) => [i.productName, i.since, i.last])) === JSON.stringify([['Maltesers', day(2), day(1)]]), 'API: only Maltesers, since 2 days ago: ' + JSON.stringify(api.items));
   ok(!errs.length, 'no page errors ' + errs.join(' | '));
