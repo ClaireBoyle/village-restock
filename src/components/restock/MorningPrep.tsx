@@ -4,7 +4,7 @@
 // "No morning prep needed". On the Kitchen screen the morning team marks each task Done.
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
-import { PREP_GROUPS, prepGroupLabel, sortedItems, type PrepGroup, type PrepItem, type PrepTask } from '@/lib/prep';
+import { PREP_GROUPS, PREP_KINDS, prepGroupLabel, prepKind, sortedItems, type PrepGroup, type PrepItem, type PrepTask } from '@/lib/prep';
 import { localDb, type LocalPrep } from '@/lib/client/local-db';
 import { useLive } from '@/lib/client/hooks';
 import { importRemotePrep, setPrepDone } from '@/lib/client/prep-store';
@@ -147,28 +147,75 @@ function GroupedList({ items, render }: { items: PrepItem[]; render?: (i: PrepIt
   );
 }
 
-/** Kitchen screen: last night's handover for the morning team, each task marked Done on its own. */
-export function MorningPrepCard({ handover, dateLabel, onDone, sub }: { handover: LocalPrep; dateLabel: string; onDone: (itemId: string, done: boolean) => void;
+/**
+ * Open or folded, remembered on this device (true = open). Read straight away: the card only shows once this
+ * device's handover has loaded, never in the server's first render, so there's no flash of the wrong state.
+ */
+function useFold(key: string, start = true): [boolean, (v: boolean) => void] {
+  const [open, setOpen] = useState(() => {
+    try { const v = typeof window === 'undefined' ? null : localStorage.getItem(key); return v === null ? start : v === '1'; } catch { return start; }
+  });
+  return [open, (v: boolean) => { setOpen(v); try { localStorage.setItem(key, v ? '1' : '0'); } catch { /* private mode */ } }];
+}
+
+/**
+ * Kitchen screen: last night's handover for the morning team, each task marked Done on its own. Split by the kind
+ * of job (Portioning · Cutting · Sauces · Other); the card and each section fold away (remembered on this device).
+ */
+export function MorningPrepCard({ handover, dateLabel, onDone, sub, foldKey = 'vr-prep' }: { handover: LocalPrep; dateLabel: string; onDone: (itemId: string, done: boolean) => void;
   /** Where it came from, when not only the close (e.g. jobs left for morning on the Prep checklist). */
-  sub?: string }) {
+  sub?: string;
+  /** Where the open / folded choices are kept on this device (per department). */
+  foldKey?: string }) {
+  const [open, setOpen] = useFold(`${foldKey}-card`);
   if (handover.status === 'none') {
     return <section className="prep-card none" aria-label="Morning prep"><Icon name="check" /><div><b>No morning prep needed</b><small>From the {dateLabel} close</small></div></section>;
   }
   const done = handover.items.filter((i) => i.doneAt).length;
+  const list = sortedItems(handover.items);
+  const sections = PREP_KINDS.map(([k, label]) => ({ k, label, items: list.filter((i) => prepKind(i) === k) })).filter((x) => x.items.length);
   return (
-    <section className={`prep-card ${done === handover.items.length ? 'all-done' : ''}`} aria-labelledby="prep-card-h">
-      <div className="pc-head"><h2 id="prep-card-h"><Icon name="clock" />Morning prep</h2><span className="pc-n">{done} of {handover.items.length} done</span></div>
-      <p className="pc-sub">{sub ?? <>From the {dateLabel} close{handover.updatedBy ? ` · ${handover.updatedBy}` : ''}</>}</p>
-      <GroupedList items={handover.items} render={(i) => (
-        <div className={`pc-row ${i.doneAt ? 'done' : ''}`}>
-          <span className="pc-t"><b>{i.name}</b>{i.note ? <small>{i.note}</small> : null}
-            {i.doneAt ? <small className="pc-by">Done{i.doneBy ? ` · ${i.doneBy}` : ''} {timeOf(i.doneAt)}</small> : null}</span>
-          {i.doneAt
-            ? <button type="button" className="btn small pc-undo" onClick={() => onDone(i.id, false)} aria-label={`Undo done: ${i.name}`}>Undo</button>
-            : <button type="button" className="btn small good pc-done" onClick={() => onDone(i.id, true)} aria-label={`Done: ${i.name}`}><Icon name="check" />Done</button>}
+    <section className={`prep-card ${done === handover.items.length ? 'all-done' : ''} ${open ? '' : 'folded'}`} aria-labelledby="prep-card-h">
+      <button type="button" className="pc-head" onClick={() => setOpen(!open)} aria-expanded={open} aria-controls="prep-card-body">
+        <h2 id="prep-card-h"><Icon name="clock" />Morning prep</h2>
+        <span className="pc-n">{done} of {handover.items.length} done</span>
+        <Icon name={open ? 'up' : 'down'} />
+      </button>
+      {open ? (
+        <div id="prep-card-body" className="pc-body">
+          <p className="pc-sub">{sub ?? <>From the {dateLabel} close{handover.updatedBy ? ` · ${handover.updatedBy}` : ''}</>}</p>
+          {sections.map((x) => <PrepSection key={x.k} label={x.label} items={x.items} onDone={onDone} foldKey={`${foldKey}-${x.k}`} />)}
         </div>
-      )} />
+      ) : null}
     </section>
+  );
+}
+
+/** One kind of job (e.g. Cutting), with how many are done; folds away on its own. */
+function PrepSection({ label, items, onDone, foldKey }: { label: string; items: PrepItem[]; onDone: (itemId: string, done: boolean) => void; foldKey: string }) {
+  const [open, setOpen] = useFold(foldKey);
+  const done = items.filter((i) => i.doneAt).length;
+  return (
+    <div className={`pc-sec ${open ? '' : 'folded'} ${done === items.length ? 'all-done' : ''}`} data-prep-kind={label}>
+      <button type="button" className="pc-sec-h" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <b>{label}</b>
+        <span className="pc-sec-n">{done === items.length ? <><Icon name="check" />{items.length}</> : `${done} of ${items.length}`}</span>
+        <Icon name={open ? 'up' : 'down'} />
+      </button>
+      {open ? (
+        <ul>{items.map((i) => (
+          <li key={i.id} data-prep={i.name}>
+            <div className={`pc-row ${i.doneAt ? 'done' : ''}`}>
+              <span className="pc-t"><b>{i.name}</b>{i.note ? <small>{i.note}</small> : null}
+                {i.doneAt ? <small className="pc-by">Done{i.doneBy ? ` · ${i.doneBy}` : ''} {timeOf(i.doneAt)}</small> : null}</span>
+              {i.doneAt
+                ? <button type="button" className="btn small pc-undo" onClick={() => onDone(i.id, false)} aria-label={`Undo done: ${i.name}`}>Undo</button>
+                : <button type="button" className="btn small good pc-done" onClick={() => onDone(i.id, true)} aria-label={`Done: ${i.name}`}><Icon name="check" />Done</button>}
+            </div>
+          </li>
+        ))}</ul>
+      ) : null}
+    </div>
   );
 }
 
@@ -210,7 +257,7 @@ export function MorningPrepHome({ departmentId, today, who, tasks = [] }: { depa
     ? void setPrepCheck(departmentId, day, id.slice(4), { morningDone: done }, who)
     : h ? void setPrepDone(h.sessionId, id, done, who) : undefined);
   const sub = !h ? `Left for morning on the ${dateLabel} prep checklist` : extra.length ? `From the ${dateLabel} close and prep checklist` : undefined;
-  return <MorningPrepCard handover={merged} dateLabel={dateLabel} sub={sub} onDone={onDone} />;
+  return <MorningPrepCard handover={merged} dateLabel={dateLabel} sub={sub} onDone={onDone} foldKey={`vr-prep-${departmentId}`} />;
 }
 
 function shiftDay(d: string, n: number) {

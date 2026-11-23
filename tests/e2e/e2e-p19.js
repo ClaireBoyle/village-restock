@@ -163,9 +163,24 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   await M.click('.who'); await M.fill('#staffname', 'Jo'); await M.click('.sheet .btn.primary');
   await M.click('.dcard2:has-text("Kitchen") >> nth=0'); await M.waitForSelector('.prep-card', { timeout: 15000 });
   ok(await sees(M, '.prep-card .pc-n', '0 of 4 done') && await sees(M, '.prep-card', 'Double the chilli'), 'Kitchen screen: Morning prep, 0 of 4 done');
+  const kinds = await M.$$eval('.prep-card .pc-sec', (els) => els.map((e) => [e.dataset.prepKind, [...e.querySelectorAll('[data-prep]')].map((x) => x.dataset.prep)]));
+  ok(JSON.stringify(kinds) === JSON.stringify([['Portioning', ['Portion defrosted pulled beef']], ['Cutting', ['Cut carrots for Harvest Hommus']], ['Sauces', ['Make vodka sauce']], ['Other', ['Clean the slicer']]]),
+    'split by job: Portioning · Cutting · Sauces · Other: ' + JSON.stringify(kinds));
   await M.click('.prep-card [data-prep="Cut carrots for Harvest Hommus"] .pc-done');
   ok(await sees(M, '.prep-card .pc-n', '1 of 4 done') && await sees(M, '.prep-card [data-prep="Cut carrots for Harvest Hommus"]', 'Done · Jo'), 'marked Done by Jo');
+  ok((await M.locator('.pc-sec[data-prep-kind="Cutting"] .pc-sec-n').innerText()).trim() === '1' && await M.locator('.pc-sec[data-prep-kind="Cutting"] .pc-sec-n .ic').count() === 1, 'Cutting: all done (tick)');
   await M.screenshot({ path: `${OUT}/p19-morning.png`, fullPage: true });
+  // Fold a section, then the whole card: remembered on this device.
+  await M.click('.pc-sec[data-prep-kind="Cutting"] .pc-sec-h');
+  ok(await M.locator('.pc-sec[data-prep-kind="Cutting"] [data-prep]').count() === 0 && await M.locator('.pc-sec[data-prep-kind="Sauces"] [data-prep]').count() === 1, 'Cutting folded, the others still open');
+  await M.click('.prep-card .pc-head');
+  ok(await M.locator('.prep-card .pc-sec').count() === 0 && await sees(M, '.prep-card .pc-n', '1 of 4 done'), 'card folded: just "Morning prep · 1 of 4 done"');
+  await M.screenshot({ path: `${OUT}/p19-morning-folded.png` });
+  await M.reload(); await M.waitForSelector('.prep-card');
+  ok(await M.locator('.prep-card .pc-sec').count() === 0 && await M.getAttribute('.prep-card .pc-head', 'aria-expanded') === 'false', 'still folded after reloading');
+  await M.click('.prep-card .pc-head');
+  ok(await M.locator('.pc-sec[data-prep-kind="Cutting"] [data-prep]').count() === 0 && await M.locator('.pc-sec[data-prep-kind="Portioning"] [data-prep]').count() === 1, 'opened again: Cutting still folded, as left');
+  await M.click('.pc-sec[data-prep-kind="Cutting"] .pc-sec-h');
   const [d] = await waitDb(() => sql`select done_by, done_at from prep_handover_items where name = 'Cut carrots for Harvest Hommus'`, (r) => r[0]?.doneBy === 'Jo');
   ok(d?.doneBy === 'Jo' && d.doneAt, 'saved on the server');
   const [s2] = await sql`select status, finished_at from restock_sessions`;

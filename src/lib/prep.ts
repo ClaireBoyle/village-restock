@@ -72,3 +72,13 @@ export function prepLines(h: Pick<PrepHandover, 'status' | 'items'> | null): str
   if (h.status === 'none') return ['No morning prep needed'];
   return sortedItems(h.items).map((it) => [it.name, it.note].filter(Boolean).join(' · ') + (it.doneAt ? ' (done)' : ''));
 }
+
+/** Morning prep on the Kitchen screen, by the kind of job: portioning, cutting, sauces (made or portioned), other. */
+export type PrepKind = 'portion' | 'cut' | 'sauce' | 'other';
+export const PREP_KINDS: [PrepKind, string][] = [['portion', 'Portioning'], ['cut', 'Cutting'], ['sauce', 'Sauces'], ['other', 'Other']];
+export function prepKind(i: Pick<PrepItem, 'name' | 'group'>): PrepKind {
+  if (i.group === 'sauces' || /\bsauces?\b|\baioli\b|\bmayo\b|\brelish\b|\bdressing\b|\btartare\b/i.test(i.name)) return 'sauce';
+  if (/^\s*(portion|bag|weigh)/i.test(i.name)) return 'portion';
+  if (/^\s*(cut|dice|slice|shred|chop|wash|peel|julienne|trim)/i.test(i.name)) return 'cut';
+  return 'other';
+}
