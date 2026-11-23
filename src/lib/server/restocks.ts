@@ -107,3 +107,36 @@ export async function restockDetail(id: string) {
   const session = { ...s, tradingDate: dateStr(s.tradingDate) } as Record<string, unknown> & { tradingDate: string; people: string[] };
   return { session, areas, items, shortages, summary, view, timeZone: cat.settings.timeZone };
 }
+
+/** A product already short at an earlier restock (so already on the stock board), with when. */
+export interface BoardItem { productId: string | null; productName: string; since: string; last: string }
+
+/**
+ * Products already short at an earlier finished restock of this department (the stock board has them): open stock
+ * shortages from the last 14 days, not resolved by a manager, and not collected in full at any restock since. For
+ * the Finish screen, so staff only write up what's new. `exclude` is the restock being finished.
+ */
+export async function boardItems(departmentId: string, exclude: string | null): Promise<BoardItem[]> {
+  const sql = db();
+  const [{ hasStatus }] = await sql`select exists (select 1 from information_schema.columns where table_name = 'shortages' and column_name = 'stock_status') as has_status`;
+  const rows = await sql`
+    with sh as (
+      select sh.product_id, sh.product_name, lower(sh.product_name) as name, s.trading_date, s.finished_at
+      from shortages sh join restock_sessions s on s.id = sh.session_id
+      where sh.department_id = ${departmentId} and sh.status = 'open' and sh.reason = 'insufficient'
+        and s.status in ('finished', 'finished_exceptions') and s.finished_at is not null
+        and (${exclude}::uuid is null or s.id <> ${exclude}::uuid)
+        and s.trading_date >= current_date - 14
+        ${hasStatus ? sql`and coalesce(to_jsonb(sh)->>'stock_status', '') <> 'unconfirmed'` : sql``}
+    )
+    select max(x.product_id::text) as product_id, max(x.product_name) as product_name, min(x.trading_date) as since, max(x.trading_date) as last
+    from sh x
+    where not exists (
+      select 1 from session_items i join restock_sessions s2 on s2.id = i.session_id
+      where s2.department_id = ${departmentId} and s2.status in ('finished', 'finished_exceptions') and s2.finished_at > x.finished_at
+        and (${exclude}::uuid is null or s2.id <> ${exclude}::uuid)
+        and lower(i.product_name) = x.name and i.collected_mode = 'all')
+    group by x.name
+    order by min(x.trading_date)`;
+  return rows.map((r) => ({ productId: (r.productId as string) ?? null, productName: String(r.productName), since: dateStr(r.since), last: dateStr(r.last) }));
+}

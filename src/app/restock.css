@@ -899,6 +899,10 @@ button.pnote.open span{display:block}
 .lgrp-h b{font-weight:600;color:var(--d-accent)}
 .lgrp-h small{display:inline-flex;align-items:center;gap:3px;font-size:12.5px;letter-spacing:0;text-transform:none;font-variant-numeric:tabular-nums}
 .lgrp-h small .ic{width:13px;height:13px;color:var(--ok)}
+.sr-board{display:inline-flex;align-items:center;gap:4px;color:var(--ink-2)!important;font-weight:500}
+.sr-board .ic{width:14px;height:14px;color:var(--ok)}
+.sr-row.on-board .sr-t>b{opacity:.8}
+.sr-new{display:block;margin-top:2px;font-size:13px;font-weight:500;color:var(--ink-2);letter-spacing:0;text-transform:none}
 .take-down{display:flex;gap:10px;align-items:flex-start;margin:0 0 10px;padding:10px 12px;border-radius:12px;border:1.5px solid var(--d-line);background:var(--d-soft);color:var(--d-ink)}
 .take-down>.ic{width:20px;height:20px;flex:none;margin-top:1px;color:var(--d-accent)}
 .take-down h3{margin:0;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--d-accent)}

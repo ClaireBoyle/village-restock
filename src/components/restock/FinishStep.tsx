@@ -107,7 +107,8 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
   // Gold Class Bar: staff can change a status worked out from the checks (only while the restock is open).
   const correct = finished ? undefined : (o: StockOutcome, st: NonNullable<ItemState['statusOverride']>) =>
     void setItems(session.id, (o.placementIds ?? []).map((placementId) => ({ placementId, fields: { statusOverride: st === o.auto ? null : st } })), who);
-  const report = <StockReport outcomes={outcomes} displayRule={displayRule} onCorrect={correct} />;
+  const board = useBoard(view.department.id, session.id, session.status === 'open');
+  const report = <StockReport outcomes={outcomes} displayRule={displayRule} onCorrect={correct} board={board} />;
 
   const details = (
     <div className="sum">
@@ -234,8 +235,41 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
  * running low), then collection that couldn't be finished (not a shortage). Nothing at all
  * when everything was collected.
  */
-function StockReport({ outcomes, displayRule = false, onCorrect }: {
+/** What's already on the stock board: short at an earlier restock, not collected in full since (by product name). */
+type Board = Map<string, { since: string; last: string }>;
+
+/**
+ * Products already short at an earlier restock, from the server (kept on this device for when it's offline).
+ * Only while the restock is still open: once finished, this restock's own shortages count too.
+ */
+function useBoard(departmentId: string, sessionId: string, open: boolean): Board {
+  const key = `vr-board-${departmentId}`;
+  const [items, setItems] = useState<{ productName: string; since: string; last: string }[]>([]);
+  useEffect(() => {
+    // The last copy on this device first (offline), then the server's.
+    try { const saved = JSON.parse(localStorage.getItem(key) ?? '[]'); if (Array.isArray(saved)) setItems(saved); } catch { /* none saved */ }
+    if (!open) return;
+    let off = false;
+    fetch(`/api/shortages/board?dept=${departmentId}&session=${sessionId}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (off || !j || !Array.isArray(j.items)) return;
+        setItems(j.items);
+        try { localStorage.setItem(key, JSON.stringify(j.items)); } catch { /* private mode: fine */ }
+      })
+      .catch(() => { /* offline: the last copy on this device */ });
+    return () => { off = true; };
+  }, [departmentId, sessionId, open, key]);
+  return new Map(items.map((i) => [i.productName.toLowerCase(), { since: i.since, last: i.last }]));
+}
+
+/** "Sun 22 Nov" from a trading date. */
+const dayLabel = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+
+function StockReport({ outcomes, displayRule = false, onCorrect, board }: {
   outcomes: StockOutcome[]; displayRule?: boolean;
+  /** Already on the stock board (short at an earlier restock): flagged, so only what's new is written up. */
+  board?: Board;
   /** Gold Class Bar: change a shortage's status (Out of stock / Still available / Not sure). */
   onCorrect?: (o: StockOutcome, status: NonNullable<ItemState['statusOverride']>) => void;
 }) {
@@ -246,8 +280,9 @@ function StockReport({ outcomes, displayRule = false, onCorrect }: {
   const q = (o: StockOutcome, n: number) => `${fmt(n)} ${n === 1 ? o.unitSingular : o.unitPlural}`;
   const why = (o: StockOutcome) => SHORT_REASONS.find((r) => r[0] === o.reason)?.[1] ?? 'Not collected';
   const CHOICES: [NonNullable<ItemState['statusOverride']>, string][] = [['out', 'Out of stock'], ['low', 'Still available'], ['unconfirmed', 'Not sure']];
+  const onBoard = (o: StockOutcome) => board?.get(o.productName.toLowerCase());
   const row = (o: StockOutcome, kind: 'out' | 'low' | 'unc' | 'inc') => (
-    <li key={o.productName} className={`sr-row k-${kind}`} data-outcome={o.productName}>
+    <li key={o.productName} className={`sr-row k-${kind} ${kind !== 'inc' && onBoard(o) ? 'on-board' : ''}`} data-outcome={o.productName}>
       <span className="sr-dot" aria-hidden="true" />
       <span className="sr-t">
         <b>{o.productName}{o.flagged ? <span className="sr-flag"><Icon name="flag" />Flagged</span> : null}</b>
@@ -266,6 +301,9 @@ function StockReport({ outcomes, displayRule = false, onCorrect }: {
             : kind === 'low' ? <>Running low &middot; Collected {fmt(o.got)} of {q(o, o.needed)}</>
             : <>Collection incomplete &middot; {why(o)} &middot; {q(o, o.short)} not collected</>}</small>
         )}
+        {kind !== 'inc' && onBoard(o) ? (
+          <small className="sr-board"><Icon name="check" />Already on the board &middot; short {onBoard(o)!.since === onBoard(o)!.last ? 'on' : 'since'} {dayLabel(onBoard(o)!.since)}</small>
+        ) : null}
         {kind === 'out' && o.affects.length ? <small className="sr-affects">Set as sold out: <b>{o.affects.join(', ')}</b></small> : null}
         {onCorrect && o.upstairs && changing === o.productName ? (
           <span className="chips sr-fix" role="group" aria-label={`Status of ${o.productName}`}>
@@ -282,7 +320,8 @@ function StockReport({ outcomes, displayRule = false, onCorrect }: {
   return (
     <>
       {short.length ? (
-        <section className="sreport" aria-labelledby="sr-short"><h3 id="sr-short">Stock shortages <span className="count">{short.length}</span></h3>
+        <section className="sreport" aria-labelledby="sr-short"><h3 id="sr-short">Stock shortages <span className="count">{short.length}</span>
+          {short.some(onBoard) ? <small className="sr-new">{short.filter((o) => !onBoard(o)).length} new &middot; {short.filter(onBoard).length} already on the board</small> : null}</h3>
           {/* Out of stock first: what the next shift can't serve. */}
           <ul>{short.map((o) => row(o, kindOf(o)))}</ul></section>
       ) : null}
