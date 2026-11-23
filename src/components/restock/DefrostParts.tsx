@@ -105,6 +105,12 @@ export function DefrostRoute({ p, from }: { p: PlacementView; from?: string }) {
   );
 }
 
+/** The unit beside the number: "tubs", or "× 1 kg bag" for a unit with its size. */
+export function unitText(p: PlacementView, v: number | null) {
+  const u = v === 1 ? p.unitSingular : p.unitPlural;
+  return /^\d/.test(u) ? `× ${u}` : u;
+}
+
 /** "Bags to pull · 8 portions each": what the amount counts, beside it. */
 function amountLabel(p: PlacementView, pickup: boolean) {
   const info = defrostRowInfo(p);
@@ -182,6 +188,7 @@ export function DefrostRow({ p, item, rawQty, suggestion, admits, onChange, phot
           <button type="button" onClick={() => bump(1)} aria-label={`One more ${p.productName}`}><Icon name="plus" /></button>
         </div>
       )}
+      {v === 0 ? null : <span className="dr-unit">{unitText(p, v)}</span>}
       {v === 0 ? null : <span className="dr-sep" aria-hidden="true" />}
       <button type="button" className={`dr-b dr-nn ${v === 0 ? 'on' : ''}`} aria-pressed={v === 0}
         onClick={() => set(v === 0 ? null : 0)} aria-label={v === 0 ? `${p.productName}: not needed (tap to undo)` : `${p.productName}: not needed`}>
@@ -191,12 +198,23 @@ export function DefrostRow({ p, item, rawQty, suggestion, admits, onChange, phot
   );
 
   if (compact) {
+    // What to check here, said once (e.g. "Check portioned beef first"): the row's own instruction, or a check note.
+    const note = p.instructions?.trim() || (isCheckNote(p.grabNote) ? p.grabNote : null);
     return (
-      <article className={`drow2 dline s-${st} ${v === null && !c ? 'quiet' : ''}`} data-placement={p.placementId}>
+      <article className={`drow2 dline s-${st} ${v === null && !c ? 'quiet' : ''} ${v !== null && v > 0 ? 'has-qty' : ''}`} data-placement={p.placementId}>
         <div className="dl-t">
           <h3>{p.productName}</h3>
-          {p.grabNote ? <p className={`dr-detail ${isCheckNote(p.grabNote) ? 'dr-check' : ''}`}>{isCheckNote(p.grabNote) ? <Icon name="warn" /> : null}{p.grabNote}</p> : null}
+          {note ? <p className="dr-detail dr-check"><Icon name="warn" />{note}</p> : null}
           <p className="ps" id={`s-${p.placementId}`}>{status ?? <span className="sr-only">{srStatus}</span>}</p>
+          {info.canSuggest ? (
+            <div className="dr-ready">
+              <label htmlFor={`r-${p.placementId}`}>Ready or defrosting</label>
+              <span className="dr-rbox"><NumberBox id={`r-${p.placementId}`} value={item.currentQty} onCommit={(n) => onChange({ currentQty: n })}
+                label={`${p.productName}: ${info.readyPlural} already ready or defrosting`} allowDecimal={p.allowDecimal} unitPlural={info.readyPlural} wait={500} />
+                <small>{info.readyPlural}</small></span>
+            </div>
+          ) : null}
+          {working ? <p className="dr-work">{working}</p> : null}
         </div>
         {controls}
       </article>
@@ -227,27 +245,26 @@ export function DefrostRow({ p, item, rawQty, suggestion, admits, onChange, phot
 }
 
 /**
- * Pull for defrost: everything with an amount, grouped by where it's collected (Freezer 1, then
- * Freezer 2, then what comes from downstairs with the collection list). Each item keeps its
- * destination. Pulled = moved. Not enough upstairs = what was there; the rest goes on the collection
- * list from downstairs (an empty compartment is never a shortage by itself).
+ * Pull for defrost: what to grab from the upstairs freezers, in walking order (Freezer 1, then Freezer 2), grouped
+ * by compartment, each with where it goes. Pulled = moved. Not enough upstairs = what was there; the rest goes on
+ * the collection list from downstairs (an empty compartment is never a shortage by itself). What's defrosted
+ * straight from downstairs (e.g. the desserts) is on the collection list, not here.
  */
-export function DefrostPullList({ rows, freezerOrder, onChange }: {
+export function DefrostPullList({ rows, walkOrder, onChange }: {
   rows: { p: PlacementView; item: ItemState; pickup: boolean }[];
-  /** Freezer names in walking order. */
-  freezerOrder: string[];
+  /** Compartments in walking order (by area id). */
+  walkOrder: Map<string, number>;
   onChange: (p: PlacementView, f: Partial<ItemState>) => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
-  const list = rows.filter((r) => (needOf(r.p, r.item) ?? 0) > 0);
-  if (!list.length) return null;
-  const groupOf = (r: (typeof list)[number]) => (r.pickup ? defrostSource(r.p).split(' · ')[0] : storeLabel(r.p.locationName));
-  const names = [...new Set(list.map(groupOf))].sort((a, b) => {
-    const ia = freezerOrder.indexOf(a), ib = freezerOrder.indexOf(b);
-    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
-  });
-  const pickups = list.filter((r) => r.pickup);
+  const needed = rows.filter((r) => (needOf(r.p, r.item) ?? 0) > 0);
+  const list = needed.filter((r) => r.pickup);
+  const downstairs = needed.filter((r) => !r.pickup);
+  if (!list.length && !downstairs.length) return null;
+  const spotOf = (r: (typeof list)[number]) => r.p.pickupAreaId ?? '';
+  const spots = [...new Set(list.map(spotOf))].sort((a, b) => (walkOrder.get(a) ?? 1e9) - (walkOrder.get(b) ?? 1e9));
+  const pickups = list;
   const done = pickups.filter((r) => pullState(r.p, r.item).state !== 'todo').length;
   const confirm = (r: (typeof list)[number]) => {
     const n = draft.trim() === '' ? NaN : Number(draft.replace(',', '.'));
@@ -259,23 +276,22 @@ export function DefrostPullList({ rows, freezerOrder, onChange }: {
   return (
     <section className="grab pull dpull" aria-labelledby="pull-h">
       <h3 className="sec-title" id="pull-h"><Icon name="up" />Pull for defrost{pickups.length ? <small>{done} of {pickups.length} pulled</small> : null}</h3>
-      <p className="grab-hint">Tap <b>Pulled</b> once it&rsquo;s moved. None there? Tap <b>Not upstairs</b>. Only some? Tap <b>Only some</b> and say how many. What&rsquo;s missing goes on the collection list, and everything you defrost is also on it to put back in the freezer.</p>
-      {names.map((g) => {
-        const gl = list.filter((r) => groupOf(r) === g);
-        const down = !gl[0].pickup;
+      <p className="grab-hint">Freezer 1, then Freezer 2. Tap <b>Pulled</b> once it&rsquo;s moved; <b>Not upstairs</b> or <b>Only some</b> puts the rest on the collection list.</p>
+      {spots.map((g) => {
+        const gl = list.filter((r) => spotOf(r) === g);
         return (
           <div key={g} className="grab-group">
-            <h4 className="phead">{g}{down ? <small>&nbsp;· on the collection list</small> : null}</h4>
+            <h4 className="phead">{defrostSource(gl[0].p)}</h4>
             <ul className="dp-lines">{gl.map((r) => {
               const ps = pullState(r.p, r.item);
               const q = (n: number) => formatQty(n, r.p.unitSingular, r.p.unitPlural);
-              const spot = r.pickup ? defrostSource(r.p).split(' · ')[1] : null;
+              const spot = r.p.grabNote && !isCheckNote(r.p.grabNote) ? r.p.grabNote : null;
               return (
                 <li key={r.p.placementId} className={`dp-line s-${!r.pickup ? (r.item.collectedMode ? 'ok' : 'none') : ps.state === 'pulled' ? 'ok' : ps.state === 'short' ? 'warn' : 'none'}`} data-line={r.p.productName}>
                   <div className="dp-main">
                     <span className="dp-amt"><b>{round2(ps.need)}</b><small>{ps.need === 1 ? r.p.unitSingular : r.p.unitPlural}</small></span>
                     <span className="dp-t"><b>{r.p.productName}</b>
-                      <small>{spot ? <>{spot} </> : null}&rarr; {r.p.putNote ?? 'its destination'}</small></span>
+                      <small><span className="dp-to">&rarr; {r.p.putNote ?? 'its destination'}</span>{spot ? <span className="dp-spot">{spot}</span> : null}</small></span>
                   </div>
                   {!r.pickup ? (
                     <p className="dp-state">{r.item.collectedMode ? <><Icon name="check" />Collected</> : 'Collect it from the collection list'}</p>
@@ -310,6 +326,9 @@ export function DefrostPullList({ rows, freezerOrder, onChange }: {
           </div>
         );
       })}
+      {downstairs.length ? (
+        <p className="dp-down"><Icon name="list" /><span><b>{downstairs.length === 1 ? downstairs[0].p.productName : `${downstairs.length} more`}</b> {downstairs.length === 1 ? 'is' : 'are'} defrosted straight from downstairs: on the collection list{downstairs.length > 1 ? ` (${downstairs.map((r) => r.p.productName).join(', ')})` : ''}.</span></p>
+      ) : null}
     </section>
   );
 }

@@ -103,7 +103,6 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   const pickupOf = (p: (typeof cur.placements)[number]) => session.kind === 'full' && !!p.pickupAreaId;
   const dItem = (p: (typeof cur.placements)[number]) => items.get(p.placementId) ?? EMPTY_ITEM;
   const reviewed = defrostRows.filter((p) => dItem(p).requestedQty !== null).length;
-  const toPull = defrostRows.filter((p) => (needOf(p, dItem(p)) ?? 0) > 0 && (pickupOf(p) ? pullState(p, dItem(p)).state === 'todo' : !dItem(p).collectedMode)).length;
   const untouched = defrostRows.filter((p) => dItem(p).requestedQty === null && !dItem(p).conflict);
   // Upstairs freezer pulls not done yet ("View upstairs items to pull"), and whether that list has been reached.
   const pullTodo = isDefrost ? defrostRows.filter((p) => pickupOf(p) && (needOf(p, dItem(p)) ?? 0) > 0 && pullState(p, dItem(p)).state === 'todo').length : 0;
@@ -188,6 +187,11 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
     if (p.side) return null;
     // Refill FOH: what was grabbed here for front of house is suggested (and says so).
     const sug = ctx.suggested.get(p.placementId);
+    if (sug && !sug.defrost && !ctx.refill) {
+      // Kitchen: what's set to defrost is replaced in its usual compartment row (one amount, changed here if needed).
+      const raw = ctx.rawItems.get(p.placementId)?.requestedQty ?? null;
+      return raw === null || raw === sug.qty ? 'Added from Defrost' : `Added from Defrost: ${round2(sug.qty)}`;
+    }
     if (sug && !sug.defrost) {
       const taken = !ctx.refill ? `${round2(sug.qty)} to replace what's going to defrost`
         : sug.from.map((f) => (f.short ? `${round2(f.need)} still needed for ${f.areaName} (not enough here)` : `${round2(f.need)} taken for ${f.areaName}`)).join(' · ');
@@ -219,7 +223,8 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   // Kitchen: what was pulled for defrost is suggested for its freezer, at the top of that freezer's screen.
   // (A screen that starts with refills, e.g. Freezer 2, keeps them in place: refill first, then check the spare stock.)
   const startsWithRefills = cur.placements.some((p) => p.refillSource);
-  const taken = (phase === 'boh' || !ctx.refill) && !startsWithRefills ? cur.placements.filter((p) => { const s = ctx.suggested.get(p.placementId); return !!s && !s.defrost; }) : [];
+  // Kitchen replacements stay in their usual compartment row ("Added from Defrost"); only the bar's grabs go to the top.
+  const taken = phase === 'boh' && !startsWithRefills ? cur.placements.filter((p) => { const s = ctx.suggested.get(p.placementId); return !!s && !s.defrost; }) : [];
   const takenIds = new Set(taken.map((p) => p.placementId));
   /** A list without the products shown at the top; a subheading moves to the next product still there. */
   const rest = (list: typeof cur.placements) => {
@@ -304,14 +309,15 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
           : <h3 key={`h-${id}`} className="phead">{head}</h3>);
         if (closed) { i = j; continue; }
       }
-      // Defrost: a group that all goes the same way (e.g. the desserts) is one list, its route said once above it.
+      // Defrost: one compact row per product, grouped by where ready stock is checked. A group that all comes from
+      // and goes to the same place (e.g. the desserts) says so once, under its heading.
       const route = (x: (typeof group)[number]) => `${defrostSource(x)}|${x.putNote ?? ''}`;
-      if (isDefrost && group.length >= 3 && group.every((x) => x.defrost && !items.get(x.placementId)?.conflict && !defrostRowInfo(x).canSuggest)
-          && new Set(group.map(route)).size === 1) {
+      if (isDefrost && group.every((x) => x.defrost)) {
+        const shared = group.length >= 2 && new Set(group.map(route)).size === 1;
         out.push(
           <div key={`l-${group[0].placementId}`} className="dgroup">
-            <DefrostRouteLine p={group[0]} />
-            <div className="dlist">{group.map((x) => stockRow(x, false, true))}</div>
+            {shared ? <DefrostRouteLine p={group[0]} /> : null}
+            <div className="dlist">{group.map((x) => (items.get(x.placementId)?.conflict ? renderRow(x) : stockRow(x, false, true)))}</div>
           </div>);
       } else out.push(...group.map((x) => renderRow(x)));
       i = j;
@@ -526,7 +532,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
           ) : null}
           {isDefrost ? (
             <DefrostPullList rows={defrostRows.map((p) => ({ p, item: dItem(p), pickup: pickupOf(p) }))}
-              freezerOrder={whole.areas.map((a) => a.area.name)} onChange={(p, fields) => void onItem(p, fields)} />
+              walkOrder={whole.pickupOrder} onChange={(p, fields) => void onItem(p, fields)} />
           ) : null}
 
           {st === 'skipped' ? (
@@ -571,7 +577,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
             ))}</ul>
           </div>
         ) : null}
-        title={isDefrost ? <span className="dr-progress"><b>{reviewed} of {defrostRows.length}</b> reviewed &middot; <b>{toPull}</b> {toPull === 1 ? 'item' : 'items'} to pull</span> : <>{all.req ? <>{`${all.counted} of ${all.req} counted`}<span className="dock-sep"> &middot; </span></> : null}
+        title={isDefrost ? <span className="dr-progress"><b>{reviewed} of {defrostRows.length}</b> reviewed &middot; {pullTodo ? <><b>{pullTodo}</b> upstairs to pull</> : 'nothing upstairs to pull'}</span> : <>{all.req ? <>{`${all.counted} of ${all.req} counted`}<span className="dock-sep"> &middot; </span></> : null}
           <button type="button" className="dock-2 dock-review" onClick={() => setReview(!review)} disabled={!lines.length} aria-expanded={review} aria-controls="entered-list">
             {lines.length ? `${lines.length} to collect` : 'Nothing added to the collection list'}{lines.length ? <Icon name={review ? 'down' : 'up'} /> : null}</button></>}
         sub={walk ? undefined : next && st === 'complete' ? `Next area: ${next.area.name}` : byArea && !lines.length ? 'Tap + Add on anything that needs topping up' : undefined}>

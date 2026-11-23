@@ -1407,7 +1407,30 @@ button.pnote.open span{display:block}
 .dl-t .ps{margin:2px 0 0;font-size:13px}
 .dl-t .ps:empty,.dl-t .ps:has(> .sr-only:only-child){margin:0}
 .drow2.dline.s-ok .dl-t h3{color:var(--ink-2);font-weight:500}
-@media (max-width:480px){.dr-ctl .dr-acts,.dline .dr-acts{margin-left:0;width:100%;justify-content:space-between}}
+/* An entered amount: gold. Not needed: a tick (filled). The unit sits beside the number. */
+.dline.has-qty .dr-step .nbox,.drow2.s-warn .dr-step .nbox{border-color:var(--d-accent);box-shadow:0 0 0 1px var(--d-accent) inset;color:var(--ink)}
+.drow2.dline.s-warn{background:color-mix(in srgb,var(--d-accent) 10%,transparent);box-shadow:inset 3px 0 0 var(--d-accent)}
+.dr-unit{font-size:14px;font-weight:600;color:var(--ink-2);min-width:86px;white-space:nowrap}
+.dline.has-qty .dr-unit{color:var(--ink)}
+.dl-t .dr-ready{margin-top:6px}
+/* Phones: the controls directly under the name. */
+@media (max-width:640px){
+  .drow2.dline{flex-direction:column;align-items:stretch;gap:6px}
+  .dline .dl-t{flex:none}
+  .dline .dr-acts{margin-left:0;width:100%;justify-content:flex-start;flex-wrap:nowrap;gap:6px}
+  .dline .dr-sep{display:none}
+  .dline .dr-unit{min-width:0;flex:1 1 auto;font-size:13px}
+  .dline .dr-step button{width:38px}
+  .dline .dr-step .nbox{width:48px}
+  .dline .dr-acts .dr-b.dr-nn{margin-left:auto;min-width:0;padding:0 10px;font-size:14px}
+}
+@media (max-width:480px){.dr-ctl .dr-acts{margin-left:0;width:100%;justify-content:space-between}}
+.dp-t small{display:flex;flex-wrap:wrap;gap:2px 8px}
+.dp-to{color:var(--ink);font-weight:600}
+.dp-spot{color:var(--ink-2)}
+.dp-down{margin:8px 2px 0;display:flex;gap:8px;align-items:flex-start;font-size:13.5px;color:var(--ink-2)}
+.dp-down .ic{width:16px;height:16px;flex:none;margin-top:2px}
+.dp-down b{color:var(--ink)}
 .dr-rest{margin:10px 0 4px}
 .dr-rest p{margin:0;display:flex;align-items:center;gap:6px;font-size:14px}
 .dr-rest p .ic{width:16px;height:16px;color:var(--ok)}

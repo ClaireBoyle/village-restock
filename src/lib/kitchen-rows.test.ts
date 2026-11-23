@@ -81,6 +81,11 @@ describe('defrost pulls', () => {
     expect(lines(items({ 'pz-def': { requestedQty: 5, upstairsQty: 5 } }))).toEqual(['9" Pizza Bases 5 Walk in freezer(Downstairs)']);
     expect(lines(items({ 'pz-def': { requestedQty: 0 } }))).toEqual([]);
   });
+  it('the replacement is one amount: changed in the freezer row, the collection list shows the new total (not both)', () => {
+    // 1 pulled for defrost (from upstairs): 1 back into Freezer 1 from downstairs. The closer makes it 2: 2 in total.
+    expect(lines(items({ 'pz-def': { requestedQty: 1, upstairsQty: 1 } }))).toEqual(['9" Pizza Bases 1 Walk in freezer(Downstairs)']);
+    expect(lines(items({ 'pz-def': { requestedQty: 1, upstairsQty: 1 }, 'pz-f1': { requestedQty: 2 } }))).toEqual(['9" Pizza Bases 2 Walk in freezer(Downstairs)']);
+  });
   it('not enough upstairs: the rest of the defrost comes from downstairs too, and the freezer still gets the full amount back', () => {
     const m = items({ 'pz-def': { requestedQty: 5, upstairsQty: 2 } });
     // Both from the downstairs walk-in freezer: one line of 8 (3 to defrost + 5 back into the freezer).

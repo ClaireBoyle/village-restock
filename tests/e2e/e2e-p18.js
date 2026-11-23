@@ -22,7 +22,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   // As on the live site: the Kitchen starts with no areas, and the downstairs walk-in freezer is a storeroom.
   await sql`delete from check_areas where department_id = (select id from departments where name = 'Gold Class Kitchen')`;
   await sql`insert into storage_locations (name, sort_order) values ('Walk in freezer(Downstairs)', 3), ('Walk in fridge(Downstairs)', 2) on conflict do nothing`;
-  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep', 'defrost-compact', 'defrost-pulls', 'freezers', 'refills', 'portion-prep', 'defrost-compact', 'freezer-1-first', 'refills', 'freezer-1-first', 'no-walk-in-desserts', 'no-walk-in-desserts', 'walk-in-shelves', 'refills', 'walk-in-third-shelf', 'walk-in-fresh-produce', 'bottom-sauce-shelf', 'dry-stock']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
+  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep', 'defrost-compact', 'defrost-pulls', 'freezers', 'refills', 'portion-prep', 'defrost-compact', 'freezer-1-first', 'refills', 'freezer-1-first', 'no-walk-in-desserts', 'no-walk-in-desserts', 'walk-in-shelves', 'refills', 'walk-in-third-shelf', 'walk-in-fresh-produce', 'bottom-sauce-shelf', 'dry-stock', 'defrost-checks', 'defrost-checks']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
   // Targets on two items (the rest have none: manual entry). Beef: 8 portions a 1 kg bag.
   await sql`update product_placements x set ready_targets = '[{"min":0,"max":150,"qty":24},{"min":151,"qty":36}]'::jsonb
     from products p, check_areas a where p.id = x.product_id and a.id = x.check_area_id and a.name = 'Defrost' and p.name = '9" Pizza Bases'`;
@@ -44,13 +44,15 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   const names = await P.locator('article.drow2 h3').allInnerTexts();
   ok(names.length === 16 && names.includes('Bao Buns') && names.includes('Buns (Portioned Tubs)') && names.includes('Sticky Date'), `16 rows, bao buns and portioned buns separate (${names.length})`);
   ok(await P.locator('article.drow2 .pphoto.ph').count() === 0, 'no placeholder pictures');
-  // One short route per row (source → destination), plus a detail only where it matters.
-  ok(await sees(P, `${drow('9" Pizza Bases')} .dr-route`, 'Freezer 1 · Lower left→Upstairs walk-in fridge'), 'route: "Freezer 1 · Lower left → Upstairs walk-in fridge"');
-  ok(await sees(P, `${drow('Grilled Chicken')} .dr-route`, 'Freezer 2→Upstairs walk-in fridge') && await sees(P, `${drow('Grilled Chicken')} .dr-detail`, 'Above the arancini drawer'), 'grilled chicken: Freezer 2, above the arancini drawer');
-  ok(await sees(P, `${drow('Pulled Beef (Bao)')} .dr-check`, 'Check the portioned beef in the under-salad-bar bench fridge first'), 'the portioned-beef check stays visible');
+  // Grouped by where ready stock is checked; one compact row each (name and the one instruction that matters).
+  const heads = await P.$$eval('.area .phead', (e) => e.map((x) => x.textContent.trim()));
+  ok(JSON.stringify(heads.slice(0, 3)) === JSON.stringify(['Under-salad-bar bench fridge', 'Check location to confirm', 'Upstairs walk-in fridge · Dessert shelf']), 'grouped by where it\'s checked: ' + heads.join(' | '));
+  ok(await P.locator(`.dgroup:has(.phead:text-is("Under-salad-bar bench fridge")) .dline h3, .dlist:has(${drow('Pulled Beef (Bao)')}) .dline h3`).allTextContents().then((t) => t.includes('Pulled Beef (Bao)') && t.includes('Beef Patties')), 'pulled beef and patties: under-salad-bar bench fridge');
+  ok(await sees(P, `${drow('Pulled Beef (Bao)')} .dr-check`, 'Check portioned beef first') && await sees(P, `${drow('Beef Patties')} .dr-check`, 'Check the right side'), 'kept in view: "Check portioned beef first", "Check the right side"');
+  ok(await P.locator('.dline').count() === 16 && await P.locator('.dlist .dline .dr-route').count() === 0, 'one compact row per product, no route on each row');
   ok(await sees(P, `.dgroup:has(${drow('Sticky Date')}) > .dr-route`, 'Downstairs walk-in freezer→Upstairs walk-in fridge · dessert shelf') && await P.locator(`${drow('Sticky Date')} .dr-route`).count() === 0,
     'desserts: one list, the route said once above it (downstairs walk-in freezer → dessert shelf)');
-  ok(await P.locator('.dgroup .dline').count() === 9, 'the 9 desserts as one line each');
+  ok(await P.locator(`.dgroup:has(${drow('Sticky Date')}) .dline`).count() === 9, 'the 9 desserts in one list');
   ok(await P.locator(`${drow('Beef Patties')}`).filter({ hasText: 'containers' }).count() === 0, 'the "if empty" route is hidden until it\'s needed');
   ok(await sees(P, '.admits', 'Gold Class admits'), 'admits box (targets exist)');
   await P.screenshot({ path: `${OUT}/p18-defrost-rows.png` });
@@ -60,7 +62,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   const qv = async (n, want) => { const end = Date.now() + 4000; for (;;) { const v = await P.locator(`${drow(n)} .dr-step .qty-input`).inputValue(); if (want === undefined || v === want || Date.now() > end) return v; await P.waitForTimeout(100); } };
   ok((await P.locator(`${drow('Bao Buns')} .dr-b`).allInnerTexts()).join('|') === 'Not needed' && await qv('Bao Buns') === '' && await P.isDisabled(`${drow('Bao Buns')} button[aria-label="One less Bao Buns"]`),
     'untouched: − (off) – + beside "Not needed", no "Set amount" step');
-  ok((await P.locator(`${drow('Bao Buns')} .dr-lab`).innerText()) === 'Buns to pull', 'label: "Buns to pull"');
+  ok((await P.locator(`${drow('Bao Buns')} .dr-unit`).innerText()) === 'buns', 'the unit beside the box: "buns"');
   await P.click(`${drow('Bao Buns')} button[aria-label="One more Bao Buns"]`);
   await P.click(`${drow('Bao Buns')} button[aria-label="One more Bao Buns"]`);
   ok(await qv('Bao Buns', '2') === '2' && (await P.textContent(`${drow('Bao Buns')} .ps`)).includes('2 buns to pull'), 'Bao buns: + + → 2 buns to pull');
@@ -78,18 +80,18 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   ok(await sees(P, `${drow('9" Pizza Bases')} .ps`, '14 bases'), 'pizza bases: target 24, 10 ready → 14 bases (suggested)');
   ok(await sees(P, `${drow('9" Pizza Bases')} .dr-work`, 'Target 24 bases for 0–150 admits'), 'shows how it was worked out');
   await P.fill(await rid('Pulled Beef (Bao)'), '12'); await P.keyboard.press('Tab');
-  ok(await sees(P, `${drow('Pulled Beef (Bao)')} .ps`, '4 bags') && await sees(P, `${drow('Pulled Beef (Bao)')} .dr-work`, '28 portions → 4 bags'), 'pulled beef: 40 − 12 = 28 portions → 4 bags');
+  ok(await sees(P, `${drow('Pulled Beef (Bao)')} .ps`, '4 × 1 kg bags') && await sees(P, `${drow('Pulled Beef (Bao)')} .dr-work`, '28 portions → 4 × 1 kg bags'), 'pulled beef: 40 − 12 = 28 portions → 4 bags');
   ok(await P.locator(`${drow('Buns (Portioned Tubs)')} .dr-ready`).count() === 0, 'portioned buns: no conversion set, so manual (no ready count)');
   await P.click(`${drow('9" Pizza Bases')} button[aria-label="One more 9\\" Pizza Bases"]`);
   ok(await qv('9" Pizza Bases', '15') === '15' && await sees(P, `${drow('9" Pizza Bases')} .dr-work`, 'suggested 14'), 'changed to 15 (suggested 14 still shown)');
   await P.fill('#admits-in', '200'); await P.keyboard.press('Enter');
-  ok(await sees(P, `${drow('Pulled Beef (Bao)')} .ps`, '4 bags'), 'admits 200: beef still 4 bags (one range)');
+  ok(await sees(P, `${drow('Pulled Beef (Bao)')} .ps`, '4 × 1 kg bags'), 'admits 200: beef still 4 bags (one range)');
   await P.click(`${drow('9" Pizza Bases')} .dr-back`);
   ok(await sees(P, `${drow('9" Pizza Bases')} .ps`, '26 bases'), 'back to suggested: 36 − 10 = 26 for 200 admits');
   const [s] = await waitDb(() => sql`select forecast_admits from restock_sessions where kind = 'full'`, (r) => r[0]?.forecastAdmits === 200);
   ok(s?.forecastAdmits === 200, 'admits saved on the restock (200)');
   // The footer: progress, then Continue → Freezer 1 (the collection list is secondary).
-  ok(await sees(P, '.dock .dr-progress', '6 of 16') && await sees(P, '.dock .dr-progress', '5 items to pull'), 'footer: "6 of 16 reviewed · 5 items to pull"');
+  ok(await sees(P, '.dock .dr-progress', '6 of 16') && await sees(P, '.dock .dr-progress', '4 upstairs to pull'), 'footer: "6 of 16 reviewed · 4 upstairs to pull"');
   // Opened fresh, at the top: the pull list first (it's out of view).
   await P.reload(); await P.waitForSelector('article.drow2'); await P.evaluate(() => window.scrollTo(0, 0)); await P.waitForTimeout(400);
   ok(/^(View upstairs items to pull|To pull) \(4\)$/.test(await primaryText(P)) && await P.locator('.dock .dr-list').count() === 1, 'main action "View upstairs items to pull (4)" ("To pull (4)" on a phone), collection list secondary: ' + await primaryText(P));
@@ -109,35 +111,38 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   // 4. Pull for defrost: grouped by where it's collected, destination kept; Pulled only once moved.
   ok(await sees(P, '.dpull .sec-title', 'Pull for defrost'), '"Pull for defrost" on the Defrost page');
   const groups = (await P.locator('.dpull .grab-group h4').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim());
-  ok(groups.join('|') === 'Freezer 1|Freezer 2|Downstairs walk-in freezer · on the collection list', `grouped by collection location: ${groups.join(', ')}`);
-  ok(await sees(P, `.dpull .grab-group:has(h4:text-is("Freezer 2")) ${pline('Grilled Chicken')}`, '6') && await sees(P, `${pline('Pulled Beef (Bao)')} .dp-t`, '→ Upstairs walk-in fridge'), 'each item keeps its destination');
-  ok(await sees(P, pline('Sticky Date'), 'Collect it from the collection list') && await P.locator(pline('Brownie')).count() === 0, 'desserts: collected downstairs; Not needed items not listed');
+  ok(groups.join('|') === 'Freezer 1 · Lower left|Freezer 1 · Lower right|Freezer 2', `walking order, by compartment: ${groups.join(', ')}`);
+  ok(await sees(P, `.dpull .grab-group:has(h4:text-is("Freezer 2")) ${pline('Grilled Chicken')}`, '6') && await sees(P, `${pline('Pulled Beef (Bao)')} .dp-to`, '→ Upstairs walk-in fridge'), 'each item with its destination beside it');
+  ok(await sees(P, `${pline('Grilled Chicken')} .dp-spot`, 'Above the arancini drawer'), 'and where exactly to grab it (above the arancini drawer)');
+  ok(await P.locator(pline('Sticky Date')).count() === 0 && await sees(P, '.dp-down', 'Sticky Date') && await sees(P, '.dp-down', 'collection list') && await P.locator(pline('Brownie')).count() === 0,
+    'desserts from downstairs: not on the pull list, "on the collection list"');
   ok((await P.locator(`${pline('Bao Buns')} .dr-b`).allInnerTexts()).map((t) => t.trim()).join('|') === 'Not upstairs|Only some|Pulled', 'each pull: Not upstairs · Only some · Pulled');
   for (const n of ['Bao Buns', '9" Pizza Bases']) await P.click(`${pline(n)} .dp-ok`);
   // None of the beef upstairs: one tap. All of it comes from downstairs (and the freezer still gets its 4 back).
   await P.click(`${pline('Pulled Beef (Bao)')} .dp-none`);
-  ok(await sees(P, pline('Pulled Beef (Bao)'), 'Not upstairs · all 4 bags from Downstairs walk-in freezer (on the collection list)') && await sees(P, `${drow('Pulled Beef (Bao)')} .ps`, 'Not upstairs'),
+  ok(await sees(P, pline('Pulled Beef (Bao)'), 'Not upstairs · all 4 × 1 kg bags from Downstairs walk-in freezer (on the collection list)') && await sees(P, `${drow('Pulled Beef (Bao)')} .ps`, 'Not upstairs'),
     'not upstairs: "Not upstairs · all 4 bags from Downstairs walk-in freezer"');
   // Freezer 2 only had 4 chicken: the other 2 come from downstairs (not a shortage).
   await P.click(`${pline('Grilled Chicken')} .dp-few`);
   await P.fill(`${pline('Grilled Chicken')} .dp-edit input`, '4'); await P.click(`${pline('Grilled Chicken')} .dp-edit .btn.primary`);
   ok(await sees(P, pline('Grilled Chicken'), 'Pulled 4') && await sees(P, pline('Grilled Chicken'), '2 portions more from Downstairs walk-in freezer (on the collection list)'), 'not enough upstairs: 4 pulled, 2 more from downstairs');
   ok(await sees(P, `${drow('Grilled Chicken')} .ps`, 'Pulled 4 of 6') && await sees(P, `${drow('Bao Buns')} .ps`, 'Pulled 2 buns'), 'rows say what was pulled');
-  ok(await sees(P, '.dpull .sec-title small', '4 of 4 pulled') && await sees(P, '.dock .dr-progress', '1 item to pull'), 'all four pulled; 1 item left (from downstairs)');
+  ok(await sees(P, '.dpull .sec-title small', '4 of 4 pulled') && await sees(P, '.dock .dr-progress', 'nothing upstairs to pull'), 'all four dealt with: "nothing upstairs to pull"');
   await P.screenshot({ path: `${OUT}/p18-defrost-pull.png`, fullPage: true });
 
   // 5. Freezer 1 / Freezer 2: what was actually pulled is suggested, to bring up from downstairs.
   await P.click('.area-btn:has-text("Freezer 1")'); await P.waitForSelector('.area-btn.cur:has-text("Freezer 1")');
-  ok(await sees(P, '.taken-h', 'Replace what’s going to defrost') && await sees(P, `${row('Pulled Beef (Bao)')}`, 'to replace what\'s going to defrost'), 'Freezer 1: "Replace what’s going to defrost"');
+  ok(await P.locator('.taken-h').count() === 0 && await sees(P, `.psec:has(.psec-t b:text-is("Lower left")) ${row('Pulled Beef (Bao)')} .pnote`, 'Added from Defrost'),
+    'Freezer 1: the replacement in its usual compartment row (Lower left), "Added from Defrost"');
   ok(!(await P.textContent('main')).includes('After refilling Freezer 2'), 'Freezer 1 guide no longer says "after refilling Freezer 2"');
-  ok(await sees(P, `${row('9" Pizza Bases')} .ps`, '26 bases') && await sees(P, `${row('Pulled Beef (Bao)')} .ps`, '4 bags') && await sees(P, `${row('Bao Buns')} .ps`, '2 buns'),
+  ok(await sees(P, `${row('9" Pizza Bases')} .ps`, '26 bases') && await sees(P, `${row('Pulled Beef (Bao)')} .ps`, '4 × 1 kg bags') && await sees(P, `${row('Bao Buns')} .ps`, '2 buns'),
     'Freezer 1: 26 bases, 4 bags of beef (none was upstairs: still 4 back), 2 bao buns suggested');
   ok(await P.locator(`${row('Brownie')}.suggested`).count() === 0, 'Freezer 1: nothing suggested for what wasn\'t needed');
   ok(await P.locator('.admits, .drow2').count() === 0 && await sees(P, `${row('Beef Patties')} button.padd`, 'Add'), 'Freezer 1 is a normal top-up screen (+ Add), not Defrost rows');
   const comps1 = await P.locator('.psec-t b').allInnerTexts();
   ok(comps1.join('|') === "Upper left|Upper right|Lower left|Lower right|Fisherman's Basket spares", `Freezer 1 compartments: ${comps1.join(', ')}`);
-  ok(await sees(P, `.psec:has(.psec-t b:text-is("Lower left")) ${row('Pulled Beef (Bao)')}`, 'Bottom shelf, beneath the pizza bases') || await sees(P, `${row('Pulled Beef (Bao)')} .parea`, 'Lower left'),
-    'beef: compartment shown (Lower left)');
+  ok(await P.locator(`.psec:has(.psec-t b:text-is("Lower left")) ${row('Pulled Beef (Bao)')}`).count() === 1 && await P.locator(row('Pulled Beef (Bao)')).count() === 1,
+    'beef: in its usual compartment (Lower left), once');
   ok(await sees(P, `.psec:has(.psec-t b:text-is("Lower right")) ${row('Naan Bread')} .pnote`, 'Lower-left tub'), 'naan: "Lower-left tub" beside it');
   // Freezer 1 stock (portioning is a separate morning prep task): check the level, order from downstairs.
   const f1 = (c, n) => `.psec:has(.psec-t b:text-is("${c}")) ${row(n)}`;

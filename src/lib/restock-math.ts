@@ -33,7 +33,9 @@ export function parseQuantity(raw: string, opts: { allowDecimal: boolean; unitPl
 
 /** "1 bottle" / "2 bottles" / "2.5 kg". */
 export function formatQty(n: number, unitSingular: string, unitPlural: string): string {
-  return `${round2(n)} ${n === 1 ? unitSingular : unitPlural}`;
+  const unit = n === 1 ? unitSingular : unitPlural;
+  // A unit with its size ("1 kg bag"): "2 × 1 kg bags", not "2 1 kg bags".
+  return `${round2(n)} ${/^\d/.test(unit) ? '× ' : ''}${unit}`;
 }
 
 /**
