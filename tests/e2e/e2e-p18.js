@@ -22,7 +22,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   // As on the live site: the Kitchen starts with no areas, and the downstairs walk-in freezer is a storeroom.
   await sql`delete from check_areas where department_id = (select id from departments where name = 'Gold Class Kitchen')`;
   await sql`insert into storage_locations (name, sort_order) values ('Walk in freezer(Downstairs)', 3), ('Walk in fridge(Downstairs)', 2) on conflict do nothing`;
-  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep', 'defrost-compact', 'defrost-pulls', 'freezers', 'refills', 'portion-prep', 'defrost-compact', 'freezer-1-first', 'refills', 'freezer-1-first', 'no-walk-in-desserts', 'no-walk-in-desserts', 'walk-in-shelves', 'refills', 'walk-in-third-shelf', 'walk-in-fresh-produce', 'bottom-sauce-shelf', 'dry-stock', 'defrost-checks', 'defrost-checks']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
+  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep', 'defrost-compact', 'defrost-pulls', 'freezers', 'refills', 'portion-prep', 'defrost-compact', 'freezer-1-first', 'refills', 'freezer-1-first', 'no-walk-in-desserts', 'no-walk-in-desserts', 'walk-in-shelves', 'refills', 'walk-in-third-shelf', 'walk-in-fresh-produce', 'bottom-sauce-shelf', 'dry-stock', 'defrost-checks', 'defrost-checks', 'portioning-in-drawers']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
   // Targets on two items (the rest have none: manual entry). Beef: 8 portions a 1 kg bag.
   await sql`update product_placements x set ready_targets = '[{"min":0,"max":150,"qty":24},{"min":151,"qty":36}]'::jsonb
     from products p, check_areas a where p.id = x.product_id and a.id = x.check_area_id and a.name = 'Defrost' and p.name = '9" Pizza Bases'`;
@@ -162,9 +162,12 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   const R = (n) => sec('Refill working drawers and tubs', n), S = (n) => sec('Check remaining spare stock', n);
   ok(await P.locator('.psec:has(.psec-t b:text-is("Refill working drawers and tubs")) article.rrow').count() === 10, '10 working drawers and tubs');
   // Lamb, cauliflower popcorn and Fisherman's Baskets: no Freezer 2 stock row (that's Freezer 1), just a portioning check.
-  ok(await P.locator('.psec:has(.psec-t b:text-is("Refill working drawers and tubs")) .phead').filter({ hasText: 'Check the portioning' }).count() === 1
+  const drawerOrder = await P.$$eval('.psec:has(.psec-t b:text-is("Refill working drawers and tubs")) article.prow h3', (e) => e.map((x) => x.textContent));
+  ok(await P.locator('.psec:has(.psec-t b:text-is("Refill working drawers and tubs")) .phead').filter({ hasText: 'Check the portioning' }).count() === 0
     && await P.locator('.psec:has(.psec-t b:text-is("Refill working drawers and tubs")) article.pcrow').count() === 3
-    && await P.locator(S('Portioned Lamb')).count() === 0, 'Freezer 2: "Check the portioning" (3), no stock rows for them');
+    && drawerOrder[0] === 'Portioned Lamb' && drawerOrder.indexOf("Fisherman's Basket") === drawerOrder.indexOf('Prawn Twisters') + 1
+    && drawerOrder.indexOf('Cauliflower Popcorn') === drawerOrder.indexOf('Fish') + 1
+    && await P.locator(S('Portioned Lamb')).count() === 0, 'Freezer 2: the 3 portioning checks in drawer order (no separate group), no stock rows for them: ' + drawerOrder.join(', '));
   await P.click(`${R('Portioned Lamb')} .pc-tick`);
   ok(await sees(P, `${R('Portioned Lamb')} .ps`, 'On the prep checklist') && await sees(P, `${R('Portioned Lamb')} .ps`, 'Portion lamb'), 'portioning selection acknowledged');
   const checklist = await P.context().newPage();

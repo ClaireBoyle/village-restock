@@ -14,7 +14,7 @@
 do $$
 declare
   dept uuid := (select id from departments where lower(name) = 'gold class kitchen');
-  f1 uuid; f2 uuid; area uuid; p uuid; pl uuid; t uuid; i int; norm text; down uuid; refill uuid; chk uuid;
+  f1 uuid; f2 uuid; area uuid; p uuid; pl uuid; t uuid; i int; norm text; down uuid; refill uuid; chk uuid; fresh boolean;
   -- product (or its other names, split by |), Freezer 1 section, task, group, note beside it
   list text[][] := array[
     ['Portioned Lamb|Lamb', 'Freezer 1 · Lower right', 'Portion lamb', 'proteins', 'Overflow'],
@@ -59,10 +59,13 @@ begin
     -- Freezer 2: one portioning check in the refill section (the old refill or spare row is reused), nothing else.
     chk := (select x.id from product_placements x join check_areas c on c.id = x.check_area_id
             where x.product_id = p and x.id <> pl and (c.id = f2 or c.parent_area_id = f2) order by (c.id = refill) desc limit 1);
+    fresh := chk is null or not exists (select 1 from product_placements where id = chk and check_area_id = refill);
     if chk is null then insert into product_placements (product_id, check_area_id, sort_order) values (p, refill, 100 + i) returning id into chk;
     else update product_placements set check_area_id = refill where id = chk; end if;
     delete from product_placements x using check_areas c where c.id = x.check_area_id and x.product_id = p and x.id not in (pl, chk) and (c.id = f2 or c.parent_area_id = f2);
-    update product_placements set sort_order = 100 + i, heading = case when i = 1 then 'Check the portioning' else null end, par_level = null,
+    -- Placed among the drawers already (e.g. 2026-11-gold-class-kitchen-portioning-in-drawers.sql): kept there.
+    update product_placements set sort_order = case when fresh then 100 + i else sort_order end,
+      heading = case when not fresh then heading when i = 1 then 'Check the portioning' else null end, par_level = null,
       refill_source = 'Tick if more needs portioning tomorrow (from the Freezer 1 stock)', prep_task_id = t,
       pickup_area_id = null, pickup_suggest = false, location_id = null, instructions = null
       where id = chk;
