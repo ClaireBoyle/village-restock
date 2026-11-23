@@ -110,7 +110,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
 
   // 4. Pull for defrost: grouped by where it's collected, destination kept; Pulled only once moved.
   ok(await sees(P, '.dpull .sec-title', 'Pull for defrost'), '"Pull for defrost" on the Defrost page');
-  const groups = (await P.locator('.dpull .grab-group h4').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim());
+  const groups = await P.$$eval('.dpull .grab-group h4', (e) => e.map((x) => x.childNodes[0].textContent.replace(/\s+/g, ' ').trim()));
   ok(groups.join('|') === 'Freezer 1 · Lower left|Freezer 1 · Lower right|Freezer 2', `walking order, by compartment: ${groups.join(', ')}`);
   ok(await sees(P, `.dpull .grab-group:has(h4:text-is("Freezer 2")) ${pline('Grilled Chicken')}`, '6') && await sees(P, `${pline('Pulled Beef (Bao)')} .dp-to`, '→ Upstairs walk-in fridge'), 'each item with its destination beside it');
   ok(await sees(P, `${pline('Grilled Chicken')} .dp-spot`, 'Above the arancini drawer'), 'and where exactly to grab it (above the arancini drawer)');

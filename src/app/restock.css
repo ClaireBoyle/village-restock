@@ -1428,6 +1428,11 @@ button.pnote.open span{display:block}
 .dp-t small{display:flex;flex-wrap:wrap;gap:2px 8px}
 .dp-to{color:var(--ink);font-weight:600}
 .dp-spot{color:var(--ink-2)}
+.dp-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.dp-head .sec-title{margin:0}
+.dp-all{min-height:44px;border-color:var(--ok);color:var(--ink)}
+.dp-all .ic{width:16px;height:16px;color:var(--ok)}
+.dpull .phead .dp-all-g{margin-left:auto;font-size:13px;text-transform:none;letter-spacing:0}
 .dp-down{margin:8px 2px 0;display:flex;gap:8px;align-items:flex-start;font-size:13.5px;color:var(--ink-2)}
 .dp-down .ic{width:16px;height:16px;flex:none;margin-top:2px}
 .dp-down b{color:var(--ink)}

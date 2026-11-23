@@ -250,11 +250,13 @@ export function DefrostRow({ p, item, rawQty, suggestion, admits, onChange, phot
  * the collection list from downstairs (an empty compartment is never a shortage by itself). What's defrosted
  * straight from downstairs (e.g. the desserts) is on the collection list, not here.
  */
-export function DefrostPullList({ rows, walkOrder, onChange }: {
+export function DefrostPullList({ rows, walkOrder, onChange, onChangeMany }: {
   rows: { p: PlacementView; item: ItemState; pickup: boolean }[];
   /** Compartments in walking order (by area id). */
   walkOrder: Map<string, number>;
   onChange: (p: PlacementView, f: Partial<ItemState>) => void;
+  /** Several at once ("All pulled"), saved together. */
+  onChangeMany?: (ups: { placementId: string; fields: Partial<ItemState> }[]) => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
@@ -266,6 +268,13 @@ export function DefrostPullList({ rows, walkOrder, onChange }: {
   const spots = [...new Set(list.map(spotOf))].sort((a, b) => (walkOrder.get(a) ?? 1e9) - (walkOrder.get(b) ?? 1e9));
   const pickups = list;
   const done = pickups.filter((r) => pullState(r.p, r.item).state !== 'todo').length;
+  // "All pulled": everything still to pull (in a compartment, or everywhere) marked pulled in one tap.
+  const todoOf = (l: typeof list) => l.filter((r) => pullState(r.p, r.item).state === 'todo');
+  const pullAll = (l: typeof list) => {
+    const ups = todoOf(l).map((r) => ({ placementId: r.p.placementId, fields: { upstairsQty: needOf(r.p, r.item) ?? 0 } as Partial<ItemState> }));
+    if (onChangeMany) onChangeMany(ups); else for (const r of todoOf(l)) onChange(r.p, { upstairsQty: needOf(r.p, r.item) ?? 0 });
+  };
+  const allTodo = todoOf(list).length;
   const confirm = (r: (typeof list)[number]) => {
     const n = draft.trim() === '' ? NaN : Number(draft.replace(',', '.'));
     if (!Number.isFinite(n) || n < 0) return;
@@ -275,13 +284,17 @@ export function DefrostPullList({ rows, walkOrder, onChange }: {
   };
   return (
     <section className="grab pull dpull" aria-labelledby="pull-h">
-      <h3 className="sec-title" id="pull-h"><Icon name="up" />Pull for defrost{pickups.length ? <small>{done} of {pickups.length} pulled</small> : null}</h3>
-      <p className="grab-hint">Freezer 1, then Freezer 2. Tap <b>Pulled</b> once it&rsquo;s moved; <b>Not upstairs</b> or <b>Only some</b> puts the rest on the collection list.</p>
+      <div className="dp-head">
+        <h3 className="sec-title" id="pull-h"><Icon name="up" />Pull for defrost{pickups.length ? <small>{done} of {pickups.length} pulled</small> : null}</h3>
+        {allTodo >= 2 ? <button type="button" className="btn dp-all" onClick={() => pullAll(list)}><Icon name="check" />All pulled ({allTodo})</button> : null}
+      </div>
+      <p className="grab-hint">Freezer 1, then Freezer 2. Tap <b>Pulled</b> (or <b>All pulled</b>) once it&rsquo;s moved; <b>Not upstairs</b> or <b>Only some</b> puts the rest on the collection list.</p>
       {spots.map((g) => {
         const gl = list.filter((r) => spotOf(r) === g);
         return (
           <div key={g} className="grab-group">
-            <h4 className="phead">{defrostSource(gl[0].p)}</h4>
+            <h4 className="phead">{defrostSource(gl[0].p)}
+              {spots.length > 1 && todoOf(gl).length >= 2 ? <button type="button" className="linkbtn dp-all-g" onClick={() => pullAll(gl)} aria-label={`All pulled: ${defrostSource(gl[0].p)}`}>All pulled</button> : null}</h4>
             <ul className="dp-lines">{gl.map((r) => {
               const ps = pullState(r.p, r.item);
               const q = (n: number) => formatQty(n, r.p.unitSingular, r.p.unitPlural);

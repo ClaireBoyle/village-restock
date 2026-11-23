@@ -46,8 +46,10 @@ begin
     end if;
   end loop;
 
-  update check_areas set guide_text = 'Check what''s ready, then set what to defrost or tap Not needed.'
-    where id = def and guide_text in ('Defrost for tomorrow: set an amount, or Not needed. Freezer drawers are refilled under Freezer 2.', '');
+  -- Only what's needed is entered: a blank row means nothing to defrost (Not needed is optional).
+  update check_areas set guide_text = 'Check what''s ready, then enter only what needs defrosting. Blank means not needed.'
+    where id = def and guide_text in ('Defrost for tomorrow: set an amount, or Not needed. Freezer drawers are refilled under Freezer 2.',
+                                      'Check what''s ready, then set what to defrost or tap Not needed.', '');
 
   raise notice 'Defrost: %', (select string_agg(case when x.heading is not null then '[' || x.heading || '] ' else '' end || q.name, ', ' order by x.sort_order)
     from product_placements x join products q on q.id = x.product_id where x.check_area_id = def and q.status = 'active');

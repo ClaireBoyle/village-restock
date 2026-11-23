@@ -532,7 +532,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
           ) : null}
           {isDefrost ? (
             <DefrostPullList rows={defrostRows.map((p) => ({ p, item: dItem(p), pickup: pickupOf(p) }))}
-              walkOrder={whole.pickupOrder} onChange={(p, fields) => void onItem(p, fields)} />
+              walkOrder={whole.pickupOrder} onChange={(p, fields) => void onItem(p, fields)} onChangeMany={writeItems} />
           ) : null}
 
           {st === 'skipped' ? (
