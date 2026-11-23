@@ -87,7 +87,7 @@ const st = async (P, n) => (await P.locator(`${job(n)} .pcl-st`).innerText()).sp
   const next = await b.newContext({ ...devices['iPad (gen 7)'] });
   await next.addInitScript(`{ const off = 24 * 3600 * 1000; const D = Date; class N extends D { constructor(...a) { if (a.length) super(...a); else super(D.now() + off); } static now() { return D.now() + off; } } globalThis.Date = N; }`);
   const M = await next.newPage(); M.on('pageerror', (e) => errs.push(e.message));
-  await M.goto(`${B}/d/${k.id}`); await M.waitForSelector('.prep-card');
+  await M.goto(`${B}/d/${k.id}`); await M.waitForSelector('.prep-card'); await M.click('.prep-card .pc-head'); // starts folded
   ok(await sees(M, '.prep-card', 'Make tartare') && await sees(M, '.prep-card .pc-sub', 'Left for morning on the'), 'opener: "Make tartare" on the handover, from the prep checklist');
   ok(!(await M.locator('.prep-card').innerText()).includes('burger') && !(await M.locator('.prep-card').innerText()).includes('carrot'), 'opener: nothing that was only Needs prep for last night');
   await M.click('.prep-card button.pc-done'); await waitDb(() => sql`select morning_done_at from prep_checks where morning`, (r) => !!r[0]?.morningDoneAt);

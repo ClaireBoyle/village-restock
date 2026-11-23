@@ -162,7 +162,10 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   await M.goto(B + '/'); await M.waitForSelector('.dcard2');
   await M.click('.who'); await M.fill('#staffname', 'Jo'); await M.click('.sheet .btn.primary');
   await M.click('.dcard2:has-text("Kitchen") >> nth=0'); await M.waitForSelector('.prep-card', { timeout: 15000 });
-  ok(await sees(M, '.prep-card .pc-n', '0 of 4 done') && await sees(M, '.prep-card', 'Double the chilli'), 'Kitchen screen: Morning prep, 0 of 4 done');
+  ok(await sees(M, '.prep-card .pc-n', '0 of 4 done') && await M.locator('.prep-card .pc-sec').count() === 0 && await M.getAttribute('.prep-card .pc-head', 'aria-expanded') === 'false',
+    'Kitchen screen: Morning prep starts folded: "Morning prep · 0 of 4 done"');
+  await M.click('.prep-card .pc-head');
+  ok(await sees(M, '.prep-card', 'Double the chilli'), 'tapped: opens');
   const kinds = await M.$$eval('.prep-card .pc-sec', (els) => els.map((e) => [e.dataset.prepKind, [...e.querySelectorAll('[data-prep]')].map((x) => x.dataset.prep)]));
   ok(JSON.stringify(kinds) === JSON.stringify([['Portioning', ['Portion defrosted pulled beef']], ['Cutting', ['Cut carrots for Harvest Hommus']], ['Sauces', ['Make vodka sauce']], ['Other', ['Clean the slicer']]]),
     'split by job: Portioning · Cutting · Sauces · Other: ' + JSON.stringify(kinds));
@@ -176,8 +179,9 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   await M.click('.prep-card .pc-head');
   ok(await M.locator('.prep-card .pc-sec').count() === 0 && await sees(M, '.prep-card .pc-n', '1 of 4 done'), 'card folded: just "Morning prep · 1 of 4 done"');
   await M.screenshot({ path: `${OUT}/p19-morning-folded.png` });
+  await M.click('.prep-card .pc-head'); // open again, then reload: it starts folded again
   await M.reload(); await M.waitForSelector('.prep-card');
-  ok(await M.locator('.prep-card .pc-sec').count() === 0 && await M.getAttribute('.prep-card .pc-head', 'aria-expanded') === 'false', 'still folded after reloading');
+  ok(await M.locator('.prep-card .pc-sec').count() === 0 && await M.getAttribute('.prep-card .pc-head', 'aria-expanded') === 'false', 'reloaded: starts folded again');
   await M.click('.prep-card .pc-head');
   ok(await M.locator('.pc-sec[data-prep-kind="Cutting"] [data-prep]').count() === 0 && await M.locator('.pc-sec[data-prep-kind="Portioning"] [data-prep]').count() === 1, 'opened again: Cutting still folded, as left');
   await M.click('.pc-sec[data-prep-kind="Cutting"] .pc-sec-h');

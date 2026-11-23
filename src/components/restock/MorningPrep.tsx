@@ -160,14 +160,16 @@ function useFold(key: string, start = true): [boolean, (v: boolean) => void] {
 
 /**
  * Kitchen screen: last night's handover for the morning team, each task marked Done on its own. Split by the kind
- * of job (Portioning · Cutting · Sauces · Other); the card and each section fold away (remembered on this device).
+ * of job (Portioning · Cutting · Sauces · Other). The card starts folded; each section folds on its own (remembered
+ * on this device).
  */
 export function MorningPrepCard({ handover, dateLabel, onDone, sub, foldKey = 'vr-prep' }: { handover: LocalPrep; dateLabel: string; onDone: (itemId: string, done: boolean) => void;
   /** Where it came from, when not only the close (e.g. jobs left for morning on the Prep checklist). */
   sub?: string;
-  /** Where the open / folded choices are kept on this device (per department). */
+  /** Where the sections' open / folded choices are kept on this device (per department). */
   foldKey?: string }) {
-  const [open, setOpen] = useFold(`${foldKey}-card`);
+  // The card starts folded each time the screen opens (one line: "Morning prep · 1 of 4 done"); tap to open it.
+  const [open, setOpen] = useState(false);
   if (handover.status === 'none') {
     return <section className="prep-card none" aria-label="Morning prep"><Icon name="check" /><div><b>No morning prep needed</b><small>From the {dateLabel} close</small></div></section>;
   }
