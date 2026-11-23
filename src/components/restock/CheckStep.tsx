@@ -282,9 +282,10 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
    */
   const LONG = 15; // only very long groups (e.g. 31 spirits); shorter ones never fold
   const renderList = (list: typeof cur.placements) => {
-    // Products moved above the first subheading belong to that first group (the list starts with its heading).
+    // A product moved above the first subheading belongs to that first group (the list starts with its heading).
+    // Several rows before it (e.g. Freezer 2's drawers before "Check the portioning") are their own part, unheaded.
     const f = list.findIndex((x) => x.heading);
-    const ps = f > 0 ? list.map((x, n) => (n === 0 ? { ...x, heading: list[f].heading } : n === f ? { ...x, heading: null } : x)) : list;
+    const ps = f === 1 ? list.map((x, n) => (n === 0 ? { ...x, heading: list[f].heading } : n === f ? { ...x, heading: null } : x)) : list;
     const out: React.ReactNode[] = [];
     let i = 0;
     while (i < ps.length) {
@@ -495,12 +496,15 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
           })()}
           {cur.sections.filter((x) => x.mode !== 'side').map((sec) => {
             const enteredHere = sec.placements.filter(chk).length;
+            // Working drawers and tubs (e.g. Freezer 2): "3 of 11 checked" (portioning checks aren't drawers).
+            const drawers = sec.placements.some((x) => x.refillSource && !x.prepTaskId) ? sec.placements.filter((x) => !x.prepTaskId) : null;
             const open = openSecs[sec.area.id] ?? (sec.mode === 'open' || enteredHere > 0);
             return (
               <section key={sec.area.id} className={`psec ${sec.mode} ${open ? 'open' : ''}`}>
                 <button type="button" className="psec-h" onClick={() => setOpenSecs((o) => ({ ...o, [sec.area.id]: !open }))} aria-expanded={open}>
                   <span className="psec-t"><b>{secName(sec.area.name)}</b>{sec.mode === 'optional' ? <span className="psec-tag">Optional</span> : null}</span>
-                  <small>{enteredHere ? `${enteredHere} entered` : `${sec.placements.length} product${sec.placements.length === 1 ? '' : 's'}`}</small>
+                  <small>{drawers ? `${drawers.filter(chk).length} of ${drawers.length} checked`
+                    : enteredHere ? `${enteredHere} entered` : `${sec.placements.length} product${sec.placements.length === 1 ? '' : 's'}`}</small>
                   <Icon name={open ? 'up' : 'down'} />
                 </button>
                 {open ? (

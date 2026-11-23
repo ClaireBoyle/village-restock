@@ -114,6 +114,7 @@ export interface ItemState {
   /** Candy Bar: nothing collected and none left on display (Out of stock). */
   noneOnDisplay?: boolean;
   /** Kitchen refill task: refilled · full (already full) · needs_stock (still to do). */
+  /** A working drawer or tub: refilled (Stocked; 'full' from older versions also means Stocked) or needs_stock. */
   refillStatus?: 'refilled' | 'full' | 'needs_stock' | null;
   /** Defrost: pulled from the upstairs freezer (null = not yet). Less than needed: the rest comes from downstairs. */
   upstairsQty?: number | null;
@@ -286,7 +287,8 @@ export function scopeView(view: DepartmentView, areaId: string | null | undefine
 // ---------------------------------------------------------------------------
 /** Amount to collect, or null while the card hasn't been filled in. */
 export function needOf(p: PlacementView, i: ItemState): number | null {
-  // A refill task or a linked row is never a requirement of its own.
+  // A working drawer (Stocked / Needs stock: what's needed from downstairs is entered under the spare stock) or a
+  // linked row is never a requirement of its own.
   if (p.refillSource || p.linkedPlacementId) return null;
   // Quick Restock asks for the amount needed directly, also for target-level products (no shelf count).
   if (p.method === 'par') return i.currentQty === null && i.requestedQty !== null ? i.requestedQty : p.par === null ? null : requiredForPar(p.par, i.currentQty);

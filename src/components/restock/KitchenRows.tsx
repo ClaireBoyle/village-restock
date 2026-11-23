@@ -1,7 +1,8 @@
 'use client';
 // Gold Class Kitchen rows that aren't a plain "how many to collect":
-// * RefillRow: a working drawer or tub refilled from stock already upstairs. One tap:
-//   Refilled · Already full · Needs stock. It records the task only (no amount, never collected).
+// * RefillRow: a working drawer or tub refilled from stock already upstairs. One tap: Stocked (enough for
+//   service, already full or topped up) or Needs stock (couldn't fill it: e.g. the box under it was used up).
+//   Just the answer: what's needed from downstairs is entered under the spare stock, below.
 // * LinkedRow: the same item elsewhere (e.g. a dessert on the walk-in's dessert shelf) showing the
 //   requirement already planned in Defrost, and editing that one total.
 // * PendingRefills: refills still to do ("Needs stock"), shown after collecting and before finishing.
@@ -10,29 +11,24 @@ import type { ItemState, PlacementView } from '@/lib/restock-logic';
 import { formatQty, round2 } from '@/lib/restock-math';
 import { NumberBox } from './DefrostParts';
 
-type Refill = NonNullable<ItemState['refillStatus']>;
-const REFILL: [Refill, string][] = [['refilled', 'Refilled'], ['full', 'Already full'], ['needs_stock', 'Needs stock']];
-
+/**
+ * A working drawer or tub: Stocked or Needs stock, nothing else (starts unanswered, so staff see what's checked).
+ * Tap the chosen one again to undo.
+ */
 export function RefillRow({ p, item, onChange, photo }: { p: PlacementView; item: ItemState; onChange: (f: Partial<ItemState>) => void; photo: React.ReactNode }) {
   const v = item.refillStatus ?? null;
-  const st = v === 'needs_stock' ? 'warn' : v ? 'ok' : 'none';
-  const status = v === 'refilled' ? <><Icon name="check" />Refilled</>
-    : v === 'full' ? <><Icon name="check" />Already full</>
-    : v === 'needs_stock' ? <><Icon name="warn" />Refill still to do</>
-    : <span className="sr-only">Not done yet</span>;
+  const stocked = v === 'refilled' || v === 'full';
+  const needs = v === 'needs_stock';
   return (
-    <article className={`prow card rrow s-${st} ${v ? '' : 'quiet'}`} data-placement={p.placementId}>
+    <article className={`prow card rrow s-${needs ? 'warn' : stocked ? 'ok' : 'none'} ${v ? '' : 'quiet'}`} data-placement={p.placementId}>
       {photo}
-      <div className="pt"><h3>{p.productName}</h3><p className="ps" id={`s-${p.placementId}`}>{status}</p></div>
-      <div className="pwide rr-body">
-        <p className="rr-src"><Icon name="up" /><span><b>From</b> {p.refillSource}</span></p>
-        {p.instructions ? <p className="rr-note">{p.instructions}</p> : null}
-        <div className="rr-acts" role="group" aria-label={`${p.productName}: refill`}>
-          {REFILL.map(([k, label]) => (
-            <button key={k} type="button" className={`rr-b k-${k} ${v === k ? 'on' : ''}`} aria-pressed={v === k}
-              onClick={() => onChange({ refillStatus: v === k ? null : k })}>{v === k ? <Icon name="check" /> : null}{label}</button>
-          ))}
-        </div>
+      <div className="pt"><h3>{p.productName}</h3>
+        <p className="ps sr-only" id={`s-${p.placementId}`}>{stocked ? 'Stocked' : needs ? 'Needs stock' : 'Not checked yet'}</p></div>
+      <div className="pc rr-acts" role="group" aria-label={`${p.productName}: drawer`}>
+        <button type="button" className={`rr-b k-stocked ${stocked ? 'on' : ''}`} aria-pressed={stocked}
+          onClick={() => onChange({ refillStatus: stocked ? null : 'refilled' })}>{stocked ? <Icon name="check" /> : null}Stocked</button>
+        <button type="button" className={`rr-b k-needs_stock ${needs ? 'on' : ''}`} aria-pressed={needs}
+          onClick={() => onChange({ refillStatus: needs ? null : 'needs_stock' })}>{needs ? <Icon name="check" /> : null}Needs stock</button>
       </div>
     </article>
   );
@@ -101,7 +97,6 @@ export function PortionCheckRow({ p, taskName, on, onToggle, photo }: { p: Place
         <button type="button" className={`pnn pc-tick ${on ? 'on' : ''}`} aria-pressed={on} onClick={onToggle}
           aria-label={`${p.productName}: needs portioning`}>{on ? <Icon name="check" /> : null}Needs portioning</button>
       </div>
-      {p.refillSource ? <p className="pwide rr-src pc-src"><Icon name="clock" /><span>{p.refillSource}</span></p> : null}
     </article>
   );
 }

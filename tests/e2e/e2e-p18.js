@@ -156,8 +156,6 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   // 5b. Refills: one tap, the source shown in full under each.
   const R = (n) => sec('Refill working drawers and tubs', n), S = (n) => sec('Check remaining spare stock', n);
   ok(await P.locator('.psec:has(.psec-t b:text-is("Refill working drawers and tubs")) article.rrow').count() === 10, '10 working drawers and tubs');
-  ok(await sees(P, `${R('Chicken tenders')} .rr-src`, 'Tender box in Freezer 2, lower left') && await sees(P, `${R('Prawn Twisters')} .rr-src`, 'Spare boxes in Freezer 2, lower left')
-    && await sees(P, `${R('Beef Dumplings')} .rr-src`, 'Freezer 2, lower right') && await sees(P, `${R('Fries')} .rr-src`, 'Source to be confirmed'), 'each refill shows its source');
   // Lamb, cauliflower popcorn and Fisherman's Baskets: no Freezer 2 stock row (that's Freezer 1), just a portioning check.
   ok(await P.locator('.psec:has(.psec-t b:text-is("Refill working drawers and tubs")) .phead').filter({ hasText: 'Check the portioning' }).count() === 1
     && await P.locator('.psec:has(.psec-t b:text-is("Refill working drawers and tubs")) article.pcrow').count() === 3
@@ -178,9 +176,16 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   await checklist.close();
   const [{ n: noItem }] = await sql`select count(*)::int as n from session_items i join product_placements x on x.id = i.placement_id join products q on q.id = x.product_id where q.name = 'Portioned Lamb'`;
   ok(noItem === 0, 'the tick only updates the handover (nothing in the restock)');
-  ok(await P.locator(`${R('Arancini')} button.padd`).count() === 0 && (await P.locator(`${R('Arancini')} .rr-b`).allInnerTexts()).join('|') === 'Refilled|Already full|Needs stock', 'refill: Refilled · Already full · Needs stock (no Add)');
-  await P.click(`${R('Arancini')} .rr-b.k-refilled`); await P.click(`${R('Nuggets')} .rr-b.k-full`); await P.click(`${R('Chicken tenders')} .rr-b.k-needs_stock`);
-  ok(await sees(P, `${R('Arancini')} .ps`, 'Refilled') && await sees(P, `${R('Nuggets')} .ps`, 'Already full') && await sees(P, `${R('Chicken tenders')} .ps`, 'Refill still to do'), 'one tap each');
+  ok(await P.locator(`${R('Arancini')} button.padd`).count() === 0 && (await P.locator(`${R('Arancini')} .rr-b`).allInnerTexts()).join('|') === 'Stocked|Needs stock', 'drawer: just Stocked · Needs stock (no Add)');
+  const refillSec = '.psec:has(.psec-t b:text-is("Refill working drawers and tubs"))';
+  const nDrawers = await P.locator(`${refillSec} article.rrow`).count();
+  ok(await P.locator(`${refillSec} .rr-b.on`).count() === 0 && (await P.locator(`${refillSec} .psec-h small`).innerText()) === `0 of ${nDrawers} checked`, `starts unselected: "0 of ${nDrawers} checked"`);
+  ok(await P.locator(`${refillSec} article.rrow .rr-src, ${refillSec} article.rrow .rr-note, ${refillSec} > .psec-hint`).count() === 0, 'no subtext: just each drawer\'s name, Stocked and Needs stock');
+  await P.click(`${R('Arancini')} .rr-b.k-stocked`); await P.click(`${R('Nuggets')} .rr-b.k-stocked`); await P.click(`${R('Chicken tenders')} .rr-b.k-needs_stock`);
+  await P.waitForSelector(`${R('Chicken tenders')} .rr-b.k-needs_stock.on`); await P.waitForSelector(`${R('Nuggets')} .rr-b.k-stocked.on`);
+  ok(await P.locator(`${R('Arancini')} .rr-b.k-stocked.on`).count() === 1 && await P.locator(`${R('Chicken tenders')} .rr-b.k-needs_stock.on`).count() === 1 && await P.locator(`${R('Arancini')} .rr-need`).count() === 0, 'one tap each');
+  ok((await P.locator(`${refillSec} .psec-h small`).innerText()) === `3 of ${nDrawers} checked`, `"3 of ${nDrawers} checked"`);
+  ok(await P.locator(`${R('Chicken tenders')} .qty-input, ${R('Chicken tenders')} .rr-note`).count() === 0, 'Needs stock: just the answer (no amount, no extra text)');
   // 5c. Then the spare stock: the total needed from downstairs, entered once.
   await P.click(`${S('Arancini')} button.padd`);
   await P.click(`${S('Vegetarian Spring Rolls')} button.padd`);
@@ -202,7 +207,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   ok(chick.length === 2 && chick[0] === '2 to defrost → Upstairs walk-in fridge' && chick[1] === '6 back into Freezer 2 spare stock', 'chicken, one line: ' + chick.join(' | '));
   ok(await sees(P, line('Sticky Date'), '2') && await P.locator(line('Sticky Date')).count() === 1 && await sees(P, `${line('Sticky Date')} .dr-dest`, 'Upstairs walk-in fridge'), 'sticky date: one line of 2, from Defrost (not doubled)');
   ok(await sees(P, `.room:has(h3:text-is("Walk in freezer(Downstairs)")) ${line('Cauliflower Popcorn')}`, '1'), 'cauliflower popcorn: on the downstairs list (walk-in freezer)');
-  ok(await sees(P, line('Arancini'), '1') && await P.locator(line('Chicken tenders')).count() === 0 && await P.locator(line('Nuggets')).count() === 0, 'refills add nothing: only the spare stock amount (arancini 1)');
+  ok(await sees(P, line('Arancini'), '1') && await P.locator(line('Chicken tenders')).count() === 0 && await P.locator(line('Nuggets')).count() === 0, 'drawers add nothing: only the spare stock amount (arancini 1)');
   ok(await sees(P, '.rr-pending', 'Chicken tenders') && await sees(P, '.rr-pending', 'Tender box in Freezer 2, lower left'), 'after collecting: "Back upstairs: refill" lists the tenders drawer');
   ok(await P.locator(line('Bao Buns')).count() === 0, 'bao buns removed on Freezer 1: not on the list');
   await P.screenshot({ path: `${OUT}/p18-defrost-collect.png`, fullPage: true });

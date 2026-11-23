@@ -31,7 +31,7 @@ const none = new Map();
 const list = (m: Map<string, ItemState>) => collectionLines(collectPlacements('full', view.placements, none), m).map((l) => `${l.productName} ${l.total}`);
 
 describe('refill tasks', () => {
-  it('a tick records the task only: nothing collected, nothing assumed used', () => {
+  it('Stocked or Needs stock records the drawer only: nothing collected, nothing assumed used', () => {
     for (const s of ['refilled', 'full', 'needs_stock'] as const) expect(list(items({ drawer: { refillStatus: s } }))).toEqual([]);
     expect(isChecked(view.byId.get('drawer')!, { ...EMPTY_ITEM, refillStatus: 'full' })).toBe(true);
     expect(isChecked(view.byId.get('drawer')!, EMPTY_ITEM)).toBe(false);

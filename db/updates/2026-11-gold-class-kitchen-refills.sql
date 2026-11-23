@@ -87,7 +87,7 @@ begin
   spare := (select id from check_areas where department_id = dept and lower(name) = lower('Freezer 2 · Check remaining spare stock'));
   if spare is null then insert into check_areas (department_id, name, sort_order) values (dept, 'Freezer 2 · Check remaining spare stock', 2) returning id into spare; end if;
   update check_areas set active = true, parent_area_id = f2, section_mode = 'open', sort_order = 1,
-    guide_text = 'Refill each working drawer and tub from the stock shown under it. Tap Refilled, Already full or Needs stock.' where id = refill;
+    guide_text = '' where id = refill;
   update check_areas set active = true, parent_area_id = f2, section_mode = 'open', sort_order = 2,
     guide_text = 'After refilling: check what spare stock is left and enter the total needed from downstairs.' where id = spare;
   oldsecs := array(select id from check_areas where department_id = dept and parent_area_id = f2 and not (id in (refill, spare)));
