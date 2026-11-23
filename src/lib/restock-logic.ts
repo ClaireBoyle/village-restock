@@ -75,6 +75,10 @@ export interface PlacementView {
   /** Where to reach in the storeroom (collection line), and what to take down for this product (top of the list). */
   collectNote?: string | null;
   collectReminder?: string | null;
+  /** A "Needs refill" task done from another area's stock (e.g. the malt powder container, from the coffee cupboard):
+   *  ticked, it's a reminder at the top of that area's screen, not a line on the downstairs list. */
+  remindAreaId?: string | null;
+  remindAreaName?: string | null;
   /** Defrost rows (Gold Class Kitchen): pull an amount or "Not needed", with where it's from and where it goes. */
   defrost?: boolean;
   grabNote?: string | null;
@@ -195,6 +199,7 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
       const p = products.get(pl.productId)!;
       const locId = pl.locationId ?? p.defaultLocationId;
       const pick = pl.pickupAreaId && pl.pickupAreaId !== area.id ? byArea.get(pl.pickupAreaId) : undefined;
+      const remind = p.method === 'routine' && pl.remindAreaId && pl.remindAreaId !== area.id ? byArea.get(pl.remindAreaId) : undefined;
       // A unit override needs both words (e.g. bottle / bottles), or it's ignored.
       const ownUnit = pl.unitSingular?.trim() && pl.unitPlural?.trim();
       return {
@@ -213,6 +218,7 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
         photoCredit: p.photoCredit ?? null,
         collectNote: pl.collectNote?.trim() || null,
         collectReminder: p.collectReminder?.trim() || null,
+        remindAreaId: remind?.id ?? null, remindAreaName: remind?.name ?? null,
         heading: pl.heading?.trim() || null,
         screenAreaId, optional,
         refillSource: pl.refillSource?.trim() || null,
@@ -289,7 +295,7 @@ export function needOf(p: PlacementView, i: ItemState): number | null {
 }
 
 /** Quick Restock: products picked by amount. Refill tasks, linked rows and prep-made stock are restocked other ways. */
-export const isQuickPick = (p: PlacementView) => !p.refillSource && !p.linkedPlacementId && !p.prepTaskId;
+export const isQuickPick = (p: PlacementView) => !p.refillSource && !p.linkedPlacementId && !p.prepTaskId && !p.remindAreaId;
 
 /** Quick Restock: the amount entered as needed (null = not on the list). */
 export const quickNeed = (p: PlacementView, i: ItemState): number | null => (p.method === 'routine' ? null : i.requestedQty);
@@ -519,6 +525,20 @@ export function lineGroups(lines: CollectionLine[], view: DepartmentView, by: 't
   return sorted.map((g): LineGroup => ({ key: g.key, label: g.label, lines: g.lines, ...(g.areaName ? { areaName: g.areaName } : {}) }));
 }
 
+/**
+ * Refill tasks to remind staff about on a screen (e.g. Coffee cupboard: "Refill the malt powder container"): those
+ * ticked "Needs refill" elsewhere whose stock is on this screen (the area or one of its sections), with whether
+ * they're done.
+ */
+export function areaReminders(view: DepartmentView, screenAreaId: string, items: Map<string, ItemState>): { p: PlacementView; done: boolean }[] {
+  const screen = view.areas.find((a) => a.area.id === screenAreaId);
+  if (!screen) return [];
+  const here = new Set([screen.area.id, ...screen.sections.map((s) => s.area.id)]);
+  return view.placements
+    .filter((p) => p.remindAreaId && here.has(p.remindAreaId) && (items.get(p.placementId) ?? EMPTY_ITEM).routineChoice === 'needed')
+    .map((p) => ({ p, done: (items.get(p.placementId) ?? EMPTY_ITEM).collectedMode === 'all' }));
+}
+
 /** Lines grouped by storeroom, storerooms in the admin's order. */
 export function groupByStoreroom(lines: CollectionLine[], locationOrder: Map<string, number>) {
   const groups = new Map<string, { name: string; order: number; lines: CollectionLine[] }>();
@@ -716,7 +736,7 @@ export const isPrepMade = (p: PlacementView) => !!p.prepTaskId;
  * A defrost pull stays in, marked: only what upstairs didn't have ("Not enough upstairs") is collected.
  */
 export function collectPlacements(kind: SessionKind, placements: PlacementView[], recordedAreas: Map<string, AreaStatus>): PlacementView[] {
-  return activePlacements(kind, placements, recordedAreas).flatMap((p) => (isPickup(kind, p) ? (p.defrost ? [{ ...p, pullRemainder: true }] : []) : isPrepMade(p) ? [] : [p]));
+  return activePlacements(kind, placements, recordedAreas).flatMap((p) => (isPickup(kind, p) ? (p.defrost ? [{ ...p, pullRemainder: true }] : []) : isPrepMade(p) || p.remindAreaId ? [] : [p]));
 }
 
 /** Defrost pull state: todo (not pulled yet) · pulled (all of it) · short (not enough upstairs: the rest is on the collection list). */

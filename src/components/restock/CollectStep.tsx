@@ -169,15 +169,16 @@ export function Line({ line, items, write, oneArea, tickOnly = false, displayRul
   const dShort = valid ? round2(Math.max(0, line.total - num!)) : null;
   const inputId = `got-${line.key.replace(/[^a-z0-9]/gi, '')}`;
 
-  /** Open the editor: blank for a new shortfall, the recorded amount when changing one. */
+  /** Open the editor: 0 for a new shortfall (adjust with + / −, or type over it), the recorded amount when changing one. */
   const openEditor = () => {
     setEditing(true); setMore(false);
-    setDraft(st === 'short' || st === 'part' ? String(round2(got)) : '');
+    setDraft(st === 'short' || st === 'part' ? String(round2(got)) : '0');
     setDReason(info.reason && info.reason !== 'insufficient' ? info.reason : null);
     setDFlag(info.flagged);
     // Changing it: the split staff chose last time.
     setAlloc(Object.fromEntries(sideShares(line, items).map((s) => [s.placementId, s.collected ?? 0])));
-    window.setTimeout(() => document.getElementById(inputId)?.focus(), 30);
+    // Focused with the amount selected, so typing a number replaces the 0.
+    window.setTimeout(() => { const el = document.getElementById(inputId) as HTMLInputElement | null; el?.focus(); el?.select(); }, 30);
   };
   /** The default split of n units: each side in turn gets what it asked for, until they run out. */
   const defaultAlloc = (n: number) => {

@@ -82,9 +82,9 @@ const contrast = (P, sel) => P.$eval(sel, (el) => {
   ok(await has(P, `${line('Whipping Cream')}.done`, 'Collected') && await has(P, `${line('Whipped Cream')}.done`, 'Collected'), '4. Whipped and Whipping Cream collected separately');
   // 5. Partial: no reason to pick
   await P.click(`${line('Kirin Ichiban')} .l-few`);
-  ok(await has(P, `${line('Kirin Ichiban')} .fewer`, 'How many did you get?') && await P.inputValue(`${line('Kirin Ichiban')} .fewer .qty-input`) === ''
-    && await P.isDisabled(`${line('Kirin Ichiban')} .fw-ok`) && await P.locator(`${line('Kirin Ichiban')} .chip, ${line('Kirin Ichiban')} .flag`).count() === 0,
-    '5. Got fewer: "How many did you get?", blank amount, Confirm waits for it, reasons and Flag tucked under More options');
+  ok(await has(P, `${line('Kirin Ichiban')} .fewer`, 'How many did you get?') && await P.inputValue(`${line('Kirin Ichiban')} .fewer .qty-input`) === '0'
+    && !(await P.isDisabled(`${line('Kirin Ichiban')} .fw-ok`)) && await P.locator(`${line('Kirin Ichiban')} .chip, ${line('Kirin Ichiban')} .flag`).count() === 0,
+    '5. Got fewer: "How many did you get?", starts at 0 (adjust with + / −), reasons and Flag tucked under More options');
   ok((await reasonOf('Kirin Ichiban')).collectedMode === null, '5. opening Got fewer saves nothing');
   await P.click(`${line('Kirin Ichiban')} .fw-x`);
   ok(await P.locator(`${line('Kirin Ichiban')} .fewer`).count() === 0 && await P.locator(`${line('Kirin Ichiban')}.todo .l-all`).count() === 1
@@ -107,8 +107,11 @@ const contrast = (P, sel) => P.$eval(sel, (el) => {
   await P.click(`${line('Guinness')} .chip:has-text("Couldn’t access stock")`); await P.click(`${line('Guinness')} .fw-ok`);
   ok((await reasonOf('Guinness', (x) => !!x.shortfallReason)).shortfallReason === 'access' && await has(P, `${line('Guinness')} .l-why`, 'access'), '7. Couldn’t access stock recorded');
   // 8. Interrupted
-  await P.click(`${line('Heineken')} .l-few`); await P.click(`${line('Heineken')} button[aria-label="One less"]`);
-  ok(await P.inputValue(`${line('Heineken')} .fewer .qty-input`) === '0', '8. − from blank gives 0');
+  await P.click(`${line('Heineken')} .l-few`);
+  ok(await P.inputValue(`${line('Heineken')} .fewer .qty-input`) === '0' && await P.isDisabled(`${line('Heineken')} button[aria-label="One less"]`), '8. starts at 0 (− can\'t go below it)');
+  await P.click(`${line('Heineken')} button[aria-label="One more"]`);
+  ok(await P.inputValue(`${line('Heineken')} .fewer .qty-input`) === '1', '8. + gives 1');
+  await P.click(`${line('Heineken')} button[aria-label="One less"]`);
   await P.click(`${line('Heineken')} .fw-more`); await P.click(`${line('Heineken')} .chip:has-text("Interrupted")`); await P.click(`${line('Heineken')} .fw-ok`);
   const h = await reasonOf('Heineken', (x) => !!x.shortfallReason);
   ok(h.shortfallReason === 'time' && Number(h.collectedQty) === 0, '8. Interrupted / ran out of time recorded (0 collected)');

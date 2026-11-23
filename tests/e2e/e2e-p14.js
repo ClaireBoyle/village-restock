@@ -17,7 +17,7 @@ const add = async (P, n, qty) => { await P.click(`${row(n)} button.padd`); for (
 // Got fewer, step down to `got`, Confirm
 const fewer = async (P, n, total, got) => {
   await P.click(`${line(n)} .l-few`); await P.waitForSelector(`${line(n)} .fewer`);
-  await P.fill(`${line(n)} .fewer .qty-input`, String(got)); // the amount starts blank
+  await P.fill(`${line(n)} .fewer .qty-input`, String(got)); // the amount starts at 0
   await P.click(`${line(n)} .fw-ok`); await gone(P, `${line(n)} .fewer`);
 };
 
@@ -40,7 +40,7 @@ const fewer = async (P, n, total, got) => {
     && await sees(P, '.room-note', 'Use stock from the open-box shelf first. Only open a new box if you still need more.'), 'confection collected from Dry storage, with the open-box reminder once');
   // An accidental tap on Got fewer: Cancel, nothing saved, same row.
   await P.click(`${line('Twix')} .l-few`);
-  ok(await sees(P, `${line('Twix')} .fewer`, 'How many did you get?') && await P.inputValue(`${line('Twix')} .fewer .qty-input`) === '', 'Got fewer: "How many did you get?" with a blank amount');
+  ok(await sees(P, `${line('Twix')} .fewer`, 'How many did you get?') && await P.inputValue(`${line('Twix')} .fewer .qty-input`) === '0', 'Got fewer: "How many did you get?", starting at 0');
   await P.click(`${line('Twix')} .fw-x`);
   const [tw] = await sql`select collected_mode from session_items where product_name = 'Twix'`;
   ok(await P.locator(`${line('Twix')} .fewer`).count() === 0 && tw?.collectedMode == null && await P.locator(`${line('Twix')} .l-all`).isVisible(), 'Cancel: back on the row, nothing saved, Got all still one tap');

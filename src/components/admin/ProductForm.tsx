@@ -9,7 +9,7 @@ export interface ProductFormData {
   affects: string[];
   /** Shown at the top of the collection list while this product is on it (migration 024). */
   collectReminder?: string;
-  placements: { areaId: string; par: number | null; locationId: string | null; collectNote?: string; defrost?: DefrostFormData }[];
+  placements: { areaId: string; par: number | null; locationId: string | null; collectNote?: string; remindAreaId?: string | null; defrost?: DefrostFormData }[];
 }
 
 /** Defrost details for one area (all text as typed; blank = not set). */
@@ -142,6 +142,14 @@ export function ProductForm({ departmentId, product, areas, categories, location
                       {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
                     </select></div>
                 ) : <span />}
+                {on && method === 'routine' ? (
+                  <div className="field" style={{ gridColumn: '1 / -1' }}><label htmlFor={`remind_${a.id}`}>Refilled from another area (optional)</label>
+                    <select id={`remind_${a.id}`} name={`remind_${a.id}`} defaultValue={pl?.remindAreaId ?? ''}>
+                      <option value="">No: collected from the storeroom (or an upstairs pickup)</option>
+                      {areas.filter((x) => x.id !== a.id).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                    </select>
+                    <small>When staff tick &ldquo;Needs refill&rdquo; here, that area&rsquo;s screen reminds them at the top (e.g. the malt powder container, refilled from the Coffee cupboard).</small></div>
+                ) : null}
                 {on && method !== 'routine' ? (
                   <div className="field" style={{ gridColumn: '1 / -1' }}><label htmlFor={`cnote_${a.id}`}>Where in the storeroom (optional)</label>
                     <input id={`cnote_${a.id}`} name={`cnote_${a.id}`} defaultValue={pl?.collectNote ?? ''} maxLength={120} placeholder="e.g. Lower-right compartment, beside the zucchini wedges" /></div>

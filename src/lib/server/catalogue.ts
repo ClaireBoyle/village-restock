@@ -58,7 +58,9 @@ export async function loadCatalogue(): Promise<Catalogue> {
              -- Refill tasks and linked rows (migration 018)
              (to_jsonb(pl)->>'refill_source') as refill_source, (to_jsonb(pl)->>'linked_placement_id') as linked_placement_id,
              -- Where to reach in the storeroom (migration 024)
-             nullif(trim(to_jsonb(pl)->>'collect_note'), '') as collect_note
+             nullif(trim(to_jsonb(pl)->>'collect_note'), '') as collect_note,
+             -- Refill reminder in another area (migration 026)
+             (to_jsonb(pl)->>'remind_area_id') as remind_area_id
       from product_placements pl
       join products p on p.id = pl.product_id and p.status = 'active'
       join check_areas a on a.id = pl.check_area_id and a.active

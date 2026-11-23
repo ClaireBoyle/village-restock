@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Icon } from '@/components/Icon';
 import {
+  areaReminders,
   EMPTY_ITEM, SKIP_REASONS, type ItemState, activePlacements, areaNotes, areaStatus, collectPlacements, collectionLines, isChecked, isRequired, needOf,
   phaseAreas, refillLines, groupByStoreroom, lineState, usesAdmits, prepFromStock, prepNeedText, pullState, type CollectionLine,
 } from '@/lib/restock-logic';
@@ -369,6 +370,25 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
               {st !== 'complete' && st !== 'skipped' && !byArea && !flow ? <button className="btn small" onClick={() => setSkipOpen(true)}><Icon name="skip" />Skip</button> : null}
             </div>
           </div>
+
+          {(() => {
+            // Refill tasks ticked elsewhere whose stock is here (e.g. the malt powder container, from this cupboard).
+            const rem = areaReminders(whole, cur.area.id, items);
+            return rem.length ? (
+              <section className="take-down area-remind" aria-labelledby="area-remind-h">
+                <Icon name="warn" />
+                <div><h3 id="area-remind-h">Refill while you&rsquo;re here</h3>
+                  <ul>{rem.map(({ p, done }) => (
+                    <li key={p.placementId} className={done ? 'done' : ''} data-remind={p.productName}>
+                      <span><b>{p.productName}</b>{p.instructions ? <small>{p.instructions}</small> : null}</span>
+                      <button type="button" className={`l-tick ${done ? 'on' : 'l-all'}`} aria-pressed={done}
+                        aria-label={done ? `${p.productName}: refilled (tap to undo)` : `Refilled: ${p.productName}`}
+                        onClick={() => writeItems([{ placementId: p.placementId, fields: { collectedMode: done ? null : 'all', collectedQty: null } }])}><Icon name="check" /></button>
+                    </li>
+                  ))}</ul></div>
+              </section>
+            ) : null;
+          })()}
 
           {skipOpen ? (
             <div className="skip-panel"><b>Why are you skipping {cur.area.name}?</b>

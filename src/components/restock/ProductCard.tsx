@@ -30,7 +30,8 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
   noneLeft?: boolean;
 }) {
   const st = cardState(p, item);
-  const refillTask = p.method === 'routine' && !!p.pickupAreaId;
+  // Refilled from stock elsewhere: from an upstairs cupboard (the sugar), or from another area here (the malt powder).
+  const refillTask = p.method === 'routine' && (!!p.pickupAreaId || !!p.remindAreaId);
   const need = needOf(p, item);
   const field: 'currentQty' | 'requestedQty' = p.method === 'par' ? 'currentQty' : 'requestedQty';
   const value = item[field];
@@ -88,6 +89,7 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
   else if (progressive && sug) status = <><Icon name="check" />Removed: none needed</>;
   else if (progressive) status = <><Icon name="check" />None needed</>;
   // A container refilled from an upstairs spot (e.g. sugar, Flake): its instructions are on the Refill FOH list.
+  else if (p.method === 'routine' && refillTask && p.remindAreaId) status = item.routineChoice === 'needed' ? <><Icon name="clock" />Refill at the {p.remindAreaName}</> : <><Icon name="check" />Not needed</>;
   else if (p.method === 'routine' && refillTask) status = item.routineChoice === 'needed' ? <><Icon name="up" />To grab upstairs</> : <><Icon name="check" />Not needed</>;
   else if (p.method === 'routine') status = item.routineChoice === 'needed' ? <><Icon name="up" />On the list</> : <><Icon name="check" />Not needed</>;
   else if ((need ?? 0) > 0) status = <>{target ? `${target} · ` : ''}<Icon name="up" /><b>{formatQty(need!, p.unitSingular, p.unitPlural)}</b><span className="lg">&nbsp;to collect</span></>;

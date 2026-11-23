@@ -82,6 +82,8 @@ export interface CatPlacement {
   linkedPlacementId?: string | null;
   /** Where to reach in the storeroom, shown on the collection line (e.g. "Lower-right compartment, beside the zucchini wedges"). */
   collectNote?: string | null;
+  /** A "Needs refill" task done from this area's stock: ticked, it's a reminder at the top of that area's screen. */
+  remindAreaId?: string | null;
 }
 
 /** A ready-stock target for a range of forecast admits (max null = and above). */

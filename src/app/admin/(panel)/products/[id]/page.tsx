@@ -24,7 +24,7 @@ export default async function EditProduct({ params, searchParams }: {
       to_jsonb(pl)->>'grab_note' as grab_note, to_jsonb(pl)->>'fallback_note' as fallback_note, to_jsonb(pl)->>'put_note' as put_note,
       to_jsonb(pl)->>'ready_unit_singular' as ready_unit_singular, to_jsonb(pl)->>'ready_unit_plural' as ready_unit_plural,
       to_jsonb(pl)->>'ready_per' as ready_per, to_jsonb(pl)->'ready_targets' as ready_targets,
-      to_jsonb(pl)->>'collect_note' as collect_note
+      to_jsonb(pl)->>'collect_note' as collect_note, to_jsonb(pl)->>'remind_area_id' as remind_area_id
     from product_placements pl join check_areas a on a.id = pl.check_area_id where pl.product_id = ${id}`;
   const opts = await loadFormOptions(String(p.departmentId));
   const product: ProductFormData = {
@@ -34,7 +34,7 @@ export default async function EditProduct({ params, searchParams }: {
     affects: (p.affects as string[]) ?? [],
     collectReminder: (p.collectReminder as string | null | undefined) ?? '',
     placements: placements.map((r) => ({ areaId: String(r.checkAreaId), par: r.parLevel as number | null, locationId: (r.locationId as string) ?? null,
-      collectNote: (r.collectNote as string | null) ?? '',
+      collectNote: (r.collectNote as string | null) ?? '', remindAreaId: (r.remindAreaId as string | null) ?? null,
       defrost: {
         grab: (r.grabNote as string) ?? '', fallback: (r.fallbackNote as string) ?? '', put: (r.putNote as string) ?? '',
         readySingular: (r.readyUnitSingular as string) ?? '', readyPlural: (r.readyUnitPlural as string) ?? '',

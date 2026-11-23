@@ -381,6 +381,12 @@ export async function saveProduct(_: ActionResult, form: FormData): Promise<Acti
         await tx`insert into product_placements (product_id, check_area_id, par_level, location_id, sort_order)
           values (${id}, ${pl.areaId}, ${pl.par}, ${pl.locationId}, ${Number(n)})
           on conflict (product_id, check_area_id) do update set par_level = excluded.par_level, location_id = excluded.location_id`;
+        if (form.has(`remind_${pl.areaId}`) && await hasColumn('product_placements', 'remind_area_id')) {
+          const r = String(form.get(`remind_${pl.areaId}`) ?? '');
+          const ok = d.method === 'routine' && r && r !== pl.areaId && uuid.safeParse(r).success
+            && (await tx`select 1 from check_areas where id = ${r} and department_id = ${d.departmentId}`).length > 0;
+          await tx`update product_placements set remind_area_id = ${ok ? r : null} where product_id = ${id} and check_area_id = ${pl.areaId}`;
+        }
         if (form.has(`cnote_${pl.areaId}`) && await collectColumns(tx)) {
           const note = String(form.get(`cnote_${pl.areaId}`) ?? '').trim().slice(0, 120) || null;
           await tx`update product_placements set collect_note = ${d.method === 'routine' ? null : note} where product_id = ${id} and check_area_id = ${pl.areaId}`;
