@@ -54,7 +54,10 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
     return first ? { [field]: v, leftHere: 'some', noneLeftHere: false } : { [field]: v };
   };
   const choose = (v: 'some' | 'none') => { setTick(v); onChange({ leftHere: v, noneLeftHere: v === 'none' }); };
-  const commit = (v: number | null) => { setErr(''); setText(fmt(v)); onChange(withTick(v)); };
+  // Quick taps on + / − count from the last amount set, not the one on screen (it's saved a moment later).
+  const last = useRef(value);
+  useEffect(() => { last.current = value; }, [value]);
+  const commit = (v: number | null) => { last.current = v; setErr(''); setText(fmt(v)); onChange(withTick(v)); };
   const onType = (raw: string) => {
     setText(raw);
     const r = parseQuantity(raw, { allowDecimal: p.allowDecimal, unitPlural: p.unitPlural });
@@ -64,7 +67,7 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
   };
   const step = p.allowDecimal ? 0.5 : 1;
   // From blank, + gives 1 and − gives 0 (a quick way to say "none" / "empty").
-  const bump = (dir: 1 | -1) => commit(Math.max(0, round2((value ?? 0) + dir * step)));
+  const bump = (dir: 1 | -1) => commit(Math.max(0, round2((last.current ?? 0) + dir * step)));
   // "Staff enter" products start as a single "+ Add". Once added, − steps down to 0 ("none needed"),
   // and − at 0 clears it back to untouched (blank = not entered, which is different from 0).
   const progressive = p.method === 'manual';

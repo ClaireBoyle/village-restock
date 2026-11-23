@@ -5,11 +5,11 @@ import { Icon } from '@/components/Icon';
 import {
   areaReminders,
   EMPTY_ITEM, SKIP_REASONS, type ItemState, activePlacements, areaNotes, areaStatus, collectPlacements, collectionLines, isChecked, isRequired, needOf,
-  phaseAreas, refillLines, groupByStoreroom, lineState, usesAdmits, prepFromStock, prepNeedText, pullState, type CollectionLine,
+  defrostSource, phaseAreas, refillLines, groupByStoreroom, lineState, usesAdmits, prepFromStock, prepNeedText, pullState, type CollectionLine,
 } from '@/lib/restock-logic';
 import { applyStockPrep, tickPrep } from '@/lib/client/prep-store';
 import { defrostRowInfo } from '@/lib/defrost-rows';
-import { AdmitsBox, DefrostPullList, DefrostRow } from './DefrostParts';
+import { AdmitsBox, DefrostPullList, DefrostRouteLine, DefrostRow } from './DefrostParts';
 import { LinkedRow, PortionCheckRow, RefillRow } from './KitchenRows';
 import { useLive } from '@/lib/client/hooks';
 import { Line } from './CollectStep';
@@ -76,6 +76,8 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   // Morning prep handover (Kitchen): portioning checks while refilling tick their task on it.
   const handover = useLive(async () => (ctx.prepTasks.length ? localDb().prep.get(session.id) : undefined), [session.id, ctx.prepTasks.length], undefined);
 
+  // Defrost: whether the "Pull for defrost" list has been scrolled into view (then the dock says Continue).
+  const [pullSeen, setPullSeen] = useState<string | null>(null);
   const goArea = (id: string) => { setSkipOpen(false); void updateLocalSession(session.id, { curAreaId: id }); window.scrollTo({ top: 0 }); };
   if (!cur) return <main className="wrap restock-main">{ctx.header}<div className="banner s-none"><Icon name="info" /><div><b>This department has no areas yet</b><p>An admin can add them in Admin.</p></div></div></main>;
 
@@ -103,6 +105,9 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   const reviewed = defrostRows.filter((p) => dItem(p).requestedQty !== null).length;
   const toPull = defrostRows.filter((p) => (needOf(p, dItem(p)) ?? 0) > 0 && (pickupOf(p) ? pullState(p, dItem(p)).state === 'todo' : !dItem(p).collectedMode)).length;
   const untouched = defrostRows.filter((p) => dItem(p).requestedQty === null && !dItem(p).conflict);
+  // Upstairs freezer pulls not done yet ("View upstairs items to pull"), and whether that list has been reached.
+  const pullTodo = isDefrost ? defrostRows.filter((p) => pickupOf(p) && (needOf(p, dItem(p)) ?? 0) > 0 && pullState(p, dItem(p)).state === 'todo').length : 0;
+
   // Upstairs, at this location: what to grab for the bar (from this spot or its cupboards).
   const spotIds = new Set([cur.area.id, ...cur.sections.map((x) => x.area.id)]);
   const grab = phase === 'boh' ? grabAll.filter((l) => l.locationId && spotIds.has(l.locationId)) : [];
@@ -233,7 +238,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   const photoOf = (p: (typeof cur.placements)[number]) => (p.photoPath ? <ProductThumb src={p.photoPath} name={p.productName} credit={p.photoCredit} className="pphoto" /> : <span className="pphoto ph" aria-hidden="true"><Icon name="box" /></span>);
   const linkedTo = (p: (typeof cur.placements)[number]) => (p.linkedPlacementId ? whole.byId.get(p.linkedPlacementId) : undefined);
   const portionTask = (p: (typeof cur.placements)[number]) => (p.refillSource && p.prepTaskId && session.kind === 'full' ? ctx.prepTasks.find((t) => t.id === p.prepTaskId) : undefined);
-  const stockRow = (p: (typeof cur.placements)[number], showArea = false) => portionTask(p) ? (
+  const stockRow = (p: (typeof cur.placements)[number], showArea = false, compact = false) => portionTask(p) ? (
     // Portioning check while refilling: one tick puts its task on tomorrow's morning prep (nothing in the restock).
     <PortionCheckRow key={p.placementId} p={p} taskName={portionTask(p)!.name} photo={photoOf(p)}
       on={handover?.status === 'needed' && handover.items.some((i) => i.taskId === p.prepTaskId)}
@@ -248,7 +253,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   ) : p.defrost && !items.get(p.placementId)?.conflict ? (
     // Defrost rows: set an amount or Not needed, with where it's from and where it goes (no photo placeholder).
     <DefrostRow key={p.placementId} p={p} item={items.get(p.placementId) ?? EMPTY_ITEM} rawQty={ctx.rawItems.get(p.placementId)?.requestedQty ?? null}
-      suggestion={ctx.suggested.get(p.placementId)?.defrost} admits={session.forecastAdmits ?? null} pickup={pickupOf(p)}
+      suggestion={ctx.suggested.get(p.placementId)?.defrost} admits={session.forecastAdmits ?? null} pickup={pickupOf(p)} compact={compact}
       photo={p.photoPath ? <ProductThumb src={p.photoPath} name={p.productName} credit={p.photoCredit} className="pphoto" /> : null}
       onChange={(fields, resolve) => void onItem(p, fields, resolve)} />
   ) : (
@@ -298,7 +303,16 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
           : <h3 key={`h-${id}`} className="phead">{head}</h3>);
         if (closed) { i = j; continue; }
       }
-      out.push(...group.map((x) => renderRow(x)));
+      // Defrost: a group that all goes the same way (e.g. the desserts) is one list, its route said once above it.
+      const route = (x: (typeof group)[number]) => `${defrostSource(x)}|${x.putNote ?? ''}`;
+      if (isDefrost && group.length >= 3 && group.every((x) => x.defrost && !items.get(x.placementId)?.conflict && !defrostRowInfo(x).canSuggest)
+          && new Set(group.map(route)).size === 1) {
+        out.push(
+          <div key={`l-${group[0].placementId}`} className="dgroup">
+            <DefrostRouteLine p={group[0]} />
+            <div className="dlist">{group.map((x) => stockRow(x, false, true))}</div>
+          </div>);
+      } else out.push(...group.map((x) => renderRow(x)));
       i = j;
     }
     return out;
@@ -562,8 +576,15 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
           // Defrost: carry on to the next area (Defrost counts as done); the collection list is there but secondary.
           <>
             <button className="btn dr-list" onClick={() => ctx.go('collect')}><span className="lg">Collection list</span><span className="sm">List</span></button>
-            <button className="btn primary big flow-next" onClick={() => void doneAndNext()}>
-              <span className="fn-l">Continue</span><span className="fn-to" aria-hidden="true">&rarr;</span><span className="fn-n">{nextOpen ? nextOpen.area.name : stepName}</span><Icon name="next" /></button>
+            {pullTodo ? <SeenWatch targetId="pull-h" onSeen={() => setPullSeen(cur.area.id)} /> : null}
+            {pullTodo && pullSeen !== cur.area.id ? (
+              // Something to pull from the upstairs freezers: there first (then Continue, once the list is in view).
+              <button className="btn primary big flow-next dr-to-pull" onClick={() => document.getElementById('pull-h')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+                <span className="lg">View upstairs items to pull ({pullTodo})</span><span className="sm">To pull ({pullTodo})</span><Icon name="down" /></button>
+            ) : (
+              <button className="btn primary big flow-next" onClick={() => void doneAndNext()}>
+                <span className="fn-l">Continue</span><span className="fn-to" aria-hidden="true">&rarr;</span><span className="fn-n">{nextOpen ? nextOpen.area.name : stepName}</span><Icon name="next" /></button>
+            )}
           </>
         ) : walk ? (
           // One primary next action, the same on phone, iPad and laptop.
@@ -581,4 +602,16 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
       </Dock>
     </>
   );
+}
+
+/** Tells the screen once an element (e.g. the "Pull for defrost" list) has been scrolled into view. */
+function SeenWatch({ targetId, onSeen }: { targetId: string; onSeen: () => void }) {
+  useEffect(() => {
+    const el = document.getElementById(targetId);
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) onSeen(); });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [targetId]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
 }

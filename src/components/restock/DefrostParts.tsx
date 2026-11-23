@@ -84,24 +84,42 @@ export function AdmitsBox({ admits, onSave, missing }: { admits: number | null; 
 /** "Downstairs walk-in freezer" and "Downstairs walk in freezer" are the same place. */
 export const sameText = (a: string, b: string) => a.toLowerCase().replace(/[^a-z0-9]/g, '') === b.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-/** Source → destination in one line (e.g. "Freezer 1 · Lower left → Upstairs walk-in fridge"), then any detail. */
-export function DefrostRoute({ p, from }: { p: PlacementView; from?: string }) {
+/** Source → destination in one line (e.g. "Freezer 1 · Lower left → Upstairs walk-in fridge"). */
+export function DefrostRouteLine({ p, from }: { p: PlacementView; from?: string }) {
   const src = from ?? defrostSource(p);
-  const check = p.grabNote && /^check\b/i.test(p.grabNote);
+  return <p className="dr-route"><span className="dr-src">{src}</span>{p.putNote ? <><span className="dr-arrow" aria-label="to">&rarr;</span><span className="dr-dest">{p.putNote}</span></> : null}</p>;
+}
+
+/** A "Check … first" note: said first, in bold, with a warning sign. */
+export const isCheckNote = (n: string | null | undefined) => !!n && /^check\b/i.test(n);
+
+/** Source → destination, with a "Check … first" note above it and any other detail below. */
+export function DefrostRoute({ p, from }: { p: PlacementView; from?: string }) {
+  const check = isCheckNote(p.grabNote);
   return (
     <>
-      <p className="dr-route"><span className="dr-src">{src}</span>{p.putNote ? <><span className="dr-arrow" aria-label="to">&rarr;</span><span className="dr-dest">{p.putNote}</span></> : null}</p>
-      {p.grabNote ? <p className={`dr-detail ${check ? 'dr-check' : ''}`}>{check ? <Icon name="warn" /> : null}{p.grabNote}</p> : null}
+      {check ? <p className="dr-detail dr-check"><Icon name="warn" />{p.grabNote}</p> : null}
+      <DefrostRouteLine p={p} from={from} />
+      {p.grabNote && !check ? <p className="dr-detail">{p.grabNote}</p> : null}
     </>
   );
 }
 
+/** "Bags to pull · 8 portions each": what the amount counts, beside it. */
+function amountLabel(p: PlacementView, pickup: boolean) {
+  const info = defrostRowInfo(p);
+  const unit = p.unitPlural.charAt(0).toUpperCase() + p.unitPlural.slice(1);
+  const each = p.readyPer && p.readyPer !== 1 && info.readyPlural && info.readyPlural !== p.unitPlural ? ` · ${round2(p.readyPer)} ${info.readyPlural} each` : '';
+  return `${unit} to ${pickup ? 'pull' : 'defrost'}${each}`;
+}
+
 /**
- * One defrost item, compact: name, the amount (with its unit) or Not needed, and where it goes.
- * Setting an amount means it needs defrosting; it's marked Pulled only once it's been moved
- * (on "Pull for defrost" below). With admits targets, what's already ready gives a suggestion.
+ * One defrost item: name, any "check first" note, where it's from and where it goes, then the amount (− / + always
+ * there, blank until set) beside "Not needed". Setting an amount means it needs defrosting; it's marked Pulled only
+ * once it's been moved (on "Pull for defrost" below). With admits targets, what's already ready gives a suggestion.
+ * compact: one line in a list whose route is shown once above it (e.g. the desserts).
  */
-export function DefrostRow({ p, item, rawQty, suggestion, admits, onChange, photo, pickup }: {
+export function DefrostRow({ p, item, rawQty, suggestion, admits, onChange, photo, pickup, compact = false }: {
   p: PlacementView; item: ItemState;
   /** What staff entered themselves (null = untouched, so a suggestion stands). */
   rawQty: number | null;
@@ -112,6 +130,8 @@ export function DefrostRow({ p, item, rawQty, suggestion, admits, onChange, phot
   photo: React.ReactNode;
   /** Pulled from an upstairs freezer (vs collected from downstairs with the collection list). */
   pickup: boolean;
+  /** One line in a list that shares one route (shown above the list). */
+  compact?: boolean;
 }) {
   const info = defrostRowInfo(p);
   const v = item.requestedQty;
@@ -120,19 +140,24 @@ export function DefrostRow({ p, item, rawQty, suggestion, admits, onChange, phot
   const c = item.conflict;
   const ps = pullState(p, item);
   const st = c ? 'bad' : v === null ? 'none' : v > 0 ? (pickup && ps.state === 'pulled' ? 'ok' : 'warn') : 'ok';
-  const set = (n: number | null) => onChange({ requestedQty: n });
+  // Quick taps on + / − count from the last amount set, not the one on screen (it's saved a moment later).
+  const last = useRef(v);
+  useEffect(() => { last.current = v; }, [v]);
+  const set = (n: number | null) => { last.current = n; onChange({ requestedQty: n }); };
   const step = p.allowDecimal ? 0.5 : 1;
+  const bump = (d: 1 | -1) => { const cur = last.current; set(cur === null ? (d > 0 ? step : null) : Math.max(0, round2(cur + d * step))); };
   const changed = suggestion && rawQty !== null && rawQty !== suggestion.qty;
 
-  let status: React.ReactNode;
+  // Said only when it adds something: the amount and Not needed are already in view.
+  let status: React.ReactNode = null;
   if (c) status = <><Icon name="warn" />Two different amounts: choose below</>;
   else if (v === null) status = info.canSuggest && admits === null ? <>Enter tomorrow&rsquo;s admits for a suggestion</>
-    : info.canSuggest && item.currentQty === null ? <>Count what&rsquo;s ready for a suggestion</>
-    : <span className="sr-only">Not reviewed</span>;
+    : info.canSuggest && item.currentQty === null ? <>Count what&rsquo;s ready for a suggestion</> : null;
   else if (v > 0 && pickup && ps.state === 'pulled') status = <><Icon name="check" />Pulled {q(v)}</>;
   else if (v > 0 && pickup && ps.state === 'short') status = <><Icon name="warn" />{ps.pulled ? <>Pulled {round2(ps.pulled)} of {q(v)}</> : <>Not upstairs</>} &middot; {round2(ps.rest)} from downstairs</>;
-  else if (v > 0) status = <><b>{q(v)}</b><span>&nbsp;to {pickup ? 'pull' : 'collect'}{suggestion && rawQty === null ? ' · suggested' : ''}</span></>;
-  else status = <><Icon name="check" />{suggestion && rawQty === null ? 'Not needed: enough is ready' : 'Not needed'}</>;
+  else if (v > 0 && suggestion && rawQty === null) status = <><b>{q(v)}</b><span>&nbsp;suggested</span></>;
+  else if (v === 0 && suggestion && rawQty === null) status = <><Icon name="check" />Enough is ready</>;
+  const srStatus = v === null ? 'Not reviewed' : v > 0 ? `${q(v)} to ${pickup ? 'pull' : 'defrost'}` : 'Not needed';
 
   // How the suggestion was worked out, in one line (e.g. "Target 24 for 81–160 admits − 10 ready = 14").
   let working: string | null = null;
@@ -147,48 +172,47 @@ export function DefrostRow({ p, item, rawQty, suggestion, admits, onChange, phot
     working = `No target set for ${admits} admits: set the amount.`;
   }
 
-  let controls: React.ReactNode = null;
-  if (c) controls = null;
-  else if (v === null) {
-    controls = (
-      <div className="dr-acts">
-        <button type="button" className="dr-b dr-set" onClick={() => set(1)} aria-label={`Set amount: ${p.productName}`}>Set amount</button>
-        <button type="button" className="dr-b dr-nn" onClick={() => set(0)} aria-label={`${p.productName}: not needed`}>Not needed</button>
-      </div>
-    );
-  } else if (v === 0) {
-    controls = (
-      <div className="dr-acts">
-        <button type="button" className="dr-b dr-set" onClick={() => set(1)} aria-label={`Set amount: ${p.productName}`}>Set amount</button>
-        <button type="button" className="dr-b dr-nn on" aria-pressed="true" onClick={() => set(null)} aria-label={`${p.productName}: not needed (tap to undo)`}><Icon name="check" />Not needed</button>
-      </div>
-    );
-  } else {
-    controls = (
-      <div className="dr-acts">
+  // The amount (− / + always there; blank until set) and Not needed. Not needed chosen: just that, filled in.
+  const controls = c ? null : (
+    <div className="dr-acts">
+      {v === 0 ? null : (
         <div className="pstep dr-step">
-          <button type="button" onClick={() => set(Math.max(0, round2(v - step)))} aria-label={`One less ${p.productName}`}><Icon name="minus" /></button>
-          <span className="dr-qty"><NumberBox id={`q-${p.placementId}`} value={v} onCommit={set} label={`${p.productName}: amount to defrost`} allowDecimal={p.allowDecimal} unitPlural={p.unitPlural} />
-            <small>{v === 1 ? p.unitSingular : p.unitPlural}</small></span>
-          <button type="button" onClick={() => set(round2(v + step))} aria-label={`One more ${p.productName}`}><Icon name="plus" /></button>
+          <button type="button" onClick={() => bump(-1)} disabled={v === null} aria-label={`One less ${p.productName}`}><Icon name="minus" /></button>
+          <span className="dr-qty"><NumberBox id={`q-${p.placementId}`} value={v} onCommit={set} label={`${p.productName}: amount to defrost`} allowDecimal={p.allowDecimal} unitPlural={p.unitPlural} /></span>
+          <button type="button" onClick={() => bump(1)} aria-label={`One more ${p.productName}`}><Icon name="plus" /></button>
         </div>
-        <button type="button" className="dr-b dr-nn" onClick={() => set(0)} aria-label={`${p.productName}: not needed`}>Not needed</button>
-        {changed ? <button type="button" className="linkbtn dr-back" onClick={() => set(null)}>Use suggested {round2(suggestion!.qty)}</button> : null}
-      </div>
+      )}
+      {v === 0 ? null : <span className="dr-sep" aria-hidden="true" />}
+      <button type="button" className={`dr-b dr-nn ${v === 0 ? 'on' : ''}`} aria-pressed={v === 0}
+        onClick={() => set(v === 0 ? null : 0)} aria-label={v === 0 ? `${p.productName}: not needed (tap to undo)` : `${p.productName}: not needed`}>
+        {v === 0 ? <Icon name="check" /> : null}Not needed</button>
+      {changed ? <button type="button" className="linkbtn dr-back" onClick={() => set(null)}>Use suggested {round2(suggestion!.qty)}</button> : null}
+    </div>
+  );
+
+  if (compact) {
+    return (
+      <article className={`drow2 dline s-${st} ${v === null && !c ? 'quiet' : ''}`} data-placement={p.placementId}>
+        <div className="dl-t">
+          <h3>{p.productName}</h3>
+          {p.grabNote ? <p className={`dr-detail ${isCheckNote(p.grabNote) ? 'dr-check' : ''}`}>{isCheckNote(p.grabNote) ? <Icon name="warn" /> : null}{p.grabNote}</p> : null}
+          <p className="ps" id={`s-${p.placementId}`}>{status ?? <span className="sr-only">{srStatus}</span>}</p>
+        </div>
+        {controls}
+      </article>
     );
   }
-
   return (
     <article className={`drow2 s-${st} ${v === null && !c ? 'quiet' : ''} ${suggestion ? 'suggested' : ''}`} data-placement={p.placementId}>
       <div className="dr-head">
         {photo}
         <div className="dr-t">
           <h3>{p.productName}</h3>
-          <p className="ps" id={`s-${p.placementId}`}>{status}</p>
+          <p className="ps" id={`s-${p.placementId}`}>{status ?? <span className="sr-only">{srStatus}</span>}</p>
         </div>
       </div>
       <div className="dr-info"><DefrostRoute p={p} /></div>
-      {controls}
+      {c ? null : <div className="dr-ctl"><span className="dr-lab">{amountLabel(p, pickup)}</span>{controls}</div>}
       {info.canSuggest ? (
         <div className="dr-ready">
           <label htmlFor={`r-${p.placementId}`}>Already ready or defrosting for tomorrow</label>

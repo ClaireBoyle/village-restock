@@ -40,7 +40,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   await P.click('.dcard2:has-text("Kitchen") >> nth=0'); await P.click('.type-full button.btn.primary'); await P.waitForSelector('article.drow2');
   ok(await sees(P, '.area-btn.cur', 'Defrost'), 'Defrost is still first');
   const beef = "article.drow2:has(h3:text-is('Pulled Beef (Bao)'))";
-  await P.click(`${beef} .dr-set`);
+  await P.click(`${beef} button[aria-label="One more Pulled Beef (Bao)"]`);
   for (let i = 0; i < 40 && (await P.locator(`${beef} .qty-input`).inputValue().catch(() => '')) !== '1'; i++) await P.waitForTimeout(100);
   await P.click(`${beef} button[aria-label="One more Pulled Beef (Bao)"]`);
   await P.click(".dp-line[data-line='Pulled Beef (Bao)'] .dp-ok");

@@ -1372,6 +1372,33 @@ button.pnote.open span{display:block}
 .dr-qty small{font-size:11.5px;color:var(--ink-2);line-height:1.1}
 .dr-step .nbox{width:64px;height:46px}
 .dr-acts .dr-nn:not(.on){flex:0 1 auto}
+/* Defrost cards: what the amount counts on the left, − / + and Not needed on the right (wraps on a phone). */
+.dr-ctl{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;margin-top:2px}
+.dr-lab{font-size:14px;font-weight:600;color:var(--ink);min-width:0}
+.dr-ctl .dr-acts,.dline .dr-acts{flex-wrap:nowrap;gap:10px;margin-left:auto}
+.dr-ctl .dr-step,.dline .dr-step{flex:none}
+.dr-ctl .dr-b.dr-nn,.dline .dr-b.dr-nn{flex:none;min-width:118px;min-height:44px}
+.dr-sep{width:1px;align-self:stretch;margin:6px 0;background:var(--hair)}
+.theme-navy .dr-sep{background:rgba(255,255,255,.16)}
+.dr-step button:disabled{opacity:.4}
+.dr-b.dr-nn.on{background:var(--d-accent);border-color:var(--d-accent);color:#1A1408;margin-left:auto}
+.theme-navy .dr-b.dr-nn.on{background:var(--d-accent);border-color:var(--d-accent);color:#101826}
+.dr-acts .dr-back{flex-basis:100%;text-align:right}
+/* A group that all goes the same way (e.g. the desserts): the route once, then one line per item. */
+.dgroup{grid-column:1/-1;display:flex;flex-direction:column;gap:8px}
+.dgroup>.dr-route{padding:0 2px}
+.dlist{border-radius:14px;border:1px solid var(--hair);background:var(--surface);overflow:hidden}
+.theme-navy .dlist{background:rgba(255,255,255,.045);border-color:rgba(255,255,255,.08)}
+.drow2.dline{flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:8px 14px;border:0;border-radius:0;background:transparent;box-shadow:none}
+.drow2.dline+.drow2.dline{border-top:1px solid var(--hair)}
+.theme-navy .drow2.dline+.drow2.dline{border-top-color:rgba(255,255,255,.08)}
+.drow2.dline.s-warn{background:color-mix(in srgb,var(--warn-bg) 45%,transparent);box-shadow:inset 3px 0 0 var(--warn-fill)}
+.dl-t{flex:1 1 180px;min-width:0}
+.dl-t h3{margin:0;font-size:16px;font-weight:600;line-height:1.25}
+.dl-t .ps{margin:2px 0 0;font-size:13px}
+.dl-t .ps:empty,.dl-t .ps:has(> .sr-only:only-child){margin:0}
+.drow2.dline.s-ok .dl-t h3{color:var(--ink-2);font-weight:500}
+@media (max-width:480px){.dr-ctl .dr-acts,.dline .dr-acts{margin-left:0;width:100%;justify-content:space-between}}
 .dr-rest{margin:10px 0 4px}
 .dr-rest p{margin:0;display:flex;align-items:center;gap:6px;font-size:14px}
 .dr-rest p .ic{width:16px;height:16px;color:var(--ok)}
