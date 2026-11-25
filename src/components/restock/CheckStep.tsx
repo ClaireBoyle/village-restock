@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Icon } from '@/components/Icon';
 import {
@@ -13,6 +13,7 @@ import { AdmitsBox, DefrostPullList, DefrostRouteLine, DefrostRow } from './Defr
 import { LinkedRow, PortionCheckRow, RefillRow } from './KitchenRows';
 import { useLive } from '@/lib/client/hooks';
 import { Line } from './CollectStep';
+import { AreaMenu, StartOverSheet } from './StartOver';
 import { round2 } from '@/lib/restock-math';
 import { setAdmits, setArea, setItems, updateLocalSession } from '@/lib/client/restock-store';
 import { localDb } from '@/lib/client/local-db';
@@ -78,6 +79,12 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
 
   // Defrost: whether the "Pull for defrost" list has been scrolled into view (then the dock says Continue).
   const [pullSeen, setPullSeen] = useState<string | null>(null);
+  // "Start over" for this area: the confirmation sheet, then a few seconds to undo it.
+  const [startOver, setStartOver] = useState(false);
+  type Snap = { areaName: string; ups: { placementId: string; fields: Partial<ItemState> }[]; area: { id: string; status: 'not_started' | 'complete' | 'skipped'; reason: string | null } | null };
+  const [undoSnap, setUndoSnap] = useState<Snap | null>(null);
+  const undoTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(undoTimer.current), []);
   const goArea = (id: string) => { setSkipOpen(false); void updateLocalSession(session.id, { curAreaId: id }); window.scrollTo({ top: 0 }); };
   if (!cur) return <main className="wrap restock-main">{ctx.header}<div className="banner s-none"><Icon name="info" /><div><b>This department has no areas yet</b><p>An admin can add them in Admin.</p></div></div></main>;
 
@@ -106,6 +113,34 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   const untouched = defrostRows.filter((p) => dItem(p).requestedQty === null && !dItem(p).conflict);
   // Upstairs freezer pulls not done yet ("View upstairs items to pull"), and whether that list has been reached.
   const pullTodo = isDefrost ? defrostRows.filter((p) => pickupOf(p) && (needOf(p, dItem(p)) ?? 0) > 0 && pullState(p, dItem(p)).state === 'todo').length : 0;
+  // Start over: what's entered on this screen (cleared), and what's already collected or pulled (kept).
+  type Raw = ItemState & { updatedBy?: string | null };
+  const rawOf = (p: { placementId: string }) => ctx.rawItems.get(p.placementId) as Raw | undefined;
+  const entered = (i?: Raw) => !!i && (i.requestedQty !== null || i.currentQty !== null || i.routineChoice !== null || !!i.refillStatus || !!i.leftHere || !!i.noneLeftHere || !!i.statusOverride);
+  const settled = (i: Raw) => !!i.collectedMode || (i.upstairsQty ?? null) !== null;
+  const hereEntered = cur.placements.filter((p) => entered(rawOf(p)));
+  const toClear = hereEntered.filter((p) => !settled(rawOf(p)!));
+  const keptN = hereEntered.length - toClear.length;
+  const prepTicksHere = handover?.status === 'needed' ? cur.placements.filter((p) => p.prepTaskId && handover.items.some((h) => h.taskId === p.prepTaskId)).length : 0;
+  const areaRec = areaRecords.get(cur.area.id);
+  const CLEARED: Partial<ItemState> = { requestedQty: null, currentQty: null, routineChoice: null, refillStatus: null, leftHere: null, noneLeftHere: false, statusOverride: null };
+  const doStartOver = () => {
+    const ups = toClear.map((p) => { const r = rawOf(p)!; return { placementId: p.placementId, fields: { requestedQty: r.requestedQty, currentQty: r.currentQty, routineChoice: r.routineChoice,
+      refillStatus: r.refillStatus ?? null, leftHere: r.leftHere ?? null, noneLeftHere: !!r.noneLeftHere, statusOverride: r.statusOverride ?? null } as Partial<ItemState> }; });
+    if (toClear.length) writeItems(toClear.map((p) => ({ placementId: p.placementId, fields: CLEARED })));
+    const area = areaRec && areaRec.status !== 'not_started' ? { id: cur.area.id, status: areaRec.status, reason: areaRec.skipReason } : null;
+    if (area) void setArea(session.id, cur.area.id, 'not_started', null, who);
+    setStartOver(false);
+    setUndoSnap({ areaName: cur.area.name, ups, area });
+    window.clearTimeout(undoTimer.current);
+    undoTimer.current = window.setTimeout(() => setUndoSnap(null), 10000);
+  };
+  const undoStartOver = () => {
+    if (!undoSnap) return;
+    if (undoSnap.ups.length) writeItems(undoSnap.ups);
+    if (undoSnap.area) void setArea(session.id, undoSnap.area.id, undoSnap.area.status, undoSnap.area.reason, who);
+    window.clearTimeout(undoTimer.current); setUndoSnap(null);
+  };
 
   // Upstairs, at this location: what to grab for the bar (from this spot or its cupboards).
   const spotIds = new Set([cur.area.id, ...cur.sections.map((x) => x.area.id)]);
@@ -348,6 +383,15 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
     <>
       <main className="wrap restock-main">
       {ctx.header}
+      {startOver ? (
+        <StartOverSheet areaName={cur.area.name} clearWho={toClear.map((p) => rawOf(p)?.updatedBy)} kept={keptN} prepTicks={prepTicksHere}
+          defrostLinked={isDefrost && toClear.some((p) => (rawOf(p)?.requestedQty ?? 0) > 0)} wasDone={!!areaRec && areaRec.status !== 'not_started'}
+          onConfirm={doStartOver} onClose={() => setStartOver(false)} />
+      ) : null}
+      {undoSnap ? (
+        <div className="toast so-toast" role="status"><span>{undoSnap.areaName} started over</span>
+          <button type="button" className="linkbtn so-undo" onClick={undoStartOver}>Undo</button></div>
+      ) : null}
       {ctx.hasDefrost && !reminderHidden && !ctx.placements.some((p) => p.defrost) ? (
         <aside className="kreminder" aria-label="Kitchen reminder">
           <Icon name="clock" />
@@ -387,6 +431,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
               </p>
             </div>
             <div className="acts">
+              {hereEntered.length && session.status === 'open' ? <AreaMenu areaName={cur.area.name} onStartOver={() => setStartOver(true)} /> : null}
               {reqLeft > 0 && done > 0 && st !== 'skipped' ? <button className="btn small" onClick={firstUnchecked}><Icon name="down" /><span className="lg">Next to count</span><span className="sm">Next</span></button> : null}
               {st !== 'complete' && st !== 'skipped' && !byArea && !flow ? <button className="btn small" onClick={() => setSkipOpen(true)}><Icon name="skip" />Skip</button> : null}
             </div>
@@ -535,6 +580,10 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
               walkOrder={whole.pickupOrder} onChange={(p, fields) => void onItem(p, fields)} onChangeMany={writeItems} />
           ) : null}
 
+          {hereEntered.length && session.status === 'open' ? (
+            // Phones (no area heading): Start over at the end of the list, with Skip.
+            <button type="button" className="btn so-end" onClick={() => setStartOver(true)}><Icon name="reset" />Start over</button>
+          ) : null}
           {st === 'skipped' ? (
             <div className="banner s-skip area-end"><Icon name="skip" /><div><b>{cur.area.name} skipped</b><p>{rec?.skipReason}{rec?.updatedBy ? ` · ${rec.updatedBy}` : ''} {timeOf(rec?.updatedAt)}</p></div>
               <button className="btn" onClick={() => void setArea(session.id, cur.area.id, 'not_started', null, who)}>Undo skip</button>{nextBtn}</div>
