@@ -714,8 +714,13 @@ button.room-h>.ic:last-child{color:var(--ink-2)}
   .l-qty small{margin-top:2px;font-size:11px}
   .l-done{grid-area:auto}
   .l-acts .btn,.l-all{min-height:42px}
-  /* Checking: the area tab already shows progress; Skip lives at the end of the list */
+  /* Checking: the area tab already shows progress; Skip lives at the end of the list. Once something's entered,
+     a slim row with the area name and ⋯ (Start over) at the top. */
   .area-head{display:none}
+  .area-head.has-menu{display:flex;min-height:40px;margin:0 0 4px}
+  .area-head.has-menu h2{position:static;width:auto;height:auto;overflow:visible;clip:auto;font-size:18px}
+  .area-head.has-menu .ah-sub{display:none}
+  .area-head.has-menu .acts>:not(.amenu){display:none}
   .area-skip-end{display:inline-flex}
 }
 @media (max-width:380px){
@@ -1428,9 +1433,6 @@ button.pnote.open span{display:block}
 .dp-t small{display:flex;flex-wrap:wrap;gap:2px 8px}
 .dp-to{color:var(--ink);font-weight:600}
 .dp-spot{color:var(--ink-2)}
-.so-end{display:none;align-self:flex-start;margin:10px 0 0;min-height:44px}
-.so-end .ic{width:16px;height:16px}
-@media (max-width:640px){.so-end{display:inline-flex}}
 .so-body{display:flex;flex-direction:column;gap:12px}
 .so-what{margin:0;font-size:16px;line-height:1.4}
 .so-notes{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--ink-2)}

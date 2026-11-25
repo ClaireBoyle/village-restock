@@ -32,7 +32,7 @@ async function open(b, name) {
 
   const b = await chromium.launch(); const errs = [];
   const M = await open(b, 'Mia'); M.on('pageerror', (e) => errs.push(e.message));
-  ok(await M.locator('.so-end').count() === 0, 'nothing entered here yet: no Start over');
+  ok(await M.locator('.area-head .amenu-btn').isHidden(), 'nothing entered here yet: no ⋯ (and no extra row on the phone)');
   // Mia: patties and 7" bases; Sam (another phone): gluten-free bases.
   await M.click(`${row('Beef Patties')} button.padd`); await M.click(`${row('7" Pizza Bases')} button.padd`);
   await waitDb(() => qty('7" Pizza Bases'), (r) => r[0]?.q === 1);
@@ -46,8 +46,9 @@ async function open(b, name) {
   await M.reload(); await M.waitForSelector('.area-btn.cur:has-text("Freezer 1")'); await M.waitForTimeout(1500);
 
   // Start over: what's cleared (by whom) and what's kept.
-  ok(await M.locator('.so-end').isVisible(), 'phone: "Start over" at the end of the list (no area heading on a phone)');
-  await M.click('.so-end');
+  ok(await M.locator('.area-head .amenu-btn').isVisible() && (await M.locator('.area-head h2').innerText()) === 'Freezer 1', 'phone: the area name with ⋯ beside it, at the top');
+  await M.screenshot({ path: `${OUT}/p33-phone-top.png` });
+  await M.click('.area-head .amenu-btn'); await M.click('.amenu-pop .so-item');
   const txt = (await M.locator('.sheet').innerText()).replace(/\s+/g, ' ');
   ok(txt.includes('Clears what’s entered in Freezer 1: 2 entries (1 by Mia, 1 by Sam)'), 'sheet: "Clears what’s entered in Freezer 1: 2 entries (1 by Mia, 1 by Sam)": ' + txt);
   ok(txt.includes('Kept: 1 already collected or pulled') && txt.includes('undo it straight after'), 'sheet: the collected patties kept; undo offered');
@@ -60,7 +61,7 @@ async function open(b, name) {
   await M.click('.so-toast .so-undo'); await M.waitForSelector(`${row('Gluten-Free Pizza Bases')} .qty-input`, { timeout: 6000 }).catch(() => {});
   ok(await M.locator(`${row('7" Pizza Bases')} .qty-input`).count() === 1 && await M.locator(`${row('Gluten-Free Pizza Bases')} .qty-input`).count() === 1, 'Undo: both entries back');
   // For real this time: it reaches the server and the other phone.
-  await M.click('.so-end'); await M.click('.sheet .so-go');
+  await M.click('.area-head .amenu-btn'); await M.click('.amenu-pop .so-item'); await M.click('.sheet .so-go');
   const gf = await waitDb(() => qty('Gluten-Free Pizza Bases'), (r) => r[0]?.q === null);
   ok(gf[0]?.q === null && (await qty('7" Pizza Bases'))[0]?.q === null, 'saved: both cleared on the server');
   const pat = await qty('Beef Patties');
@@ -72,7 +73,7 @@ async function open(b, name) {
   await L.goto(B + '/'); await L.waitForSelector('.dcard2'); await L.click('.who'); await L.fill('#staffname', 'Jo'); await L.click('.sheet .btn.primary');
   await L.click('.dcard2:has-text("Kitchen") >> nth=0'); await L.click('.type-full button.btn.primary'); await L.waitForSelector('.area-btn');
   await L.click('.area-btn:has-text("Freezer 1")'); await L.waitForTimeout(800);
-  ok(await L.locator('.area-head .amenu-btn').isVisible() && await L.locator('.so-end').isHidden(), 'iPad: ⋯ on the area heading (Start over inside), not at the end');
+  ok(await L.locator('.area-head .amenu-btn').isVisible(), 'iPad: ⋯ on the area heading (Start over inside)');
   await L.click('.area-head .amenu-btn'); ok((await L.locator('.amenu-pop .so-item').innerText()).trim() === 'Start over', 'menu: "Start over"');
   await L.screenshot({ path: `${OUT}/p33-menu.png` });
   ok(!errs.length, 'no page errors ' + errs.join(' | '));

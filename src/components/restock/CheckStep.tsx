@@ -421,7 +421,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
         </nav>}
 
         <section className="area" aria-labelledby="area-name">
-          <div className="area-head">
+          <div className={`area-head ${hereEntered.length && session.status === 'open' ? 'has-menu' : ''}`}>
             <div className="ah-t">
               <h2 id="area-name">{cur.area.name}</h2>
               <p className="ah-sub">
@@ -580,10 +580,6 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
               walkOrder={whole.pickupOrder} onChange={(p, fields) => void onItem(p, fields)} onChangeMany={writeItems} />
           ) : null}
 
-          {hereEntered.length && session.status === 'open' ? (
-            // Phones (no area heading): Start over at the end of the list, with Skip.
-            <button type="button" className="btn so-end" onClick={() => setStartOver(true)}><Icon name="reset" />Start over</button>
-          ) : null}
           {st === 'skipped' ? (
             <div className="banner s-skip area-end"><Icon name="skip" /><div><b>{cur.area.name} skipped</b><p>{rec?.skipReason}{rec?.updatedBy ? ` · ${rec.updatedBy}` : ''} {timeOf(rec?.updatedAt)}</p></div>
               <button className="btn" onClick={() => void setArea(session.id, cur.area.id, 'not_started', null, who)}>Undo skip</button>{nextBtn}</div>

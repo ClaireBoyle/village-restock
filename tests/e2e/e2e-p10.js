@@ -40,7 +40,7 @@ const syncNow = (p) => p.evaluate(() => window.dispatchEvent(new Event('online')
   await fillQty(S.p, row('Heineken'), '3');
   await T.p.goto(`${B}/d/${bar.id}`); await T.p.click('button:has-text("full restock")'); await T.p.waitForSelector(row('Heineken'));
   await waitDb(() => sessionsOf('Gold Class Bar'), (r) => r.length === 1 && r[0].items === 1);
-  ok(await S.p.locator('.amenu').count() === 0, 'staff (not signed in as admin) never see the reset menu');
+  ok(await S.p.locator('.amenu-btn[aria-label^="Admin options"]').count() === 0, 'staff (not signed in as admin) never see the reset menu');
   const denied = await S.p.evaluate(async (d) => (await fetch('/api/admin/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ departmentId: d, kind: 'full', tradingDate: '2026-01-01', confirm: [] }) })).status, bar.id);
   ok(denied === 401, 'the server refuses a reset from a non-admin (401)');
 
