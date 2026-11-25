@@ -22,7 +22,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   // As on the live site: the Kitchen starts with no areas, and the downstairs walk-in freezer is a storeroom.
   await sql`delete from check_areas where department_id = (select id from departments where name = 'Gold Class Kitchen')`;
   await sql`insert into storage_locations (name, sort_order) values ('Walk in freezer(Downstairs)', 3), ('Walk in fridge(Downstairs)', 2) on conflict do nothing`;
-  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep', 'defrost-compact', 'defrost-pulls', 'freezers', 'refills', 'portion-prep', 'defrost-compact', 'freezer-1-first', 'refills', 'freezer-1-first', 'no-walk-in-desserts', 'no-walk-in-desserts', 'walk-in-shelves', 'refills', 'walk-in-third-shelf', 'walk-in-fresh-produce', 'bottom-sauce-shelf', 'dry-stock', 'defrost-checks', 'defrost-checks', 'portioning-in-drawers']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
+  for (const f of ['defrost', 'upstairs-areas', 'defrost-pulls', 'freezers', 'walk-in-and-prep', 'walk-in-shelves', 'refills', 'portion-prep', 'defrost-compact', 'defrost-pulls', 'freezers', 'refills', 'portion-prep', 'defrost-compact', 'freezer-1-first', 'refills', 'freezer-1-first', 'no-walk-in-desserts', 'no-walk-in-desserts', 'walk-in-shelves', 'refills', 'walk-in-third-shelf', 'walk-in-fresh-produce', 'bottom-sauce-shelf', 'dry-stock', 'defrost-checks', 'defrost-checks', 'portioning-in-drawers', 'defrost-walk-in', 'defrost-walk-in']) await sql.file(`db/updates/2026-11-gold-class-kitchen-${f}.sql`);
   // Targets on two items (the rest have none: manual entry). Beef: 8 portions a 1 kg bag.
   await sql`update product_placements x set ready_targets = '[{"min":0,"max":150,"qty":24},{"min":151,"qty":36}]'::jsonb
     from products p, check_areas a where p.id = x.product_id and a.id = x.check_area_id and a.name = 'Defrost' and p.name = '9" Pizza Bases'`;
@@ -46,7 +46,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   ok(await P.locator('article.drow2 .pphoto.ph').count() === 0, 'no placeholder pictures');
   // Grouped by where ready stock is checked; one compact row each (name and the one instruction that matters).
   const heads = await P.$$eval('.area .phead', (e) => e.map((x) => x.textContent.trim()));
-  ok(JSON.stringify(heads.slice(0, 3)) === JSON.stringify(['Under-salad-bar bench fridge', 'Check location to confirm', 'Upstairs walk-in fridge · Dessert shelf']), 'grouped by where it\'s checked: ' + heads.join(' | '));
+  ok(JSON.stringify(heads.slice(0, 3)) === JSON.stringify(['Under-salad-bar bench fridge', 'Upstairs walk-in fridge', 'Upstairs walk-in fridge · Dessert shelf']), 'grouped by where it\'s checked: ' + heads.join(' | '));
   ok(await P.locator(`.dgroup:has(.phead:text-is("Under-salad-bar bench fridge")) .dline h3, .dlist:has(${drow('Pulled Beef (Bao)')}) .dline h3`).allTextContents().then((t) => t.includes('Pulled Beef (Bao)') && t.includes('Beef Patties')), 'pulled beef and patties: under-salad-bar bench fridge');
   ok(await sees(P, `${drow('Pulled Beef (Bao)')} .dr-check`, 'Check portioned beef first') && await sees(P, `${drow('Beef Patties')} .dr-check`, 'Check the right side'), 'kept in view: "Check portioned beef first", "Check the right side"');
   ok(await P.locator('.dline').count() === 16 && await P.locator('.dlist .dline .dr-route').count() === 0, 'one compact row per product, no route on each row');
@@ -125,7 +125,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   // Freezer 2 only had 4 chicken: the other 2 come from downstairs (not a shortage).
   await P.click(`${pline('Grilled Chicken')} .dp-few`);
   await P.fill(`${pline('Grilled Chicken')} .dp-edit input`, '4'); await P.click(`${pline('Grilled Chicken')} .dp-edit .btn.primary`);
-  ok(await sees(P, pline('Grilled Chicken'), 'Pulled 4') && await sees(P, pline('Grilled Chicken'), '2 portions more from Downstairs walk-in freezer (on the collection list)'), 'not enough upstairs: 4 pulled, 2 more from downstairs');
+  ok(await sees(P, pline('Grilled Chicken'), 'Pulled 4') && await sees(P, pline('Grilled Chicken'), '2 packets more from Downstairs walk-in freezer (on the collection list)'), 'not enough upstairs: 4 pulled, 2 more from downstairs');
   ok(await sees(P, `${drow('Grilled Chicken')} .ps`, 'Pulled 4 of 6') && await sees(P, `${drow('Bao Buns')} .ps`, 'Pulled 2 buns'), 'rows say what was pulled');
   ok(await sees(P, '.dpull .sec-title small', '4 of 4 pulled') && await sees(P, '.dock .dr-progress', 'nothing upstairs to pull'), 'all four dealt with: "nothing upstairs to pull"');
   await P.screenshot({ path: `${OUT}/p18-defrost-pull.png`, fullPage: true });
@@ -157,7 +157,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   await P.click('.area-btn:has-text("Freezer 2")'); await P.waitForSelector('.area-btn.cur:has-text("Freezer 2")');
   const sec = (c, n) => `.psec:has(.psec-t b:text-is("${c}")) ${row(n)}`;
   ok((await P.locator('.psec-t b').allInnerTexts()).join('|') === 'Refill working drawers and tubs|Check remaining spare stock', 'Freezer 2: refill working drawers and tubs, then check remaining spare stock');
-  ok(await P.locator('.taken-h').count() === 0 && await sees(P, `${sec('Check remaining spare stock', 'Grilled Chicken')} .ps`, '6 portions'), 'grilled chicken: the 6 going to defrost, suggested in place in the spare stock check (after the refills)');
+  ok(await P.locator('.taken-h').count() === 0 && await sees(P, `${sec('Check remaining spare stock', 'Grilled Chicken')} .ps`, '6 packets'), 'grilled chicken: the 6 going to defrost, suggested in place in the spare stock check (after the refills)');
   // 5b. Refills: one tap, the source shown in full under each.
   const R = (n) => sec('Refill working drawers and tubs', n), S = (n) => sec('Check remaining spare stock', n);
   ok(await P.locator('.psec:has(.psec-t b:text-is("Refill working drawers and tubs")) article.rrow').count() === 10, '10 working drawers and tubs');
