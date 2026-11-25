@@ -66,7 +66,6 @@ export function AreaPicker({ view, remote, quickSession, today, opening, onStart
               <div className="ac-top">
                 <div className="ac-t">
                   <h2 id={`ap-${area.id}`}>{area.name}</h2>
-                  <p className="meta">{placements.length} products</p>
                 </div>
                 {onReset && runs.length ? <AdminMenu label={`${area.name} restock`} onChoose={() => onReset({ kind: 'area', areaId: area.id, areaName: area.name })} /> : null}
                 {photos.length ? (

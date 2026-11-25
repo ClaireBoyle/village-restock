@@ -241,7 +241,7 @@ function Lane({ s }: { s: DeptState }) {
     : s.kind === 'quick' ? `${s.quickCount} on the list · full restock not started`
     : s.kind === 'done' ? `Finished ${t(s.finishedAt)}${s.people.length ? ` · ${s.people.join(', ')}` : ''}`
     : s.kind === 'exceptions' ? `${t(s.finishedAt)}${s.reason ? ` · ${s.reason}` : ''}`
-    : `${s.segs.length} areas · ${s.products} products`;
+    : `${s.segs.length} ${s.segs.length === 1 ? 'area' : 'areas'}`;
   return (
     <li className={`lane k-${unset ? 'unset' : s.kind} ${s.d.theme === 'gold' ? 'gold' : 'village'} ${fin ? `fin ${fin.warn ? 'fin-warn' : 'fin-ok'}` : ''}`}>
       <div className="ln-head">
