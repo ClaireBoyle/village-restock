@@ -6,7 +6,7 @@
 --   once ("Snickers Pods · Collect 5", "Side A · 3  Side B · 2"); Fill Side A / Fill Side B lists what goes back.
 -- * The existing rows (and their history) become Side A; Side B gets the same products. The water stand stays as it
 --   is, above the switch (it's next to the stand, not one side of it).
--- * The stand's note becomes "Enter what this side needs." (unless a manager has written their own).
+-- * The stand's old "both sides / enter the total" note goes (unless a manager has written their own).
 do $$
 declare
   dept uuid := (select id from departments where lower(name) = 'candy bar');
@@ -43,8 +43,8 @@ begin
   update product_placements set instructions = null where check_area_id in (sa, sb) and instructions ilike '%both sides%';
   update products q set instructions = '' where q.department_id = dept and q.instructions ilike '%both sides%'
     and exists (select 1 from product_placements x where x.product_id = q.id and x.check_area_id in (sa, sb));
-  update check_areas set guide_text = 'Enter what this side needs.'
-    where id = stand and (trim(coalesce(guide_text, '')) = '' or guide_text ilike '%both sides%' or guide_text ilike '%enter the total%');
+  update check_areas set guide_text = ''
+    where id = stand and (guide_text ilike '%both sides%' or guide_text ilike '%enter the total%');
 
   raise notice 'Confection stand: water stand %; Side A % products; Side B % products (% added)',
     (select count(*) from product_placements where check_area_id = stand),

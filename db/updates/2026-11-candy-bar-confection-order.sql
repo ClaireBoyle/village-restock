@@ -81,10 +81,6 @@ begin
     k := k + 1;
     update product_placements set sort_order = k, heading = null where id = pl;
   end loop;
-  -- The water's own note is about the drinks fridge; on the stand it gets its own.
-  update product_placements x set instructions = 'The water stand next to the confection stand: enter how many bottles it needs.'
-    from products p where p.id = x.product_id and x.check_area_id = stand and lower(p.name) = 'mount franklin still water'
-      and x.instructions is null;
   -- A one-line route for the stand (only replaces the current wording).
   update check_areas set guide_text = 'Start at the water stand and walk both sides. Enter the total needed for each product.'
     where id = stand and (trim(coalesce(guide_text, '')) = '' or guide_text = 'Check both sides of the stand. Enter the total quantity needed.');

@@ -298,9 +298,11 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
       onChange={(fields, resolve) => void onItem(p, fields, resolve)} />
   ) : (
     <ProductRow key={p.placementId} p={p} showArea={showArea} item={items.get(p.placementId) ?? EMPTY_ITEM} note={alsoEntered(p) ?? fromCupboard(p) ?? notes.own.get(p.placementId)}
-      suggestedQty={ctx.suggested.get(p.placementId)?.qty} noneLeft={noneLeftOn}
+      suggestedQty={ctx.suggested.get(p.placementId)?.qty} noneLeft={noneLeftOn} by5={standBy5}
       onChange={(fields, resolve) => void onItem(p, fields, resolve)} />
   );
+  // A stand checked side by side (the Candy Bar confection stand, its water stand too): counted in fives.
+  const standBy5 = cur.sections.some((x) => x.mode === 'side');
   const renderRow = (p: (typeof cur.placements)[number], showArea = false) => {
     const row = stockRow(p, showArea);
     if (session.kind !== 'full' || whole.department.name !== 'Gold Class Kitchen' ||
@@ -529,12 +531,12 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
             if (!sides.length) return null;
             const on = sides.find((x) => x.area.id === sideOn[cur.area.id]) ?? sides[0];
             return (
-              <section className="stand-sides" aria-label="Sides of the stand">
+              <section className={`stand-sides side-${sides.indexOf(on) % 2 ? 'b' : 'a'}`} aria-label="Sides of the stand">
                 <div className="side-switch" role="tablist" aria-label="Side">
                   {sides.map((x) => {
                     const n = x.placements.filter(chk).length;
                     return (
-                      <button key={x.area.id} type="button" role="tab" aria-selected={x === on} className={x === on ? 'on' : ''} onClick={() => pickSide(cur.area.id, x.area.id)}>
+                      <button key={x.area.id} type="button" role="tab" aria-selected={x === on} className={`${x === on ? 'on' : ''} sw-${sides.indexOf(x) % 2 ? 'b' : 'a'}`} onClick={() => pickSide(cur.area.id, x.area.id)}>
                         <b>{secName(x.area.name)}</b><small>{n ? `${n} entered` : 'Not started'}</small>
                       </button>
                     );
