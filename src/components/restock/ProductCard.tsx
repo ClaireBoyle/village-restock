@@ -19,7 +19,7 @@ function focusNext(from: HTMLInputElement) {
  * its restock method. Blank = not checked yet; 0 = checked, nothing needed.
  * Typing is kept as text until it's a valid number, so a half-typed "2." is never lost.
  */
-export function ProductRow({ p, item, onChange, showArea, onRemove, note, suggestedQty, noneLeft = false }: {
+export function ProductRow({ p, item, onChange, showArea, onRemove, note, suggestedQty, noneLeft = false, by5 = false }: {
   p: PlacementView; item: ItemState; onChange: (fields: Partial<ItemState>, resolve?: boolean) => void;
   showArea?: boolean; onRemove?: () => void;
   /** Refill FOH: the amount suggested from what was grabbed for front of house (staff can change or remove it). */
@@ -28,6 +28,8 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
   note?: string | null;
   /** Gold Class Bar: offer "None left here" once the item is added to collect. */
   noneLeft?: boolean;
+  /** Counted in fives (the Candy Bar confection stand): a "+5" button beside the stepper. */
+  by5?: boolean;
 }) {
   const st = cardState(p, item);
   // Refilled from stock elsewhere: from an upstairs cupboard (the sugar), or from another area here (the malt powder).
@@ -68,6 +70,9 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
   const step = p.allowDecimal ? 0.5 : 1;
   // From blank, + gives 1 and − gives 0 (a quick way to say "none" / "empty").
   const bump = (dir: 1 | -1) => commit(Math.max(0, round2((last.current ?? 0) + dir * step)));
+  const plus5 = by5 && !p.prepTaskId
+    ? <button type="button" className="p5" onClick={() => commit(round2((last.current ?? 0) + 5))} aria-label={`Five more ${p.productName}`}>+5</button>
+    : null;
   // "Staff enter" products start as a single "+ Add". Once added, − steps down to 0 ("none needed"),
   // and − at 0 clears it back to untouched (blank = not entered, which is different from 0).
   const progressive = p.method === 'manual';
@@ -112,6 +117,7 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
         onChange={(e) => onType(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); focusNext(e.currentTarget); } }} />
       <button type="button" onClick={() => bump(1)} aria-label={`One more ${p.productName}`}><Icon name="plus" /></button>
+      {plus5}
     </div>
   );
 
@@ -133,6 +139,7 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
       ? <button type="button" className={`padd ${p.prepTaskId ? 'padd-prep' : ''}`} onClick={() => commit(1)}
           aria-label={p.prepTaskId ? `Add prep: ${p.productName}` : `Add ${p.productName}`}><Icon name={p.prepTaskId ? 'clock' : 'plus'} />{p.prepTaskId ? 'Add prep' : 'Add'}</button>
       : stepper;
+    if (plus5 && value === null && !err) controls = <div className="padd5">{controls}{plus5}</div>;
   } else if (p.method === 'par') {
     const full = value !== null && p.par !== null && value >= p.par;
     controls = <>

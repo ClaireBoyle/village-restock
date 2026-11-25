@@ -1,5 +1,5 @@
 // Candy Bar confection stand, side by side: a Side A / Side B switch (the side stays on, entries saved, either side
-// editable), "Enter what this side needs." once, one collection line per product with the total and the split (kept
+// editable, each side its own shade of blue, a +5 button), no "Enter what this side needs." note, one collection line per product with the total and the split (kept
 // after Got all), Got fewer with staff choosing where the units go, Fill Side A / Fill Side B as a reference before
 // Finish, and the same switch in Quick Restock. Phone.
 // Before running: reset the test database, then load candy-fixture.sql and candy-area-fixture.sql.
@@ -25,6 +25,9 @@ const txt = async (P, sel) => (await P.locator(sel).first().innerText()).replace
 (async () => {
   require('fs').mkdirSync(OUT, { recursive: true });
   await sql.file('db/updates/2026-11-candy-bar-confection-sides.sql'); await sql.file('db/updates/2026-11-candy-bar-confection-sides.sql');
+  // Re-adding the old wording first, so the clean-up script is tested on it.
+  await sql`update check_areas set guide_text = 'Enter what this side needs.' where name = 'Confection stand'`;
+  for (const f of ['sides', 'less-text', 'less-text']) await sql.file(`db/updates/2026-11-candy-bar-confection-${f}.sql`);
   const b = await chromium.launch(); const errs = [];
   const P = await (await b.newContext({ ...devices['iPhone 13'] })).newPage(); P.on('pageerror', (e) => errs.push(e.message));
   await P.goto(B + '/'); await P.waitForSelector('.dcard2');
@@ -33,10 +36,21 @@ const txt = async (P, sel) => (await P.locator(sel).first().innerText()).replace
 
   // 1. Check the stand, one side at a time.
   ok((await P.$$eval('.side-switch button b', (e) => e.map((x) => x.textContent))).join('|') === 'Side A|Side B', 'a Side A / Side B switch at the top of the list');
-  ok(await sees(P, 'main', 'Enter what this side needs.') && !(await P.textContent('main')).includes('both sides'), '"Enter what this side needs." (no "check both sides and enter the total")');
+  const main = await P.textContent('main');
+  ok(!/Enter what (this|each) side needs|both sides|water stand next/i.test(main), 'no "Enter what this side needs." or "check both sides" note');
+  const tint = () => P.$eval('.stand-sides', (e) => getComputedStyle(e).backgroundColor);
+  const tintA = await tint();
+  // +5: from untouched straight to 5, then 5 more, then − back to 9.
+  await P.click(`${row('Snickers')} button.p5`); await P.waitForTimeout(250);
+  ok(await P.locator(`${row('Snickers')} .qty-input`).inputValue() === '5', '+5 from untouched: 5');
+  await P.click(`${row('Snickers')} button.p5`); await P.click(`${row('Snickers')} button[aria-label="One less Snickers"]`); await P.waitForTimeout(250);
+  ok(await P.locator(`${row('Snickers')} .qty-input`).inputValue() === '9', '+5 again then −: 9');
   await setQty(P, 'Snickers', 3);
   await side(P, 'Side B'); await P.waitForTimeout(300);
   ok(await P.locator('.side-switch button.on:has-text("Side B")').count() === 1 && await P.locator(`${row('Snickers')} button.padd`).count() === 1, 'Side B: its own list (Snickers not entered here yet)');
+  const tintB = await tint();
+  ok(tintA !== tintB && !/rgba\(0, 0, 0, 0\)/.test(tintA), `each side its own shade (Side A ${tintA}, Side B ${tintB})`);
+  await P.screenshot({ path: `${OUT}/p25-side-b.png`, fullPage: true });
   await setQty(P, 'Snickers', 2); await setQty(P, 'Kit Kat', 1);
   await side(P, 'Side A'); await P.waitForTimeout(300);
   ok(await P.locator(`${row('Snickers')} .qty-input`).inputValue() === '3' && await sees(P, '.side-switch button:has-text("Side A")', '1 entered') && await sees(P, '.side-switch button:has-text("Side B")', '2 entered'),
@@ -85,7 +99,7 @@ const txt = async (P, sel) => (await P.locator(sel).first().innerText()).replace
 
   // Quick Restock: the same switch for the confection stand.
   await P.click('.dock button:has-text("Back to home")').catch(() => {}); await P.goto(B + '/'); await P.waitForSelector('.dcard2');
-  await P.click('.dcard2:has-text("Candy Bar")'); await P.click('.quick-link:has-text("Quick restock")'); await P.waitForSelector('#qsearch');
+  await P.click('.dcard2:has-text("Candy Bar")'); await P.click('.quick-link:has-text("Stock top-up")'); await P.waitForSelector('#qsearch');
   await P.click('.chip:has-text("Confection stand")');
   ok(await P.locator('.q-sides button').count() === 2 && await P.locator('.qpanel .qrow:has(b:text-is("Snickers"))').count() === 1, 'Quick Restock: Side A / Side B switch, one side at a time');
   await P.click('.q-sides button:has-text("Side B")');

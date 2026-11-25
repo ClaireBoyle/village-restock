@@ -64,7 +64,7 @@ export default async function DepartmentDetail({ params }: { params: Promise<{ i
 
       <section className="panel" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <h2>Categories</h2>
-        <p className="meta">Used to browse and search in Quick Restock, e.g. Beer, Dairy, Cups.</p>
+        <p className="meta">Used to browse and search in Stock Top-up, e.g. Beer, Dairy, Cups.</p>
         <div className="rows">
           {categories.map((c, i) => (
             <div key={String(c.id)} className={`row ${c.active ? '' : 'muted'}`} style={{ flexWrap: 'wrap' }}>

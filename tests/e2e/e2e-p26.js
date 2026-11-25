@@ -123,7 +123,7 @@ const PIZZA = 'Pizza cheese (portioned bags)';
 
   // Quick Restock: the same reminder.
   await P.goto(B + '/'); await P.waitForSelector('.dcard2');
-  await P.click('.dcard2:has-text("Kitchen") >> nth=0'); await P.click('text=Start quick restock'); await P.waitForSelector('#qsearch');
+  await P.click('.dcard2:has-text("Kitchen") >> nth=0'); await P.click('text=Start stock top-up'); await P.waitForSelector('#qsearch');
   await P.fill('#qsearch', 'patties'); await P.waitForTimeout(300);
   await P.fill('.qrow:has(b:text-is("Beef Patties")) .q-num >> nth=-1', '1'); await P.waitForSelector('.picked .qrow:has-text("Beef Patties")');
   await P.fill('#qsearch', 'avocado'); await P.waitForTimeout(300);

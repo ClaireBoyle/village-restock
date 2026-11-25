@@ -145,7 +145,7 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
   // ---------- Quick restock in Candy Bar (scenario 9) ----------
   await A.click('.dock button:has-text("Back to home")'); await A.waitForSelector('.dcard2');
   ok(await hasText(A, '.lane:nth-child(2) .fin-label', '✓ Done ·'), 'home shows Kitchen finished, with what needs following up (✓ Done · …)');
-  await A.click('.dcard2:has-text("Candy Bar")'); await A.click('text=Start quick restock');
+  await A.click('.dcard2:has-text("Candy Bar")'); await A.click('text=Start stock top-up');
   // Quick restock asks for the amount needed, straight in the product row (also for target-level products).
   await A.fill('#qsearch', 'large'); await A.fill('.qpanel .qrow:has-text("Large cups") .q-num', '3');
   await A.waitForSelector('.picked .qrow:has-text("Large cups")');

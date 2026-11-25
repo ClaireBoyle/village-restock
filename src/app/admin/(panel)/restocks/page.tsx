@@ -23,7 +23,7 @@ export default async function Restocks() {
               {dayRows.map((r: RestockRow) => (
                 <div key={r.id} className="row" style={{ flexWrap: 'wrap' }}>
                   <div className="grow" style={{ minWidth: 240 }}>
-                    <div className="title">{r.departmentName} &middot; {r.kind === 'full' ? 'Full restock' : r.kind === 'area' ? `${r.areaName ?? 'Area'} restock` : 'Quick restock'}</div>
+                    <div className="title">{r.departmentName} &middot; {r.kind === 'full' ? 'Full restock' : r.kind === 'area' ? `${r.areaName ?? 'Area'} restock` : 'Stock top-up'}</div>
                     <div className="meta">
                       {r.people.length ? r.people.join(', ') : 'No names'} &middot; started {time(r.startedAt)}{r.finishedAt ? `, finished ${time(r.finishedAt)}` : ''}
                       {r.kind === 'full' ? ` · ${r.areasDone} of ${r.areasTotal} areas` : ` · ${r.itemsTouched} product${r.itemsTouched === 1 ? '' : 's'} entered`}

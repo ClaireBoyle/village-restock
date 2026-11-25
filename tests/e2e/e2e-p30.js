@@ -67,7 +67,7 @@ const waitDb = async (q, check, ms = 15000) => { const end = Date.now() + ms; fo
 
   // Quick Restock: the container isn't a pick (it's a walk reminder); the malt powder is.
   await P.goto(B + '/'); await P.waitForSelector('.dcard2');
-  await P.click('.dcard2:has-text("Bar") >> nth=0'); await P.click('text=Start quick restock'); await P.waitForSelector('#qsearch');
+  await P.click('.dcard2:has-text("Bar") >> nth=0'); await P.click('text=Start stock top-up'); await P.waitForSelector('#qsearch');
   await P.fill('#qsearch', 'malt'); await P.waitForTimeout(300);
   ok(await P.locator(`.qpanel .qrow:has(b:text-is("Malt powder"))`).count() === 1 && await P.locator(`.qpanel .qrow:has(b:text-is("${MC}"))`).count() === 0, 'Quick Restock: Malt powder, not the container');
   ok(!errs.length, 'no page errors ' + errs.join(' | '));

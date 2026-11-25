@@ -1057,7 +1057,7 @@ export function summaryText(args: {
   const { view, items, recordedAreas } = args;
   const L: string[] = [];
   L.push(`VILLAGE RESTOCK: ${args.departmentName}`);
-  L.push(`${args.kind === 'full' ? 'Full' : args.kind === 'area' ? `${view.areas[0]?.area.name ?? 'Area'}` : 'Quick'} restock \u00b7 ${args.finishedLabel ? `finished ${args.finishedLabel}` : 'not finished'} \u00b7 ${args.dateLabel}${args.people.length ? ` \u00b7 ${args.people.join(', ')}` : ''}`);
+  L.push(`${args.kind === 'full' ? 'Full restock' : args.kind === 'area' ? `${view.areas[0]?.area.name ?? 'Area'} restock` : 'Stock top-up'} \u00b7 ${args.finishedLabel ? `finished ${args.finishedLabel}` : 'not finished'} \u00b7 ${args.dateLabel}${args.people.length ? ` \u00b7 ${args.people.join(', ')}` : ''}`);
   L.push(`Status: ${!args.finishedLabel ? 'In progress' : args.exceptionReason ? `Finished with exceptions (${args.exceptionReason})` : 'Complete'}`);
   if (args.completedBy) L.push(`Completed by: ${args.completedBy}`);
 
