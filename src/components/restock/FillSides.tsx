@@ -7,7 +7,7 @@ import { round2 } from '@/lib/restock-math';
 /**
  * Fill the stand (e.g. the Candy Bar confection stand): Fill Side A / Fill Side B, each a reference list of only
  * what that side needs, in stand order. What was collected for that side, or what it asked for while it's still to
- * collect. Nothing to tick: it's there to look at while filling.
+ * collect. Nothing to tick: it's there to look at while filling. Tap the side's button again to close it.
  */
 export function FillSides({ lines, items }: { lines: CollectionLine[]; items: Map<string, ItemState> }) {
   const sides = sideFillLists(lines, items);
@@ -35,7 +35,6 @@ export function FillSides({ lines, items }: { lines: CollectionLine[]; items: Ma
               {r.collected === null ? <small>still to collect</small> : r.collected < r.requested ? <small>of {round2(r.requested)} asked for</small> : null}
             </li>
           ))}</ul>
-          <button type="button" className="linkbtn" onClick={() => setOpen(null)}>Close</button>
         </div>
       ) : null}
     </section>

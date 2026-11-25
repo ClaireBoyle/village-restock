@@ -56,7 +56,7 @@ async function quick(P, dept, picks) {
   ok((await text(P, `${line('Grey Goose')}`)).includes('For '), 'Bar: each line still says where it goes');
   ok((await text(P, `.lgrp[data-group="Spirits"] .lgrp-h`)).endsWith('0 of 2'), 'Bar: "Spirits 0 of 2"');
   await P.click(`${line('Grey Goose')} .l-all`); await P.click(`${line('Patron Silver')} .l-all`); await P.waitForTimeout(300);
-  ok(await P.locator('.lgrp[data-group="Spirits"] .lgrp-h .ic').count() === 1, 'Bar: both collected: the group shows a tick');
+  ok(await P.locator('.lgrp[data-group="Spirits"] .lgrp-h small .ic').count() === 1, 'Bar: both collected: the group shows a tick');
   await P.screenshot({ path: `${OUT}/p28-bar.png`, fullPage: true });
 
   // Gold Class Kitchen: by where it's going.

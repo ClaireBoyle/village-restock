@@ -1626,3 +1626,10 @@ button.pnote.open span{display:block}
 .padd5{display:flex;align-items:center;gap:6px}
 .padd5 .p5{height:44px;border-radius:12px;border:1px solid var(--hair);background:var(--surface-2)}
 .padd5 .p5:active,.pstep button.p5:active{transform:scale(.92)}
+/* Collection list: a storeroom (or a group in it) folds up once everything in it is collected. */
+button.lgrp-h{width:100%;min-height:36px;padding:0 2px;border:0;background:none;cursor:pointer;text-align:left;align-items:center;font:inherit;font-size:13px}
+button.lgrp-h b{flex:1}
+button.lgrp-h>.ic{width:16px;height:16px;color:var(--ink-2)}
+.lgrp.complete.folded button.lgrp-h b{color:var(--ink-2)}
+button.room-h,button.lgrp-h{scroll-margin-top:calc(env(safe-area-inset-top,0px) + var(--top-h, 64px) + 8px)}
+.room.folded{margin-bottom:-4px}
