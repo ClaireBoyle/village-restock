@@ -1611,7 +1611,7 @@ button.pnote.open span{display:block}
 /* Candy Bar confection stand: each side its own shade of blue, so it's clear which side is being entered
    (Side A light sky blue, Side B deep royal blue): the switch, the panel and its rows. */
 .side-switch .sw-a,.stand-sides.side-a{--side:#62D0FF;--side-ink:#06233A;--side-bg:rgba(98,208,255,.17)}
-.side-switch .sw-b,.stand-sides.side-b{--side:#3D5BFF;--side-ink:#FFFFFF;--side-bg:rgba(32,52,190,.55)}
+.side-switch .sw-b,.stand-sides.side-b{--side:#2E4FC9;--side-ink:#FFFFFF;--side-bg:#0A1442}
 .side-switch button.sw-a,.side-switch button.sw-b{border:2px solid color-mix(in srgb,var(--side) 45%,transparent)}
 .side-switch button.on{background:var(--side);border-color:var(--side);box-shadow:var(--shadow-sm)}
 .side-switch button.on b,.side-switch button.on small{color:var(--side-ink)}
