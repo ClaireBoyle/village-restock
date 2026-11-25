@@ -164,7 +164,7 @@ export function RestockApp({ departmentId, isAdmin = false }: { departmentId: st
         localIds: mine.filter((s) => s.kind === 'full' && s.tradingDate === today).map((s) => s.id) });
     } else if (r.kind === 'quick') {
       const q = mine.filter((s) => s.kind === 'quick' && s.status === 'open');
-      setResetting({ scope: { departmentId, kind: 'quick', tradingDate: q[0]?.tradingDate ?? today, sessionIds: q.map((s) => s.id) }, typeLabel: 'Quick restock', localIds: q.map((s) => s.id) });
+      setResetting({ scope: { departmentId, kind: 'quick', tradingDate: q[0]?.tradingDate ?? today, sessionIds: q.map((s) => s.id) }, typeLabel: 'Stock top-up', localIds: q.map((s) => s.id) });
     } else {
       setResetting({ scope: { departmentId, kind: 'area', tradingDate: today, areaId: r.areaId }, typeLabel: `${r.areaName} restock`,
         localIds: mine.filter((s) => s.kind === 'area' && s.areaId === r.areaId && s.tradingDate === today).map((s) => s.id) });
@@ -210,8 +210,8 @@ export function RestockApp({ departmentId, isAdmin = false }: { departmentId: st
     <>
       <TopBar backHref={mode ? undefined : '/'}
         title={mode && view ? view.department.name : undefined}
-        crumbs={mode && activeSession ? `${sessionArea ?? (activeSession.kind === 'full' ? 'Full restock' : 'Quick restock')} · started ${timeOf(activeSession.startedAt)}`
-          : view ? `Home › ${view.department.name}${mode ? ` › ${mode === 'full' ? 'Full' : mode === 'area' ? 'Area' : 'Quick'} restock` : ''}` : 'Home'}
+        crumbs={mode && activeSession ? `${sessionArea ?? (activeSession.kind === 'full' ? 'Full restock' : 'Stock top-up')} · started ${timeOf(activeSession.startedAt)}`
+          : view ? `Home › ${view.department.name}${mode ? ` › ${mode === 'full' ? 'Full restock' : mode === 'area' ? 'Area restock' : 'Stock top-up'}` : ''}` : 'Home'}
         right={<TopControls catalogueCheckedAt={checkedAt} />}
         logo={mode ? <button className="iconbtn" onClick={toChooser} aria-label={view?.department.restockByArea ? 'Back to choosing an area' : 'Back to restock options'}><Icon name="back" /></button> : undefined} />
       <OfflineBanner />

@@ -280,7 +280,7 @@ export async function exportRestocksCsv(timeZone: string): Promise<string> {
   const status: Record<string, string> = { open: 'In progress', finished: 'Complete', finished_exceptions: 'Finished with exceptions', unfinished: 'Never finished' };
   return toCsv([
     ['Date', 'Department', 'Type', 'Status', 'Started', 'Finished', 'Staff', 'Exception reason', 'Comments', 'Shortages'],
-    ...rows.map((r) => [dateOnly(r.tradingDate), String(r.department), r.kind === 'full' ? 'Full' : 'Quick', status[String(r.status)] ?? String(r.status),
+    ...rows.map((r) => [dateOnly(r.tradingDate), String(r.department), r.kind === 'full' ? 'Full' : r.kind === 'area' ? 'Area' : 'Stock top-up', status[String(r.status)] ?? String(r.status),
       t(r.startedAt), t(r.finishedAt), ((r.people as string[]) ?? []).join(', '), (r.exceptionReason as string) ?? '', (r.note as string) ?? '', Number(r.shortages)]),
   ]);
 }

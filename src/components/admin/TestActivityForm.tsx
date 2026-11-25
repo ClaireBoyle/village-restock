@@ -4,7 +4,7 @@ import { ActionForm, SubmitButton } from './ActionForm';
 import { clearTestActivity } from '@/app/actions/admin';
 import type { DefrostActivity, ResetTarget } from '@/lib/server/reset';
 
-const KIND = { full: 'Full restock', quick: 'Quick restock', area: 'Area restock' } as const;
+const KIND = { full: 'Full restock', quick: 'Stock top-up', area: 'Area restock' } as const;
 const STATUS: Record<string, string> = { open: 'In progress', finished: 'Finished', finished_exceptions: 'Finished with exceptions', unfinished: 'Never finished' };
 
 /** Review test records, tick the ones to clear, confirm. Nothing is ticked to start with. */

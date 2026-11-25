@@ -14,7 +14,7 @@ import { MorningPrepHome } from './MorningPrep';
 
 const TIPS_KEY = 'vr-hide-tips';
 
-/** Choose Full or Quick Restock, with tonight's progress at a glance. */
+/** Choose Full Restock or Stock Top-up, with tonight's progress at a glance. */
 export function TypeStep({ view, fullSession, remoteFull, quickSession, opening, onStart, onSummary, hasDefrost = false, onReset, prep, checklist = false }: {
   view: DepartmentView; fullSession: LocalSession | null; remoteFull: RemoteSession | null; quickSession: LocalSession | null; opening: boolean;
   onStart: (m: 'full' | 'quick') => void; onSummary: () => void;
@@ -125,11 +125,11 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
         <section className="type type-quick">
           <div className="type-h">
             <span className="type-icon" aria-hidden="true"><Icon name="bolt" /></span>
-            <h2>Quick Restock</h2>{quickSession?.selected.length ? <Badge st="info">{quickSession.selected.length} on your list</Badge> : null}
-            {onReset && quickSession ? <AdminMenu label="Quick restock" onChoose={() => onReset({ kind: 'quick' })} /> : null}
+            <h2>Stock Top-up</h2>{quickSession?.selected.length ? <Badge st="info">{quickSession.selected.length} on your list</Badge> : null}
+            {onReset && quickSession ? <AdminMenu label="Stock top-up" onChoose={() => onReset({ kind: 'quick' })} /> : null}
           </div>
           <p className="lead">Only what&rsquo;s running low, <b>between sessions</b>. Separate from the full restock.</p>
-          <div className="actions"><button className={`btn big ${src && !finished ? '' : 'primary'}`} disabled={opening} onClick={() => onStart('quick')}>{quickSession ? 'Continue quick restock' : 'Start quick restock'}</button></div>
+          <div className="actions"><button className={`btn big ${src && !finished ? '' : 'primary'}`} disabled={opening} onClick={() => onStart('quick')}>{quickSession ? 'Continue stock top-up' : 'Start stock top-up'}</button></div>
         </section>
       </div>
     </main>

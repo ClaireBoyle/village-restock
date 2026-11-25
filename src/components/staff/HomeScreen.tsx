@@ -214,7 +214,7 @@ function AreaMeter({ segs, label }: { segs: Seg[]; label: string }) {
 
 const STATUS: Record<DeptState['kind'], { icon: 'half' | 'bolt' | 'check' | 'warn' | 'circle'; text: string }> = {
   active: { icon: 'half', text: 'In progress' },
-  quick: { icon: 'bolt', text: 'Quick restock saved' },
+  quick: { icon: 'bolt', text: 'Stock top-up saved' },
   done: { icon: 'check', text: 'Restocked' },
   part: { icon: 'half', text: 'Partly restocked' },
   exceptions: { icon: 'warn', text: 'Finished with exceptions' },
@@ -262,7 +262,7 @@ function DepartmentCard({ s }: { s: DeptState }) {
   const gold = d.theme === 'gold';
   const unset = s.kind === 'idle' && s.segs.length === 0;
   const action = unset ? 'Not set up yet' : s.d.restockByArea ? (s.kind === 'active' ? 'Resume restock' : 'Choose an area')
-    : { active: 'Resume restock', quick: 'Continue quick restock', done: 'View summary', exceptions: 'View summary', idle: 'Start restock', part: 'Resume restock' }[s.kind];
+    : { active: 'Resume restock', quick: 'Continue stock top-up', done: 'View summary', exceptions: 'View summary', idle: 'Start restock', part: 'Resume restock' }[s.kind];
   const fin = finishedLabel(s);
   return (
     <Link href={`/d/${d.id}`} className={`dcard2 k-${unset ? 'unset' : s.kind} ${gold ? 'gold' : 'village'} ${fin ? `fin ${fin.warn ? 'fin-warn' : 'fin-ok'}` : ''}`}

@@ -94,9 +94,9 @@ export function AreaPicker({ view, remote, quickSession, today, opening, onStart
 
       <div className="quick-row">
         <button className="quick-link" onClick={onQuick} disabled={opening}>
-          <Icon name="bolt" /><span><b>{quickSession?.selected.length ? 'Continue quick restock' : 'Quick restock'}</b><small>Search for anything running low, from any area</small></span><Icon name="next" />
+          <Icon name="bolt" /><span><b>{quickSession?.selected.length ? 'Continue stock top-up' : 'Stock top-up'}</b><small>Search for anything running low, from any area</small></span><Icon name="next" />
         </button>
-        {onReset && quickSession ? <AdminMenu label="Quick restock" onChoose={() => onReset({ kind: 'quick' })} /> : null}
+        {onReset && quickSession ? <AdminMenu label="Stock top-up" onChoose={() => onReset({ kind: 'quick' })} /> : null}
       </div>
     </main>
   );

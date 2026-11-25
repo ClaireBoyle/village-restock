@@ -153,7 +153,7 @@ const contrast = (P, sel) => P.$eval(sel, (el) => {
 
   // 12. Finish without shortages (quick restock)
   await P.click('.dock button:has-text("Back to home")'); await P.waitForSelector('.dcard2');
-  await P.click('.dcard2:has-text("Bar") >> nth=0'); await P.click('button:has-text("Start quick restock")'); await P.waitForSelector('#qsearch');
+  await P.click('.dcard2:has-text("Bar") >> nth=0'); await P.click('button:has-text("Start stock top-up")'); await P.waitForSelector('#qsearch');
   await P.fill('#qsearch', 'Orange'); await P.click('.qpanel .qrow:has-text("Orange Juice") button[aria-label^="Add one"]'); await P.waitForSelector('.picked .qrow:has-text("Orange Juice")');
   await P.click('.dock button:has-text("Collect")'); await P.click(`${line('Orange Juice')} .l-all`);
   await P.click('.dock .dock-acts button:has-text("Review")'); await P.waitForSelector('.finish-title');

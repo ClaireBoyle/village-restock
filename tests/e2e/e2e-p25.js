@@ -85,7 +85,7 @@ const txt = async (P, sel) => (await P.locator(sel).first().innerText()).replace
 
   // Quick Restock: the same switch for the confection stand.
   await P.click('.dock button:has-text("Back to home")').catch(() => {}); await P.goto(B + '/'); await P.waitForSelector('.dcard2');
-  await P.click('.dcard2:has-text("Candy Bar")'); await P.click('.quick-link:has-text("Quick restock")'); await P.waitForSelector('#qsearch');
+  await P.click('.dcard2:has-text("Candy Bar")'); await P.click('.quick-link:has-text("Stock top-up")'); await P.waitForSelector('#qsearch');
   await P.click('.chip:has-text("Confection stand")');
   ok(await P.locator('.q-sides button').count() === 2 && await P.locator('.qpanel .qrow:has(b:text-is("Snickers"))').count() === 1, 'Quick Restock: Side A / Side B switch, one side at a time');
   await P.click('.q-sides button:has-text("Side B")');
