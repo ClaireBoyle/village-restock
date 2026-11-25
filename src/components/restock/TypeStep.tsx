@@ -63,7 +63,7 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
           {view.department.groupLabel ? <span className="dh-group">{view.department.groupLabel}</span> : null}
           <h1>{view.department.shortName}</h1>
           <p className="dh-sub">{finished ? (src!.status === 'finished_exceptions' ? `Finished with exceptions at ${timeOf(src!.finishedAt)}` : `Restocked tonight at ${timeOf(src!.finishedAt)}`)
-            : src ? `Full restock in progress · ${doneAreas} of ${view.areas.length} areas${src.people.length ? ` · ${src.people.join(', ')}` : ''}` : `${view.areas.length} areas · ${view.placements.length} products`}</p>
+            : src ? `Full restock in progress · ${doneAreas} of ${view.areas.length} areas${src.people.length ? ` · ${src.people.join(', ')}` : ''}` : `${view.areas.length} ${view.areas.length === 1 ? 'area' : 'areas'}`}</p>
           {src ? <div className="ameter" role="img" aria-label={`${doneAreas} of ${view.areas.length} areas done`}>{view.areas.map(({ area }) => <i key={area.id} className={recorded.get(area.id) === 'complete' ? 'done' : recorded.get(area.id) === 'skipped' ? 'skip' : ''} />)}</div> : null}
         </div>
         {/* eslint-disable-next-line @next/next/no-img-element */}
