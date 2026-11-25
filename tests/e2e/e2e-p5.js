@@ -110,8 +110,12 @@ const FRIDGE = ['Fuze Peach Iced Tea', 'Monster Original', 'Monster White', 'Mon
   while (await P.$('.line.todo .l-all')) { await P.click('.line.todo .l-all >> nth=0'); await P.waitForTimeout(100); }
   ok(await P.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'no sideways scrolling on a phone (collect)');
   await P.screenshot({ path: out + 'p5-collect.png' });
+  await P.waitForTimeout(1600);
+  ok(await P.locator('.room:has(.room-h:has-text("Candy Bar BOH")) .line').count() === 0, 'everything collected: the storeroom folds up by itself');
   await P.click('.room-h:has-text("Candy Bar BOH")');
-  ok(await P.locator('.room:has(.room-h:has-text("Candy Bar BOH")) .line').count() === 0, 'a storeroom section can be folded away');
+  ok(await P.locator('.room:has(.room-h:has-text("Candy Bar BOH")) .line').count() > 0, 'tap its heading: open again');
+  await P.click('.room-h:has-text("Candy Bar BOH")');
+  ok(await P.locator('.room:has(.room-h:has-text("Candy Bar BOH")) .line').count() === 0, 'and folded away again');
   await P.click('.dock button:has-text("Review")'); await P.click('.dock button:has-text("Finish restock")');
   await P.waitForSelector('.finish-hero'); await waitSynced(P);
   const [sh] = await sql`select product_name, shortfall_qty, flagged from shortages`;

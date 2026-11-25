@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from '@/components/Icon';
 import { cardState, isRequired, needOf, type ItemState, type PlacementView } from '@/lib/restock-logic';
 import { formatQty, parseQuantity, round2 } from '@/lib/restock-math';
@@ -207,21 +208,26 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
   );
 }
 
-/** Full-screen photo. Tap anywhere (or press Escape) to close. */
+/**
+ * Full-screen photo: fills the screen, nothing else on it but the name. One tap anywhere (or Escape) and it goes
+ * away. Drawn over the whole page, so nothing on the
+ * screen behind it can clip it.
+ */
 export function PhotoZoom({ src, title, onClose, credit }: { src: string; title: string; onClose: () => void; credit?: string | null }) {
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', k);
-    return () => window.removeEventListener('keydown', k);
+    // The page behind doesn't scroll while the photo is up.
+    const { overflow } = document.body.style; document.body.style.overflow = 'hidden';
+    return () => { window.removeEventListener('keydown', k); document.body.style.overflow = overflow; };
   }, [onClose]);
-  return (
-    <div className="photo-zoom" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}>
+  return createPortal(
+    <div className="photo-zoom" role="dialog" aria-modal="true" aria-label={`${title} (tap to close)`} onClick={(e) => { e.stopPropagation(); onClose(); }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src} alt={title} />
-      <p>{title}</p>
-      {credit ? <small className="pz-credit">{credit}</small> : null}
-      <button type="button" className="btn" onClick={onClose}><Icon name="x" />Close</button>
-    </div>
+      <p className="pz-cap"><b>{title}</b>{credit ? <small className="pz-credit">{credit}</small> : null}</p>
+    </div>,
+    document.body,
   );
 }
 

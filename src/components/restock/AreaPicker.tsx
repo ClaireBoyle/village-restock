@@ -6,6 +6,7 @@ import { collectionLines, EMPTY_ITEM, type DepartmentView, type ItemState } from
 import type { RemoteSession } from '@/lib/sync-types';
 import { Badge, timeOf } from './shared';
 import { AdminMenu } from './ResetControls';
+import { ProductThumb } from './ProductCard';
 import type { ResetFor } from './RestockApp';
 
 interface AreaRun { id: string; status: LocalSession['status']; startedAt: string; finishedAt: string | null; people: string[]; entered: number; local: boolean }
@@ -69,9 +70,8 @@ export function AreaPicker({ view, remote, quickSession, today, opening, onStart
                 </div>
                 {onReset && runs.length ? <AdminMenu label={`${area.name} restock`} onChoose={() => onReset({ kind: 'area', areaId: area.id, areaName: area.name })} /> : null}
                 {photos.length ? (
-                  <span className="ac-photos" aria-hidden="true">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    {photos.map((p) => <img key={p.placementId} src={p.photoPath!} alt="" loading="lazy" />)}
+                  <span className="ac-photos">
+                    {photos.map((p) => <ProductThumb key={p.placementId} src={p.photoPath} name={p.productName} credit={p.photoCredit} className="ac-ph" />)}
                   </span>
                 ) : null}
               </div>

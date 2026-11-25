@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
   EMPTY_ITEM, SHORT_REASONS, activePlacements, clearCollectedUpdates, collectPlacements, refillLines, collectionLines, gotAllUpdates, gotFewerUpdates,
@@ -87,6 +87,28 @@ function roomNote(lines: CollectionLine[], notes: Map<string, string>) {
   return lines.every((l) => /\bstraws?\b/i.test(l.productName)) ? undefined : notes.get(id);
 }
 
+/**
+ * Open while there's something to collect; folds up a moment after the last item is ticked (time to see the tick,
+ * or undo a wrong tap), and opens again if something in it goes back to "to collect". Tapping the heading always
+ * opens or closes it. Already finished when the list opened: starts folded.
+ */
+function useFoldWhenDone(complete: boolean, head: React.RefObject<HTMLElement | null>) {
+  const [open, setOpen] = useState(!complete);
+  const was = useRef(complete);
+  useEffect(() => {
+    const before = was.current; was.current = complete;
+    if (!complete) { if (before) setOpen(true); return; }
+    if (before) return;
+    const t = setTimeout(() => {
+      setOpen(false);
+      // Folding can leave its heading above the screen: bring it back so the next storeroom follows straight on.
+      requestAnimationFrame(() => { const h = head.current; if (h && h.getBoundingClientRect().top < 0) h.scrollIntoView({ block: 'start', behavior: 'smooth' }); });
+    }, 1100);
+    return () => clearTimeout(t);
+  }, [complete, head]);
+  return [open, setOpen] as const;
+}
+
 /** One storeroom: header with progress, folds away once everything in it is collected. */
 function Room({ name, lines, items, write, note, oneArea, tickOnly = false, displayRule = false, checkOf, grouped }: {
   name: string; lines: CollectionLine[]; items: Map<string, ItemState>; write: (u: { placementId: string; fields: Partial<ItemState> }[]) => void;
@@ -103,11 +125,11 @@ function Room({ name, lines, items, write, note, oneArea, tickOnly = false, disp
 }) {
   const doneN = lines.filter((l) => ['done', 'short'].includes(lineState(l, items))).length;
   const complete = doneN === lines.length;
-  // Folded only if it was already finished when the list opened: never snaps shut under someone's finger.
-  const [open, setOpen] = useState(!complete);
+  const head = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useFoldWhenDone(complete, head);
   return (
-    <section className={`room ${complete ? 'complete' : ''}`}>
-      <button className="room-h" onClick={() => setOpen(!open)} aria-expanded={open}>
+    <section className={`room ${complete ? 'complete' : ''} ${open ? 'open' : 'folded'}`}>
+      <button ref={head} className="room-h" onClick={() => setOpen(!open)} aria-expanded={open}>
         <Icon name={complete ? 'check' : 'box'} /><h3>{name}</h3>
         <span className="room-n">{doneN} of {lines.length}</span>
         <span className="room-bar" aria-hidden="true"><i style={{ width: `${Math.round((doneN / lines.length) * 100)}%` }} /></span>
@@ -115,17 +137,30 @@ function Room({ name, lines, items, write, note, oneArea, tickOnly = false, disp
       </button>
       {open && note ? <p className="room-note"><Icon name="info" /><span>{note}</span></p> : null}
       {open && grouped ? (
-        <div className="room-lines">{grouped.map((g) => {
-          const n = g.lines.filter((l) => ['done', 'short'].includes(lineState(l, items))).length;
-          return (
-            <div key={g.key} className="lgrp" data-group={g.label}>
-              <p className="lgrp-h"><b>{g.label}</b><small>{n === g.lines.length ? <><Icon name="check" />{g.lines.length}</> : `${n} of ${g.lines.length}`}</small></p>
-              {g.lines.map((l) => <Line key={l.key} line={l} items={items} write={write} oneArea={oneArea} tickOnly={tickOnly} displayRule={displayRule} barCheck={checkOf?.(l).check} barWhere={checkOf?.(l).where ?? null} groupArea={g.areaName} />)}
-            </div>
-          );
-        })}</div>
+        <div className="room-lines">{grouped.map((g) => (
+          <Group key={g.key} g={g} items={items}>
+            {g.lines.map((l) => <Line key={l.key} line={l} items={items} write={write} oneArea={oneArea} tickOnly={tickOnly} displayRule={displayRule} barCheck={checkOf?.(l).check} barWhere={checkOf?.(l).where ?? null} groupArea={g.areaName} />)}
+          </Group>
+        ))}</div>
       ) : open ? <div className="room-lines">{lines.map((l) => <Line key={l.key} line={l} items={items} write={write} oneArea={oneArea} tickOnly={tickOnly} displayRule={displayRule} barCheck={checkOf?.(l).check} barWhere={checkOf?.(l).where ?? null} />)}</div> : null}
     </section>
+  );
+}
+
+/** A group inside a storeroom (e.g. "Spirits", "For Freezer 1"): folds up the same way once it's all collected. */
+function Group({ g, items, children }: { g: LineGroup; items: Map<string, ItemState>; children: React.ReactNode }) {
+  const n = g.lines.filter((l) => ['done', 'short'].includes(lineState(l, items))).length;
+  const complete = n === g.lines.length;
+  const head = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useFoldWhenDone(complete, head);
+  return (
+    <div className={`lgrp ${complete ? 'complete' : ''} ${open ? 'open' : 'folded'}`} data-group={g.label}>
+      <button ref={head} type="button" className="lgrp-h" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <b>{g.label}</b><small>{complete ? <><Icon name="check" />{g.lines.length}</> : `${n} of ${g.lines.length}`}</small>
+        {complete || !open ? <Icon name={open ? 'up' : 'down'} /> : null}
+      </button>
+      {open ? children : null}
+    </div>
   );
 }
 
