@@ -21,6 +21,7 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
   const covered = activePlacements(session.kind, placements, recorded);
   // Upstairs pickups were on Refill FOH; this is the downstairs run.
   const lines = collectionLines(collectPlacements(session.kind, placements, recorded), items);
+  const fillNext = ctx.standFill && lines.some(line => lineGot(line, items) > 0);
   const groups = groupByStoreroom(lines, view.locationOrder);
   // Inside each storeroom: by type (Gold Class Bar: Beer, Wine, Spirits…) or by where it's going (Kitchen).
   // An area restock is all for one area, so grouping by area adds nothing there.
@@ -65,13 +66,13 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
               note={roomNote(g.lines, view.locationNotes)} />)}
           </div>
         )}
-        <FillSides lines={lines} items={items} />
+        {!ctx.standFill && <FillSides lines={lines} items={items} />}
         <PendingRefills list={refills} title="Back upstairs: refill" onRefilled={(p) => write([{ placementId: p.placementId, fields: { refillStatus: 'refilled' } }])} />
       </main>
       <Dock icon={handled === lines.length ? 'check' : 'list'} progress={lines.length ? handled / lines.length : 1}
         title={lines.length ? <>{handled} of {lines.length} resolved{shorts ? <span className="short-tag">{plural(shorts, 'shortage')}</span> : null}</> : 'Nothing to collect'}>
         <button className="btn save-exit" onClick={ctx.saveAndExit} aria-label="Save and exit"><Icon name="save" /><span className="lg">Save and exit</span><span className="sm">Save &amp; exit</span></button>
-        <button className="btn primary big" onClick={() => ctx.go('finish')}><span className="lg">Review and finish</span><span className="sm">{lines.length ? 'Review' : 'Finish'}</span><Icon name="next" /></button>
+        <button className="btn primary big" onClick={() => ctx.go(fillNext ? 'fill' : 'finish')}>{fillNext ? 'Fill the stand' : <><span className="lg">Review and finish</span><span className="sm">{lines.length ? 'Review' : 'Finish'}</span></>}<Icon name="next" /></button>
       </Dock>
     </>
   );

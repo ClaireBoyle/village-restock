@@ -10,6 +10,7 @@ import { findOpenQuickSession, openAreaSession, openFullSession, startSession } 
 import { EMPTY_ITEM, departmentView, quickPlacements, scopeView, suggestions, usesRefill, withSuggestions, type AreaStatus, type DepartmentView, type ItemState, type PlacementView, type Suggestion } from '@/lib/restock-logic';
 import { tradingDate } from '@/lib/restock-math';
 import { CheckStep } from './CheckStep';
+import { StandFillStep } from './StandFillStep';
 import { CollectStep } from './CollectStep';
 import { FinishStep } from './FinishStep';
 import { QuickStep } from './QuickStep';
@@ -34,6 +35,7 @@ export interface RestockCtx {
   suggested: Map<string, Suggestion>;
   /** This restock uses the Refill FOH flow (Check FOH → Refill FOH → Check BOH → Collect → Finish). */
   refill: boolean;
+  standFill: boolean;
   areaRecords: Map<string, LocalArea>;
   recorded: Map<string, AreaStatus>;
   who: string;
@@ -58,7 +60,7 @@ function readUrl(): { mode: Mode | null; step: Step; quickId: string | null; are
   const m = p.get('mode');
   const mode = m === 'full' || m === 'quick' || m === 'area' ? (m as Mode) : null;
   const s = p.get('step');
-  return { mode, step: s === 'collect' || s === 'finish' || s === 'refill' || s === 'boh' ? s : 'check', quickId: p.get('s'), areaId: p.get('a') };
+  return { mode, step: s === 'fill' || s === 'collect' || s === 'finish' || s === 'refill' || s === 'boh' ? s : 'check', quickId: p.get('s'), areaId: p.get('a') };
 }
 
 /**
@@ -263,17 +265,19 @@ export function RestockApp({ departmentId, isAdmin = false }: { departmentId: st
   const items = suggested.size ? withSuggestions(session.kind, view, rawItems, recorded, admits) : rawItems;
   // Steps only the Refill FOH flow has fall back to the plain ones elsewhere.
   // ("refill" was its own step; it's now part of Upstairs.)
-  const shownStep: Step = refill ? (step === 'refill' ? 'boh' : step) : step === 'refill' || step === 'boh' ? 'check' : step;
+  const flowStep: Step = refill ? (step === 'refill' ? 'boh' : step) : step === 'refill' || step === 'boh' ? 'check' : step;
   // An area restock sees only its own area: its products, its collection list, its finish.
   const scoped = session.kind === 'area' ? scopeView(view, session.areaId) : view;
   // Quick Restock: what's been given an amount (shared by every device on this restock), in the order it was added.
   const placements = session.kind === 'quick' ? quickPlacements(view, items, session.selected) : scoped.placements;
+  const standFill = session.kind === 'area' && scoped.areas.some(a => a.sections.some(s => s.mode === 'side'));
+  const shownStep = flowStep === 'fill' && !standFill ? 'collect' : flowStep;
   const byArea = session.kind === 'area';
 
   const ctx: RestockCtx = {
-    view: scoped, session, placements, items, rawItems, suggested, refill, areaRecords, recorded, who, go, hasDefrost, prepTasks, allPrepTasks,
+    view: scoped, session, placements, items, rawItems, suggested, refill, standFill, areaRecords, recorded, who, go, hasDefrost, prepTasks, allPrepTasks,
     // Restock screens: one slim step bar, no banner, so products start near the top of the screen.
-    header: <div className="rbar"><Stages kind={session.kind} current={shownStep} onGo={go} refill={refill} /></div>,
+    header: <div className="rbar"><Stages kind={session.kind} current={shownStep} onGo={go} refill={refill} fill={standFill} /></div>,
     // Area restocks go back to choosing an area, where this one shows as saved (or done).
     saveAndExit: byArea ? toChooser : () => router.push('/?saved=1'),
     done: byArea ? toChooser : () => router.push('/'),
@@ -285,6 +289,7 @@ export function RestockApp({ departmentId, isAdmin = false }: { departmentId: st
       {top}
       {shownStep === 'check' ? (session.kind !== 'quick' ? <CheckStep key="foh" ctx={ctx} phase={refill ? 'foh' : 'all'} /> : <QuickStep ctx={ctx} />)
         : shownStep === 'boh' ? <CheckStep key="boh" ctx={ctx} phase="boh" />
+        : shownStep === 'fill' ? <StandFillStep key={session.id} ctx={ctx} />
         : shownStep === 'collect' ? <CollectStep ctx={ctx} /> : <FinishStep ctx={ctx} />}
     </div>
   );

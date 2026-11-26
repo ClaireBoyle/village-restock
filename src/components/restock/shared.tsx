@@ -34,17 +34,18 @@ export function DeptBand({ d, sub, right }: { d: CatDepartment; sub?: React.Reac
 }
 
 /** refill / boh: only for a full restock with upstairs pickups (Gold Class Bar's Refill FOH flow). */
-export type Step = 'check' | 'refill' | 'boh' | 'collect' | 'finish';
+export type Step = 'check' | 'refill' | 'boh' | 'collect' | 'fill' | 'finish';
 
-export function Stages({ kind, current, onGo, refill = false }: { kind: 'full' | 'quick' | 'area'; current: Step; onGo: (s: Step) => void; refill?: boolean }) {
+export function Stages({ kind, current, onGo, refill = false, fill = false }: { kind: 'full' | 'quick' | 'area'; current: Step; onGo: (s: Step) => void; refill?: boolean; fill?: boolean }) {
   const labels: [Step, string, string][] = refill
     // Front of house first, grab from upstairs, check upstairs, then the downstairs run.
     // Check the bar, then upstairs (at each spot: grab for the bar, then what to bring up), then downstairs.
     ? [['check', 'Check the bar', 'Bar'], ['boh', 'Upstairs', 'Up'], ['collect', 'Collect downstairs', 'Down'], ['finish', 'Finish', 'Finish']]
     : [['check', kind === 'full' ? 'Check stock' : kind === 'area' ? 'What’s needed' : 'Pick products', kind === 'quick' ? 'Pick' : 'Check'], ['collect', 'Collect', 'Collect'], ['finish', 'Finish', 'Finish']];
+  if (fill) labels.splice(-1, 0, ['fill', 'Fill', 'Fill']);
   const idx = labels.findIndex(([s]) => s === current);
   return (
-    <nav className={`stages ${refill ? 'four' : ''}`} aria-label="Restock steps">
+    <nav className={`stages ${refill || fill ? 'four' : ''}`} aria-label="Restock steps">
       {labels.map(([s, l, sm], i) => (
         <button key={s} className={`stage ${i === idx ? 'on' : i < idx ? 'done' : ''}`} onClick={() => onGo(s)} aria-current={i === idx ? 'step' : undefined}>
           <span className="n">{i < idx ? <Icon name="check" /> : i + 1}</span><span className="lg">{l}</span><span className="sm">{sm}</span>
