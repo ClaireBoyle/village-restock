@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import {
   EXCEPTION_REASONS, EMPTY_ITEM, SHORT_REASONS, activePlacements, areaStatus, collectPlacements, collectionLines, exceptions, isChecked, isRequired,
-  isShortage, lineGot, lineInfo, lineState, pendingRefills, restockOutcomes, type ItemState, type StockOutcome,
+  isShortage, lineGot, lineInfo, lineState, pendingRefills, restockOutcomes, type CollectionLine, type ItemState, type StockOutcome,
 } from '@/lib/restock-logic';
 import { useLive } from '@/lib/client/hooks';
 import { localDb } from '@/lib/client/local-db';
@@ -107,8 +107,11 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
   // Gold Class Bar: staff can change a status worked out from the checks (only while the restock is open).
   const correct = finished ? undefined : (o: StockOutcome, st: NonNullable<ItemState['statusOverride']>) =>
     void setItems(session.id, (o.placementIds ?? []).map((placementId) => ({ placementId, fields: { statusOverride: st === o.auto ? null : st } })), who);
-  const board = useBoard(view.department.id, session.id, session.status === 'open');
+  const { board, lastNight } = useBoard(view.department.id, session.id, session.status === 'open');
   const report = <StockReport outcomes={outcomes} displayRule={displayRule} onCorrect={correct} board={board} />;
+  // Gold Class Bar and Kitchen: what was short the night before, and where each stands tonight.
+  const lastNightList = view.department.theme === 'gold' && !finished
+    ? <LastNightList last={lastNight} tradingDate={session.tradingDate} outcomes={outcomes} lines={lines} items={items} /> : null;
 
   const details = (
     <div className="sum">
@@ -181,6 +184,7 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
             ) : null}
 
             {report}
+            {lastNightList}
 
             {/* Candy Bar confection stand: Fill Side A / Fill Side B, a reference before finishing. */}
             <FillSides lines={lines} items={items} />
@@ -242,12 +246,18 @@ type Board = Map<string, { since: string; last: string }>;
  * Products already short at an earlier restock, from the server (kept on this device for when it's offline).
  * Only while the restock is still open: once finished, this restock's own shortages count too.
  */
-function useBoard(departmentId: string, sessionId: string, open: boolean): Board {
+function useBoard(departmentId: string, sessionId: string, open: boolean): { board: Board; lastNight: LastNight | null } {
   const key = `vr-board-${departmentId}`;
   const [items, setItems] = useState<{ productName: string; since: string; last: string }[]>([]);
+  const [last, setLast] = useState<LastNight | null>(null);
   useEffect(() => {
     // The last copy on this device first (offline), then the server's.
-    try { const saved = JSON.parse(localStorage.getItem(key) ?? '[]'); if (Array.isArray(saved)) setItems(saved); } catch { /* none saved */ }
+    try {
+      const saved = JSON.parse(localStorage.getItem(key) ?? '[]');
+      if (Array.isArray(saved)) setItems(saved);
+      const ln = JSON.parse(localStorage.getItem(`${key}-last`) ?? 'null');
+      if (ln && typeof ln.date === 'string' && Array.isArray(ln.items)) setLast(ln);
+    } catch { /* none saved */ }
     if (!open) return;
     let off = false;
     fetch(`/api/shortages/board?dept=${departmentId}&session=${sessionId}`, { cache: 'no-store' })
@@ -255,12 +265,66 @@ function useBoard(departmentId: string, sessionId: string, open: boolean): Board
       .then((j) => {
         if (off || !j || !Array.isArray(j.items)) return;
         setItems(j.items);
-        try { localStorage.setItem(key, JSON.stringify(j.items)); } catch { /* private mode: fine */ }
+        setLast(j.lastNight ?? null);
+        try { localStorage.setItem(key, JSON.stringify(j.items)); localStorage.setItem(`${key}-last`, JSON.stringify(j.lastNight ?? null)); } catch { /* private mode: fine */ }
       })
       .catch(() => { /* offline: the last copy on this device */ });
     return () => { off = true; };
   }, [departmentId, sessionId, open, key]);
-  return new Map(items.map((i) => [i.productName.toLowerCase(), { since: i.since, last: i.last }]));
+  return { board: new Map(items.map((i) => [i.productName.toLowerCase(), { since: i.since, last: i.last }])), lastNight: last };
+}
+
+/** The previous full restock's shortages (from the server). */
+type LastNight = { date: string; items: { productName: string; unitPlural: string; short: number; status: 'out' | 'low' | null }[] };
+
+/**
+ * Gold Class Bar and Kitchen: what the previous full restock left out of stock or low, and where each stands tonight:
+ * still short (already in tonight's shortages), restocked tonight, on tonight's list but not collected yet, or not on
+ * tonight's list at all (worth a look before the board is updated). Folded until opened.
+ */
+function LastNightList({ last, tradingDate, outcomes, lines, items }: {
+  last: LastNight | null; tradingDate: string; outcomes: StockOutcome[]; lines: CollectionLine[]; items: Map<string, ItemState>;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!last || !last.items.length) return null;
+  const shortTonight = new Map(outcomes.filter(isShortage).map((o) => [o.productName.toLowerCase(), o.status]));
+  const lineOf = new Map<string, string>();
+  for (const l of lines) {
+    const k = l.productName.toLowerCase(), st = lineState(l, items);
+    // A product on several lines: collected in full only if all of them are.
+    lineOf.set(k, lineOf.get(k) === 'todo' || st !== 'done' ? 'todo' : 'done');
+  }
+  const yesterday = new Date(`${tradingDate}T12:00:00`); yesterday.setDate(yesterday.getDate() - 1);
+  const isLastNight = last.date === yesterday.toISOString().slice(0, 10);
+  const tonight = (name: string): { k: 'short' | 'none' | 'todo' | 'done'; text: string } => {
+    const k = name.toLowerCase(), sh = shortTonight.get(k);
+    if (sh === 'out') return { k: 'short', text: 'Still out tonight' };
+    if (sh) return { k: 'short', text: 'Still short tonight' };
+    if (lineOf.get(k) === 'done') return { k: 'done', text: 'Restocked tonight' };
+    if (lineOf.get(k) === 'todo') return { k: 'todo', text: 'On tonight’s list, not collected yet' };
+    return { k: 'none', text: 'Not on tonight’s list: check if it’s back in stock' };
+  };
+  const ORDER = { short: 0, none: 1, todo: 2, done: 3 };
+  const rows = last.items.map((i) => ({ ...i, t: tonight(i.productName) })).sort((a, b) => ORDER[a.t.k] - ORDER[b.t.k]);
+  const title = isLastNight ? 'Short last night' : 'Short at the last restock';
+  return (
+    <section className={`lastnight ${open ? 'open' : ''}`} aria-labelledby="ln-h">
+      <button type="button" id="ln-h" className="ln-h" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Icon name="clock" /><span className="ln-t"><b>{title}</b><small>{dayLabel(last.date)} &middot; {plural(last.items.length, 'item')}</small></span>
+        <Icon name={open ? 'up' : 'down'} />
+      </button>
+      {open ? (
+        <ul className="ln-list">{rows.map((r) => (
+          <li key={r.productName} className={`ln-row t-${r.t.k}`} data-last={r.productName}>
+            <span className={`sr-dot ${r.status === 'out' ? 'out' : 'low'}`} aria-hidden="true" />
+            <span className="ln-txt"><b>{r.productName}</b>
+              <small>{r.status === 'out' ? 'Out' : r.status === 'low' ? 'Low' : 'Short'} {isLastNight ? 'last night' : 'then'} &middot; <span className="ln-now">{r.t.k === 'done' ? <Icon name="check" /> : null}{r.t.text}</span></small>
+            </span>
+          </li>
+        ))}</ul>
+      ) : null}
+    </section>
+  );
 }
 
 /** "Sun 22 Nov" from a trading date. */
