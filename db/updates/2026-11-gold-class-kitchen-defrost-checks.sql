@@ -3,8 +3,8 @@
 --
 --   Under-salad-bar bench fridge             Pulled Beef (Bao) ("Check portioned beef first"),
 --                                            Beef Patties ("Check the right side")
---   Check location to confirm                every other row whose check location isn't confirmed yet
---                                            (e.g. Bao Buns, Grilled Chicken, Naan Bread, 9" Pizza Bases)
+--   Upstairs walk-in fridge                  every other row (checked in the upstairs walk-in fridge)
+--                                            (Bao Buns, Grilled Chicken, Stracciatella, Buns, Naan Bread, 9" Pizza Bases)
 --   Upstairs walk-in fridge · Dessert shelf  everything defrosted onto the dessert shelf (desserts and extras)
 --
 -- * Where it's pulled from (freezer compartment) and where it goes (destination) are unchanged: only the grouping,
@@ -41,7 +41,7 @@ begin
         where id = r.id;
     else
       n := n + 1;
-      update product_placements set sort_order = 10 + n, heading = case when n = 1 then 'Check location to confirm' else null end
+      update product_placements set sort_order = 10 + n, heading = case when n = 1 then 'Upstairs walk-in fridge' else null end
         where id = r.id;
     end if;
   end loop;
@@ -53,6 +53,6 @@ begin
 
   raise notice 'Defrost: %', (select string_agg(case when x.heading is not null then '[' || x.heading || '] ' else '' end || q.name, ', ' order by x.sort_order)
     from product_placements x join products q on q.id = x.product_id where x.check_area_id = def and q.status = 'active');
-  raise notice 'Check location to confirm: %', coalesce((select string_agg(q.name, ', ' order by x.sort_order) from product_placements x join products q on q.id = x.product_id
+  raise notice 'Upstairs walk-in fridge: %', coalesce((select string_agg(q.name, ', ' order by x.sort_order) from product_placements x join products q on q.id = x.product_id
     where x.check_area_id = def and q.status = 'active' and x.sort_order between 11 and 99), 'none');
 end $$;
