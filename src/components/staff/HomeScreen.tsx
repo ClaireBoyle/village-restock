@@ -8,7 +8,7 @@ import { useCatalogue } from '@/lib/client/use-catalogue';
 import { useLive, useResetIds } from '@/lib/client/hooks';
 import { localDb, type LocalArea, type LocalItem, type LocalSession } from '@/lib/client/local-db';
 import { tradingDate } from '@/lib/restock-math';
-import { EMPTY_ITEM, departmentView, scopeView, shortageCount, type AreaStatus, type ItemState } from '@/lib/restock-logic';
+import { EMPTY_ITEM, departmentView, restockStarted, scopeView, shortageCount, type AreaStatus, type ItemState } from '@/lib/restock-logic';
 import { adminSignOut } from '@/app/actions/admin';
 import type { RemoteSession } from '@/lib/sync-types';
 import type { Catalogue, CatDepartment } from '@/lib/catalogue-types';
@@ -67,7 +67,12 @@ function stateFor(cat: Catalogue, d: CatDepartment, local: LocalSession | undefi
   };
   if (s && s.status === 'finished') return { ...base, kind: 'done', segs: segs.map(() => 'done'), doneAreas: segs.length };
   if (s && s.status === 'finished_exceptions') return { ...base, kind: 'exceptions' };
-  if (s) return { ...base, kind: 'active' };
+  // Opened but nothing entered yet: still "Not started" (no names, no time).
+  const started = !!s && (local
+    ? restockStarted(localItems.filter((i) => i.sessionId === local.id), localAreas.filter((a) => a.sessionId === local.id).map((a) => a.status))
+    : restockStarted(remote!.items, remote!.areas.map((a) => a.status)));
+  if (s && started) return { ...base, kind: 'active' };
+  if (s) base.people = [];
   if (quick?.selected.length) return { ...base, kind: 'quick' };
   return { ...base, kind: 'idle' };
 }

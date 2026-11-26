@@ -941,6 +941,20 @@ export function upstairsStatus(got: number, check: UpstairsCheck, override: Item
   return check === 'stock' ? 'low' : check === 'empty' ? 'out' : 'unconfirmed';
 }
 
+/**
+ * Has anyone actually done anything in a restock yet? Opening a full restock (or tapping Start) isn't enough: it only
+ * counts as started once something is entered (an amount, a count, a tick, a refill, a collection) or an area is
+ * marked done or skipped. Until then home and the department page still say "Not started".
+ */
+export function restockStarted(items: Iterable<Partial<ItemState>>, areaStatuses: Iterable<string | null | undefined> = []): boolean {
+  for (const a of areaStatuses) if (a === 'complete' || a === 'skipped') return true;
+  for (const i of items) {
+    if (i.requestedQty != null || i.currentQty != null || i.routineChoice != null || i.collectedMode != null || i.refillStatus != null
+      || i.upstairsQty != null || i.leftHere != null || i.statusOverride != null || i.noneLeftHere || i.noneOnDisplay) return true;
+  }
+  return false;
+}
+
 export interface StockOutcome {
   productName: string; unitSingular: string; unitPlural: string;
   status: StockStatus;
