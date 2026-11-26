@@ -10,7 +10,6 @@ import { localDb } from '@/lib/client/local-db';
 import { setPrep } from '@/lib/client/prep-store';
 import { MorningPrepPicker, PrepSummary } from './MorningPrep';
 import { PendingRefills } from './KitchenRows';
-import { FillSides } from './FillSides';
 import { formatQty, round2 } from '@/lib/restock-math';
 import { finishSession, reopenSession, setItems, updateLocalSession } from '@/lib/client/restock-store';
 import { useSyncStatus } from '@/lib/client/hooks';
@@ -182,8 +181,6 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
 
             {report}
 
-            {/* Candy Bar confection stand: Fill Side A / Fill Side B, a reference before finishing. */}
-            <FillSides lines={lines} items={items} />
             {/* Kitchen: drawers still waiting for their refill (not a shortage). */}
             <PendingRefills list={pendingRefills(session.kind, placements, recorded, items)}
               onRefilled={(p) => void setItems(session.id, [{ placementId: p.placementId, fields: { refillStatus: 'refilled' } }], who)} />
@@ -276,7 +273,7 @@ function StockReport({ outcomes, displayRule = false, onCorrect, board }: {
   const [changing, setChanging] = useState<string | null>(null);
   const short = outcomes.filter(isShortage);
   const incomplete = outcomes.filter((o) => o.status === 'not_topped_up' && o.reason);
-  if (!short.length && !incomplete.length) return null;
+  if (!short.length && !incomplete.length) return displayRule ? <p className="meta">No stock shortages recorded.</p> : null;
   const q = (o: StockOutcome, n: number) => `${fmt(n)} ${n === 1 ? o.unitSingular : o.unitPlural}`;
   const why = (o: StockOutcome) => SHORT_REASONS.find((r) => r[0] === o.reason)?.[1] ?? 'Not collected';
   const CHOICES: [NonNullable<ItemState['statusOverride']>, string][] = [['out', 'Out of stock'], ['low', 'Still available'], ['unconfirmed', 'Not sure']];
@@ -323,7 +320,12 @@ function StockReport({ outcomes, displayRule = false, onCorrect, board }: {
         <section className="sreport" aria-labelledby="sr-short"><h3 id="sr-short">Stock shortages <span className="count">{short.length}</span>
           {short.some(onBoard) ? <small className="sr-new">{short.filter((o) => !onBoard(o)).length} new &middot; {short.filter(onBoard).length} already on the board</small> : null}</h3>
           {/* Out of stock first: what the next shift can't serve. */}
-          <ul>{short.map((o) => row(o, kindOf(o)))}</ul></section>
+          {displayRule ? (['out', 'low', 'unc'] as const).map(kind => {
+            const group = short.filter(o => kindOf(o) === kind);
+            if (!group.length) return null;
+            return <div key={kind}><h4>{kind === 'out' ? 'Out of stock' : kind === 'low' ? 'Low stock' : 'Unconfirmed'} ({group.length})</h4>
+              <ul>{group.map(o => row(o, kind))}</ul></div>;
+          }) : <ul>{short.map((o) => row(o, kindOf(o)))}</ul>}</section>
       ) : null}
       {incomplete.length ? (
         <section className="sreport" aria-labelledby="sr-inc"><h3 id="sr-inc">Collection incomplete <span className="count">{incomplete.length}</span></h3>
