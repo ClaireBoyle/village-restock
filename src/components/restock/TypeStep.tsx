@@ -81,7 +81,13 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className="dh-mark" src="/brand/village-v-white.png" alt="" aria-hidden="true" />
       </section>
-      {refill && guide}
+      {(refill || isKitchen) && guide}
+      {checklist ? (
+        // Open any time (e.g. before a busy night): no restock or handover needed.
+        <Link className="quick-link prep-link" href={`/d/${view.department.id}/prep`}>
+          <Icon name="task" /><span><b>Prep checklist</b><small>Check what&rsquo;s ready and what still needs prepping for service.</small></span><Icon name="next" />
+        </Link>
+      ) : null}
       <div className={closingLayout ? 'types closing-options' : 'types'} style={closingLayout ? {gridTemplateColumns:'minmax(0,1fr)'} : undefined}>
         <section style={closingLayout ? {borderColor:"#cfac70",borderLeftWidth:5} : undefined} className={`type type-full ${going && !finished ? 'k-active' : ''}`}>
           <div className="type-h">
@@ -120,13 +126,8 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
       {hasDefrost && <Link className="quick-link prep-link" href={`/d/${view.department.id}/defrost`}><Icon name="clock" /><span><b>Defrost planner</b></span><Icon name="next" /></Link>}
       {/* Kitchen: last night's morning prep handover, for the morning team (tracked apart from the restock). */}
       {prep ? <MorningPrepHome departmentId={view.department.id} today={prep.today} who={prep.who} tasks={prep.tasks} /> : null}
-      {!refill && guide}
-      {checklist ? (
-        // Open any time (e.g. before a busy night): no restock or handover needed.
-        <Link className="quick-link prep-link" href={`/d/${view.department.id}/prep`}>
-          <Icon name="task" /><span><b>Prep checklist</b><small>Check what&rsquo;s ready and what still needs prepping for service.</small></span><Icon name="next" />
-        </Link>
-      ) : null}
+      {!refill && !isKitchen && guide}
+
     </main>
   );
 }
