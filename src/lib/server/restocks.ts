@@ -35,7 +35,10 @@ export async function listRestocks(days = 14): Promise<RestockRow[]> {
       (select count(*) from session_areas a where a.session_id = s.id and a.status in ('complete', 'skipped'))::int as areas_done,
       (select count(*) from check_areas ca where ca.department_id = s.department_id and ca.active)::int as areas_total,
       (select count(*) from session_items i where i.session_id = s.id)::int as items_touched,
-      (select count(*) from shortages sh where sh.session_id = s.id)::int as shortages,
+      case when s.status in ('open', 'unfinished') then
+        (select count(distinct i.product_name) from session_items i where i.session_id = s.id
+          and i.collected_mode = 'partial' and i.shortfall_reason = 'insufficient' and i.conflict is null)
+       else (select count(*) from shortages sh where sh.session_id = s.id) end::int as shortages,
       (select count(*) from session_items i where i.session_id = s.id and i.conflict is not null)::int as conflicts
     from restock_sessions s join departments d on d.id = s.department_id
     where s.trading_date >= (current_date - ${days}::int)
@@ -95,6 +98,17 @@ export async function restockDetail(id: string) {
   }]));
   const recorded = new Map<string, AreaStatus>(areas.map((a) => [String(a.checkAreaId), a.status as AreaStatus]));
   const placements: PlacementView[] = view ? (s.kind !== 'quick' ? view.placements : view.placements.filter((p) => itemMap.has(p.placementId))) : [];
+  const partial = s.status === 'open' || s.status === 'unfinished';
+  const savedShorts = items.filter(i => i.collectedMode === 'partial' && i.shortfallReason === 'insufficient' && !i.conflict);
+  const collectionDetail = (i: (typeof items)[number]) => {
+    const asked = i.requestedQty == null ? null : Number(i.requestedQty);
+    const got = i.collectedQty == null ? null : Number(i.collectedQty);
+    const details = [];
+    if (asked !== null) details.push(`requested ${asked}`);
+    if (got !== null) details.push(`collected ${got}`);
+    if (asked !== null && got !== null && asked > got) details.push(`${asked - got} short`);
+    return `- ${i.productName} (${i.unitPlural}): ${details.join(', ') || 'storeroom shortage recorded'}`;
+  };
   const summary = view ? summaryText({
     departmentName: String(s.departmentName), kind: s.kind as 'full' | 'quick' | 'area',
     finishedLabel: s.finishedAt ? new Date(s.finishedAt as string).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', timeZone: cat.settings.timeZone }).toLowerCase() : null,
@@ -105,7 +119,17 @@ export async function restockDetail(id: string) {
     dateLabel: new Date(`${dateStr(s.tradingDate)}T12:00:00Z`).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }),
   }) : '';
   const session = { ...s, tradingDate: dateStr(s.tradingDate) } as Record<string, unknown> & { tradingDate: string; people: string[] };
-  return { session, areas, items, shortages, summary, view, timeZone: cat.settings.timeZone };
+  let managerSummary = summary;
+  if (partial) {
+    const status = s.status === 'unfinished' ? 'Unfinished at the trading-day cut-off' : 'In progress';
+    managerSummary = summary.replace('Status: In progress', `Status: ${status}`)
+      .replace('Nothing low or out of stock. Everything collected is back to target.', ''); 
+    const saved = savedShorts.length
+      ? ['RECORDED STOREROOM SHORTFALLS', ...savedShorts.map(collectionDetail)].join('\n')
+      : 'No storeroom shortfalls recorded so far.';
+    managerSummary = [managerSummary || `${s.departmentName} · ${status}`, saved].join('\n\n');
+  }
+  return { session, areas, items, shortages, summary: managerSummary, view, timeZone: cat.settings.timeZone };
 }
 
 /** A product already short at an earlier restock (so already on the stock board), with when. */
