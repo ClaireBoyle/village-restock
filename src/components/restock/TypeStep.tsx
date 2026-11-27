@@ -48,7 +48,8 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
   const doneAreas = view.areas.filter(({ area }) => recorded.get(area.id) === 'complete' || recorded.get(area.id) === 'skipped').length;
   // Gold Class Bar: front of house, then the upstairs spots (Refill FOH flow).
   const refill = usesRefill('full', view);
-  const closingLayout = refill || hasDefrost;
+  const isKitchen = view.department.name.trim().toLowerCase() === 'gold class kitchen' || (view.department.shortName ?? '').trim().toLowerCase() === 'kitchen';
+  const closingLayout = refill || isKitchen || hasDefrost;
   const steps: [string, string][] = refill
     ? [['FOH', 'Walk the bar and enter only what needs topping up.'], ['BOH', 'At each upstairs spot: grab for the bar, then what to bring up (what you grabbed is suggested).'], ['Collect', 'One list for downstairs, by storeroom.'], ['Finish', 'Note anything the storeroom was out of.']]
     : [['Check stock', 'Enter what’s needed. The app works out the rest.'], ['Collect', 'One list, grouped by storeroom.'], ['Finish', 'Note anything the storeroom was out of.']];
@@ -112,7 +113,7 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
             <h2>{closingLayout ? 'Mid-shift top-up' : 'Stock Top-up'}</h2>{quickSession?.selected.length ? <Badge st="info">{quickSession.selected.length} on your list</Badge> : null}
             {onReset && quickSession ? <AdminMenu label="Stock top-up" onChoose={() => onReset({ kind: 'quick' })} /> : null}
           </div>
-          <p className="lead">{closingLayout ? 'Pick the items running low between sessions.' : <>Only what&rsquo;s running low, <b>between sessions</b>. Separate from the full restock.</>}</p>
+          {!isKitchen && <p className="lead">{closingLayout ? 'Pick the items running low between sessions.' : <>Only what&rsquo;s running low, <b>between sessions</b>. Separate from the full restock.</>}</p>}
           <div className="actions"><button className={`btn big ${closingLayout || (going && !finished) ? '' : 'primary'}`} disabled={opening} onClick={() => onStart('quick')}>{quickSession ? (closingLayout ? 'Continue top-up' : 'Continue stock top-up') : (closingLayout ? 'Start top-up' : 'Start stock top-up')}</button></div>
         </section>
       </div>
