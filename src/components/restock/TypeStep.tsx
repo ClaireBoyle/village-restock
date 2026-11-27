@@ -65,7 +65,7 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
           {view.department.groupLabel ? <span className="dh-group">{view.department.groupLabel}</span> : null}
           <h1>{view.department.shortName}</h1>
           <p className="dh-sub">{finished ? (src!.status === 'finished_exceptions' ? `Finished with exceptions at ${timeOf(src!.finishedAt)}` : `Restocked tonight at ${timeOf(src!.finishedAt)}`)
-            : going ? `Full restock in progress · ${doneAreas} of ${view.areas.length} areas${src.people.length ? ` · ${src.people.join(', ')}` : ''}` : `${view.areas.length} ${view.areas.length === 1 ? 'area' : 'areas'}`}</p>
+            : going ? `Full restock in progress · ${doneAreas} of ${view.areas.length} areas${src.people.length ? ` · ${src.people.join(', ')}` : ''}` : refill ? null : `${view.areas.length} ${view.areas.length === 1 ? 'area' : 'areas'}`}</p>
           {going ? <div className="ameter" role="img" aria-label={`${doneAreas} of ${view.areas.length} areas done`}>{view.areas.map(({ area }) => <i key={area.id} className={recorded.get(area.id) === 'complete' ? 'done' : recorded.get(area.id) === 'skipped' ? 'skip' : ''} />)}</div> : null}
         </div>
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -103,16 +103,16 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
         <section className={`type type-full ${going && !finished ? 'k-active' : ''}`}>
           <div className="type-h">
             <span className="type-icon" aria-hidden="true"><Icon name="list" /></span>
-            <h2>{hasDefrost ? 'Kitchen Restock' : 'Full Restock'}</h2>
+            <h2>{hasDefrost ? 'Kitchen Restock' : refill ? 'Closing restock' : 'Full Restock'}</h2>
             {finished ? (src!.status === 'finished_exceptions' ? <Badge st="warn" icon="warn">Finished with exceptions {timeOf(src!.finishedAt)}</Badge> : <Badge st="ok">Complete {timeOf(src!.finishedAt)}</Badge>)
               : going ? <Badge st="info">In progress since {timeOf(src!.startedAt)}</Badge> : <Badge st="none">Not started tonight</Badge>}
             {onReset && src ? <AdminMenu label={`${hasDefrost ? 'Kitchen' : 'Full'} restock`} onChoose={() => onReset({ kind: 'full' })} /> : null}
           </div>
-          <p className="lead">Every area, for <b>closing shifts</b>. Shared, so anyone can continue it.</p>
+          <p className="lead">{refill ? 'Check the bar and upstairs stock, then collect what you need from downstairs.' : <>Every area, for <b>closing shifts</b>. Shared, so anyone can continue it.</>}</p>
           {/* The button first, so it's on screen without scrolling. */}
           <div className="actions">
             {finished && fullSession ? <button className="btn primary big" onClick={onSummary}>View summary</button>
-              : <button className="btn primary big" disabled={opening} onClick={() => onStart('full')}>{going ? <>{finished ? 'Open restock' : `Resume ${hasDefrost ? 'kitchen' : 'full'} restock`}<Icon name="next" /></> : <>Start {hasDefrost ? 'kitchen' : 'full'} restock<Icon name="next" /></>}</button>}
+              : <button className="btn primary big" disabled={opening} onClick={() => onStart('full')}>{going ? <>{finished ? 'Open restock' : `Resume ${hasDefrost ? 'kitchen' : refill ? 'closing' : 'full'} restock`}<Icon name="next" /></> : <>Start {hasDefrost ? 'kitchen' : refill ? 'closing' : 'full'} restock<Icon name="next" /></>}</button>}
           </div>
           {going ? (
             // Where it's up to (for whoever picks it up next), compact.
@@ -122,16 +122,16 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
                 <div><small>Back of house</small><div className="apills">{pills(phaseAreas(view, 'boh'))}</div></div>
               </div>
             ) : <div className="apills">{pills(view.areas)}</div>
-          ) : refill ? <p className="meta steps-line">{steps.map(([t]) => t).join(' → ')}</p> : null}
+          ) : null}
         </section>
         <section className="type type-quick">
           <div className="type-h">
             <span className="type-icon" aria-hidden="true"><Icon name="bolt" /></span>
-            <h2>Stock Top-up</h2>{quickSession?.selected.length ? <Badge st="info">{quickSession.selected.length} on your list</Badge> : null}
+            <h2>{refill ? 'Mid-shift top-up' : 'Stock Top-up'}</h2>{quickSession?.selected.length ? <Badge st="info">{quickSession.selected.length} on your list</Badge> : null}
             {onReset && quickSession ? <AdminMenu label="Stock top-up" onChoose={() => onReset({ kind: 'quick' })} /> : null}
           </div>
-          <p className="lead">Only what&rsquo;s running low, <b>between sessions</b>. Separate from the full restock.</p>
-          <div className="actions"><button className={`btn big ${going && !finished ? '' : 'primary'}`} disabled={opening} onClick={() => onStart('quick')}>{quickSession ? 'Continue stock top-up' : 'Start stock top-up'}</button></div>
+          <p className="lead">{refill ? 'Pick the items running low between sessions.' : <>Only what&rsquo;s running low, <b>between sessions</b>. Separate from the full restock.</>}</p>
+          <div className="actions"><button className={`btn big ${going && !finished ? '' : 'primary'}`} disabled={opening} onClick={() => onStart('quick')}>{quickSession ? (refill ? 'Continue top-up' : 'Continue stock top-up') : (refill ? 'Start top-up' : 'Start stock top-up')}</button></div>
         </section>
       </div>
     </main>
