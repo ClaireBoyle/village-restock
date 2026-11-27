@@ -37,7 +37,7 @@ const rooms = (P) => P.$$eval('.room', (els) => els.map((r) => [r.querySelector(
 
   // Check the bar
   const steps = await P.$$eval('.rbar .stage .sm', (els) => els.map((e) => e.textContent));
-  ok(JSON.stringify(steps) === JSON.stringify(['Bar', 'Up', 'Down', 'Finish']), 'four steps: ' + steps.join(' › '));
+  ok(JSON.stringify(steps) === JSON.stringify(['FOH', 'BOH', 'Collect', 'Finish']), 'four steps: ' + steps.join(' › '));
   ok(await sees(P, '.dock', 'Nothing added to the collection list'), 'nothing entered yet: "Nothing added to the collection list"');
   const foh = await rail(P);
   ok(foh[0] === 'FOH beer fridge' && !foh.includes('BOH bar fridge') && !foh.includes('Upstairs cupboards') && foh.includes('Back bench') && foh.includes('Confection'), 'Check the bar shows front-of-house areas only: ' + foh.join(', '));
@@ -59,7 +59,7 @@ const rooms = (P) => P.$$eval('.room', (els) => els.map((r) => [r.querySelector(
   await P.screenshot({ path: `${OUT}/p13-bar.png` });
 
   // Upstairs: one screen per spot
-  await P.click('.rbar .stage:has-text("Upstairs")'); await P.waitForSelector('article.prow');
+  await P.click('.rbar .stage:has-text("BOH")'); await P.waitForSelector('article.prow');
   ok(JSON.stringify(await rail(P)) === JSON.stringify(['BOH bar fridge', 'Walk in fridge', 'Upstairs cupboards']), 'Upstairs: the three spots, in order');
   await goArea(P, 'BOH bar fridge');
   const grabLines = (P) => P.$$eval('.grab .line', (els) => els.map((l) => `${l.querySelector('.l-amt b')?.textContent ?? '✓'} ${l.dataset.line}`));
@@ -111,7 +111,7 @@ const rooms = (P) => P.$$eval('.room', (els) => els.map((r) => [r.querySelector(
   }
   await P.setViewportSize(devices['iPhone 13'].viewport);
   ok(await P.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'phone: no sideways scrolling');
-  ok(await primaryIs(P, 'Done → Collect downstairs'), 'last spot: "Done → Collect downstairs"');
+  ok(await primaryIs(P, 'Done → Collect'), 'last spot: "Done → Collect"');
   await P.click('.dock .dock-acts .btn.primary'); await P.waitForSelector('.room');
 
   // Collect downstairs

@@ -49,7 +49,7 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
   // Gold Class Bar: front of house, then the upstairs spots (Refill FOH flow).
   const refill = usesRefill('full', view);
   const steps: [string, string][] = refill
-    ? [['Check the bar', 'Walk the bar and enter only what needs topping up.'], ['Upstairs', 'At each spot: grab for the bar, then what to bring up (what you grabbed is suggested).'], ['Collect downstairs', 'One list, by storeroom.'], ['Finish', 'Note anything the storeroom was out of.']]
+    ? [['FOH', 'Walk the bar and enter only what needs topping up.'], ['BOH', 'At each upstairs spot: grab for the bar, then what to bring up (what you grabbed is suggested).'], ['Collect', 'One list for downstairs, by storeroom.'], ['Finish', 'Note anything the storeroom was out of.']]
     : [['Check stock', 'Enter what’s needed. The app works out the rest.'], ['Collect', 'One list, grouped by storeroom.'], ['Finish', 'Note anything the storeroom was out of.']];
   // Small name-only pills (the colour and icon give the status), shown once a restock is under way.
   const pills = (areas: typeof view.areas) => areas.map(({ area, placements }) => {

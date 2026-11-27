@@ -23,15 +23,15 @@ const primaryText = async (P) => (await primary(P).innerText()).replace(/\s+/g, 
   ok(await sees(P, '.area-btn', 'Unchecked') && await P.locator('.area-btn:has-text("Checked · nothing needed")').count() === 0, 'to start: every area "Unchecked"');
   ok(await sees(P, '.dock', 'Nothing added to the collection list'), 'bottom bar: "Nothing added to the collection list"');
   // The downstairs list while checks are pending: not "everything is at target".
-  await P.click('.rbar .stage:has-text("Downstairs")'); await P.waitForSelector('.empty');
+  await P.click('.rbar .stage:has-text("Collect")'); await P.waitForSelector('.empty');
   ok(await sees(P, '.empty', 'Nothing added to the collection list yet') && !(await P.textContent('main')).includes('at target'), 'empty list while checks pending: "Nothing added to the collection list yet"');
-  await P.click('.rbar .stage:has-text("Bar")'); await P.waitForSelector('article.prow');
+  await P.click('.rbar .stage:has-text("FOH")'); await P.waitForSelector('article.prow');
 
   // Done through the bar with nothing entered.
   const bar = await P.$$eval('.area-btn b', (e) => e.map((x) => x.textContent));
   for (let i = 0; i < bar.length; i++) {
     const t = await primaryText(P);
-    ok(t === `Done → ${i < bar.length - 1 ? bar[i + 1] : 'Upstairs'}`, `${bar[i]}: "${t}"`);
+    ok(t === `Done → ${i < bar.length - 1 ? bar[i + 1] : 'BOH'}`, `${bar[i]}: "${t}"`);
     if (i === 0) {
       await primary(P).click(); await P.waitForSelector(`.area-btn.cur:has-text("${bar[1]}")`);
       ok(await sees(P, `.area-btn:has-text("${bar[0]}")`, 'Checked · nothing needed') && await sees(P, `.area-btn:has-text("${bar[2]}")`, 'Unchecked'),

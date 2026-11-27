@@ -42,7 +42,7 @@ const text = async (P, sel) => (await P.locator(sel).first().innerText()).replac
   await P.click(`${row('Sugar container')} .pseg button >> nth=0`); await P.click(`${row('Equal packets')} .pseg button >> nth=0`); await P.waitForTimeout(300);
   await P.screenshot({ path: `${OUT}/p29-coffee-machine.png`, fullPage: true });
 
-  await P.click('.rbar .stage:has-text("Upstairs")'); await P.waitForSelector('.area-btn.cur');
+  await P.click('.rbar .stage:has-text("BOH")'); await P.waitForSelector('.area-btn.cur');
   await goArea(P, 'Upstairs cupboards');
   ok(await P.locator(`.grab ${line('Equal packets')}`).count() === 1 && (await text(P, `.grab ${line('Equal packets')}`)).includes('Take the Equal container (next to the coffee machine) to the upstairs cupboard and fill it to the top'),
     'Upstairs cupboards: "Take the Equal container … fill it to the top" on the grab list, like the sugar');
