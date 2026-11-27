@@ -119,7 +119,7 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
             <h2>{closingLayout ? 'Mid-shift top-up' : 'Stock Top-up'}</h2>{quickSession?.selected.length ? <Badge st="info">{quickSession.selected.length} on your list</Badge> : null}
             {onReset && quickSession ? <AdminMenu label="Stock top-up" onChoose={() => onReset({ kind: 'quick' })} /> : null}
           </div>
-          {!isKitchen && <p className="lead">{closingLayout ? 'Pick the items running low between sessions.' : <>Only what&rsquo;s running low, <b>between sessions</b>. Separate from the full restock.</>}</p>}
+          <p className="lead">{closingLayout ? 'Pick the items running low between sessions.' : <>Only what&rsquo;s running low, <b>between sessions</b>. Separate from the full restock.</>}</p>
           <div className="actions"><button className={`btn big ${closingLayout || (going && !finished) ? '' : 'primary'}`} disabled={opening} onClick={() => onStart('quick')}>{quickSession ? (closingLayout ? 'Continue top-up' : 'Continue stock top-up') : (closingLayout ? 'Start top-up' : 'Start stock top-up')}</button></div>
         </section>
       </div>
