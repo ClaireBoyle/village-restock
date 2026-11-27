@@ -1738,3 +1738,51 @@ button.room-h,button.lgrp-h{scroll-margin-top:calc(env(safe-area-inset-top,0px) 
 .pcl-chip.s-needs{background:color-mix(in srgb,var(--warn-fill) 26%,transparent);border-width:2px;padding:7px 11px}
 .pcl-chip.s-needs .pcl-chip-n{color:var(--ink);font-weight:700}
 .pcl-hint{display:block}
+/* Prep checklist in two steps: 1 Check (tap what needs prep) · 2 To prep (tick each one done). */
+.pcl-steps{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border-radius:14px;background:var(--surface-2)}
+.pcl-steps button{min-height:46px;border:0;border-radius:11px;background:transparent;color:var(--ink-2);font:inherit;font-size:15.5px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
+.pcl-steps button .n{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12.5px;border:1.5px solid currentColor}
+.pcl-steps button small{font-size:12.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--surface);color:var(--ink)}
+.pcl-steps button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-sm)}
+.pcl-steps button.on .n{background:var(--d-accent);border-color:var(--d-accent);color:#1d1300}
+.pcl-group h2 small.w{color:var(--warn);font-weight:700}
+.pcl-chip-s{font-size:12px;font-weight:600;color:var(--ok);flex:none}
+.pcl-chip.s-ready{opacity:.75}
+.pcl-from{display:flex;gap:6px;align-items:flex-start}
+.pcl-go{position:sticky;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:4;margin-top:4px}
+.pcl-go .btn{width:100%;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.pcl-prog{display:flex;flex-direction:column;gap:6px}
+.pcl-prog p{margin:0;display:flex;gap:10px;align-items:center;font-size:15.5px}
+.pcl-prog .ok{display:inline-flex;gap:4px;align-items:center;color:var(--ok);font-weight:700;font-size:14px}
+.pcl-prog .ok .ic{width:15px;height:15px}
+.pcl-prog .pcl-bar{height:8px}
+.pcl-todo{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.pcl-tr{display:flex;align-items:center;gap:12px;min-height:68px;padding:8px 8px 8px 14px;border-radius:14px;border:1px solid var(--hair);background:var(--surface);box-shadow:inset 4px 0 0 var(--warn-fill)}
+.theme-navy .pcl-tr{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1)}
+.pcl-tr-t{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+.pcl-tr-t b{font-size:17px;font-weight:700;line-height:1.25;overflow-wrap:break-word}
+.pcl-tr-t small{font-size:13px;color:var(--ink-2)}
+.pcl-tr-t .linkbtn{min-height:28px;font-size:13px;color:var(--ink-2);display:inline-flex;align-items:center;gap:4px;padding:0}
+.pcl-tr-t .linkbtn .ic,.pcl-note-ro .ic{width:13px;height:13px}
+.pcl-note-ro{display:inline-flex;gap:4px;align-items:center}
+.pcl-tr .pcl-note-in{width:100%}
+.pcl-tick{flex:none;width:76px;min-height:56px;border-radius:14px;border:2px solid color-mix(in srgb,var(--ok) 60%,transparent);background:transparent;color:var(--ok);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.pcl-tick .ic{width:24px;height:24px}
+.pcl-tick:active{transform:scale(.95)}
+.pcl-tick.on{background:var(--ok);border-color:var(--ok);color:#fff}
+.pcl-tr.done{box-shadow:inset 4px 0 0 var(--ok);opacity:.8}
+.pcl-tr.done .pcl-tr-t b{text-decoration:line-through;text-decoration-thickness:1.5px;color:var(--ink-2)}
+.pcl-none{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+.pcl-none p{margin:0}
+.step-prep .pcl-hint .linkbtn{display:inline;min-height:0;padding:0;font-size:inherit;text-decoration:underline;text-underline-offset:3px}
+/* Closing restock → Morning prep: tonight's checklist jobs still not prepped, one tap to add. */
+.prep-carry{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:14px;border:1px solid var(--warn-line, var(--warn-fill));background:color-mix(in srgb,var(--warn-fill) 12%,transparent)}
+.prep-carry p{margin:0;display:flex;gap:6px;align-items:flex-start;font-size:14px}
+.prep-carry p .ic{width:16px;height:16px;color:var(--warn);flex:none;margin-top:2px}
+.prep-carry-btns{display:flex;flex-wrap:wrap;gap:6px}
+.prep-carry-btns .chip{min-height:40px;display:inline-flex;align-items:center;gap:4px}
+.prep-carry-btns .chip .ic{width:14px;height:14px}
+.prep-carry-all{font-weight:700}
+.pcl-tr-sub{display:flex;flex-wrap:wrap;align-items:center;gap:2px 12px;width:100%}
+.pcl-tr-sub .pcl-note-in{flex:1 1 100%}
+.pcl-tr{min-height:64px}

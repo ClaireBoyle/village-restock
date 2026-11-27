@@ -123,8 +123,25 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   const itemsBefore = (await waitDb(() => sql`select count(*)::int as n from session_items i where i.collected_mode is not null`, (r) => r[0].n >= 4)).length
     && (await waitDb(async () => { const a = await sql`select count(*)::int as n from session_items`; await new Promise((r) => setTimeout(r, 1500)); const b = await sql`select count(*)::int as n from session_items`; return [a[0].n, b[0].n]; }, ([a, b]) => a === b))[1];
 
+  // Tonight's Prep checklist: tartare still to prep, burger sauce done, vodka sauce still to prep (already on the handover).
+  const [kd] = await sql`select s.department_id as d, s.trading_date::text as td from restock_sessions s join departments d on d.id = s.department_id
+    where d.name = 'Gold Class Kitchen' and s.kind = 'full' order by s.started_at desc limit 1`;
+  for (const [n, st] of [['Make tartare', 'needs'], ['Make burger sauce', 'ready'], ['Make vodka sauce', 'needs']]) {
+    await sql`insert into prep_checks (department_id, trading_date, task_id, task_name, status, morning, updated_at)
+      select t.department_id, ${kd.td}, t.id, t.name, ${st}, false, now() from prep_tasks t where t.department_id = ${kd.d} and t.name = ${n}
+      on conflict do nothing`;
+  }
+
   // 3. Finish: Morning prep needed.
   await P.click('.dock .dock-acts button:has-text("Review")'); await P.waitForSelector('#morning-prep');
+  // Still not prepped tonight (from the Prep checklist): offered, one tap to add; done or already ticked ones aren't.
+  await P.waitForSelector('.prep-carry', { timeout: 10000 });
+  const carry = await P.$$eval('.prep-carry-btns button', (e) => e.map((x) => x.textContent.trim()));
+  ok(carry.length === 1 && /tartare/i.test(carry[0]), '"Still not prepped tonight": only Tartare (burger sauce was done; vodka sauce already ticked): ' + carry.join(', '));
+  await P.click('.prep-carry-btns button:has-text("artare")');
+  ok(await P.isChecked(`${task('Make tartare')} input[type=checkbox]`) && await P.locator('.prep-carry').count() === 0, 'one tap: Make tartare ticked for the morning, the suggestion goes');
+  await P.click(`${task('Make tartare')} input[type=checkbox]`);
+  ok(await P.locator('.prep-carry').count() === 1, 'unticked again: offered again');
   const groups = await P.locator('.prep-group legend').allTextContents();
   ok(groups.join('|') === 'Vegetables|Proteins|Sauces|Other', `grouped: ${groups.join(', ')}`);
   ok((await P.locator('.prep-row').count()) === 20, '20 tasks on the checklist (incl. Make GC seasoning, Portion chocolate sauce)');
