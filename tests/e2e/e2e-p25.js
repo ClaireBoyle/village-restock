@@ -1,7 +1,7 @@
 // Candy Bar confection stand, side by side: a Side A / Side B switch (the side stays on, entries saved, either side
 // editable, each side its own shade of blue, a +5 button), no "Enter what this side needs." note, one collection line per product with the total and the split (kept
-// after Got all), Got fewer with staff choosing where the units go, Fill Side A / Fill Side B as a reference before
-// Finish, and the same switch in Quick Restock. Phone.
+// after Got all), Got fewer with staff choosing where the units go, then the Fill step (a panel per side, Mark filled)
+// before Finish, and the same switch in Quick Restock. Phone.
 // Before running: reset the test database, then load candy-fixture.sql and candy-area-fixture.sql.
 const { chromium, devices } = require('playwright');
 const postgres = require('postgres');
@@ -84,17 +84,19 @@ const txt = async (P, sel) => (await P.locator(sel).first().innerText()).replace
     join products p on p.id = x.product_id where p.name = 'Snickers' and i.collected_mode = 'partial' order by c.name`, (r) => r.length === 2);
   ok(got.map((r) => `${r.name.split(' · ')[1]} ${r.q}`).join(', ') === 'Side A 2, Side B 2', 'saved per side: ' + got.map((r) => `${r.name} ${r.q}`).join(', '));
 
-  // 3. Fill the stand: a reference, nothing to tick.
-  await P.click('.fill-btns button:has-text("Fill Side A")');
-  const a = await P.$$eval('.fill-list li', (e) => e.map((x) => x.textContent.replace(/\s+/g, ' ').trim()));
-  ok(a.length === 1 && a[0].startsWith('2Snickers') && a[0].includes('of 3 asked for'), 'Fill Side A: Snickers 2 (of 3 asked for): ' + a.join(' | '));
-  await P.click('.fill-btns button:has-text("Fill Side B")');
-  const bl = await P.$$eval('.fill-list li', (e) => e.map((x) => x.textContent.replace(/\s+/g, ' ').trim()));
-  ok(bl.length === 2 && bl.some((x) => x.startsWith('2Snickers')) && bl.some((x) => x.startsWith('1Kit Kat')), 'Fill Side B: only what Side B needs: ' + bl.join(' | '));
-  ok(await P.locator('.fill-list input, .fill-list .l-tick').count() === 0, 'nothing to tick');
-  await P.screenshot({ path: `${OUT}/p25-fill-side-b.png`, fullPage: true });
-  await P.click('.dock button:has-text("Review")'); await P.waitForSelector('.finish-title');
-  ok(await P.locator('.fill-btns button').count() === 2, 'Finish: Fill Side A / Fill Side B still there before finishing');
+  // 3. Fill the stand: its own step after Collect (Check → Collect → Fill → Finish), one panel per side with
+  //    what was collected for it, and "Mark filled".
+  ok(await P.locator('.fill-sides').count() === 0, 'Collect: no Fill Side A / B buttons (it has its own step)');
+  ok((await P.$$eval('.rbar .stage .lg', (e) => e.map((x) => x.textContent))).join(' › ') === 'What’s needed › Collect › Fill › Finish', 'steps: What’s needed › Collect › Fill › Finish');
+  await P.click('.dock .btn.primary:has-text("Fill the stand")'); await P.waitForSelector('.stand-panel');
+  const panel = async (sd) => P.$$eval(`.stand-panel:has(h3:text-is("${sd}")) li`, (e) => e.map((x) => x.textContent.replace(/\s+/g, ' ').trim()));
+  const a = await panel('Side A'), bl = await panel('Side B');
+  ok(a.length === 1 && /^Snickers ?2/.test(a[0]), 'Side A: Snickers 2 (what it gets): ' + a.join(' | '));
+  ok(bl.length === 2 && bl.some((x) => /^Snickers ?2/.test(x)) && bl.some((x) => /^Kit Kat ?1/.test(x)), 'Side B: Snickers 2, Kit Kat 1: ' + bl.join(' | '));
+  await P.click('.stand-panel:has(h3:text-is("Side A")) .stand-mark');
+  ok(await P.locator('.stand-panel[data-filled="true"]:has(h3:text-is("Side A"))').count() === 1, 'Side A: "Mark filled" → filled');
+  await P.screenshot({ path: `${OUT}/p25-fill.png`, fullPage: true });
+  await P.click('.dock .btn.primary:has-text("Review and finish")'); await P.waitForSelector('.finish-title');
   await P.click('.dock button.good'); await P.waitForSelector('.finish-hero');
 
   // Quick Restock: the same switch for the confection stand.
