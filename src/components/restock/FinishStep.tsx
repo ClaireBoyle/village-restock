@@ -8,6 +8,7 @@ import {
 import { useLive } from '@/lib/client/hooks';
 import { localDb } from '@/lib/client/local-db';
 import { setPrep } from '@/lib/client/prep-store';
+import { importRemotePrepChecks } from '@/lib/client/prep-check-store';
 import { MorningPrepPicker, PrepSummary } from './MorningPrep';
 import { PendingRefills } from './KitchenRows';
 import { formatQty, round2 } from '@/lib/restock-math';
@@ -68,6 +69,11 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
   const leftChecks = useLive(async () => (prepOn ? (await localDb().prepChecks.where('[departmentId+tradingDate]').equals([session.departmentId, session.tradingDate]).toArray()).filter((c) => c.morning) : []),
     [session.departmentId, session.tradingDate, prepOn], []);
   const leftForMorning = leftChecks.map((c) => ctx.allPrepTasks.find((t) => t.id === c.taskId)?.name).filter((n): n is string => !!n);
+  // Tonight's Prep checklist: jobs marked Needs prep and not ticked done yet, offered to the morning team in one tap.
+  const openChecks = useLive(async () => (prepOn ? (await localDb().prepChecks.where('[departmentId+tradingDate]').equals([session.departmentId, session.tradingDate]).toArray()).filter((c) => c.status === 'needs') : []),
+    [session.departmentId, session.tradingDate, prepOn], []);
+  useEffect(() => { if (prepOn && !finished) void importRemotePrepChecks(session.departmentId, session.tradingDate); }, [prepOn, finished, session.departmentId, session.tradingDate]);
+  const notPrepped = openChecks.map((c) => ctx.allPrepTasks.find((t) => t.id === c.taskId)).filter((t): t is NonNullable<typeof t> => !!t);
   const goPrep = () => document.getElementById('morning-prep')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   const ex = finished ? [] : exceptions({ kind: session.kind, view, placements, recordedAreas: recorded, items });
   // Area restocks (e.g. Candy Bar's confection stand) are named after their area.
@@ -188,7 +194,7 @@ export function FinishStep({ ctx }: { ctx: RestockCtx }) {
             {/* Kitchen: drawers still waiting for their refill (not a shortage). */}
             <PendingRefills list={pendingRefills(session.kind, placements, recorded, items)}
               onRefilled={(p) => void setItems(session.id, [{ placementId: p.placementId, fields: { refillStatus: 'refilled' } }], who)} />
-            {prepOn ? <MorningPrepPicker tasks={ctx.prepTasks} handover={handover} leftForMorning={leftForMorning}
+            {prepOn ? <MorningPrepPicker tasks={ctx.prepTasks} handover={handover} leftForMorning={leftForMorning} notPrepped={notPrepped}
               onSave={(st, list) => void setPrep(session, st, list, who)} /> : null}
 
             {/* Always shown (also when there are no shortages): who is signing this restock off. */}

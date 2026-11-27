@@ -25,11 +25,13 @@ function SaveText({ value, onSave, ...rest }: { value: string; onSave: (v: strin
     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(); e.currentTarget.blur(); } }} />;
 }
 
-export function MorningPrepPicker({ tasks, handover, onSave, leftForMorning = [] }: {
+export function MorningPrepPicker({ tasks, handover, onSave, leftForMorning = [], notPrepped = [] }: {
   tasks: PrepTask[]; handover: LocalPrep | undefined;
   onSave: (status: 'needed' | 'none' | null, items: PrepItem[]) => void;
   /** Jobs already left for morning on tonight's Prep checklist (they're on the handover too). */
   leftForMorning?: string[];
+  /** Tonight's Prep checklist: marked Needs prep and not done yet. Offered here as one-tap adds. */
+  notPrepped?: PrepTask[];
 }) {
   // Shown straight away (a tick never waits for the device's database), then saved.
   const [local, setLocal] = useState<{ status: 'needed' | 'none' | null; items: PrepItem[] }>({ status: handover?.status ?? null, items: handover?.items ?? [] });
@@ -88,6 +90,20 @@ export function MorningPrepPicker({ tasks, handover, onSave, leftForMorning = []
     <section className={`prep ${status ? '' : 'unanswered'}`} aria-labelledby="prep-h" id="morning-prep">
       <h3 id="prep-h"><Icon name="clock" />Morning prep needed</h3>
       <p className="prep-hint">Tick everything the morning team needs to prep. Add a note if needed. Choosing tasks only updates this handover, not the restock.</p>
+      {notPrepped.some((t) => !byTask.has(t.id)) ? (
+        <div className="prep-carry" role="group" aria-label="Still not prepped tonight">
+          <p><Icon name="warn" /><span><b>Still not prepped tonight</b> (from the Prep checklist). Add to the morning list?</span></p>
+          <div className="prep-carry-btns">
+            {notPrepped.filter((t) => !byTask.has(t.id)).map((t) => (
+              <button key={t.id} type="button" className="chip" onClick={() => toggle(t)} aria-label={`Add to morning prep: ${t.name}`}><Icon name="plus" />{t.checklistName?.trim() || t.name}</button>
+            ))}
+            {notPrepped.filter((t) => !byTask.has(t.id)).length > 1 ? (
+              <button type="button" className="chip prep-carry-all" onClick={() => save([...items, ...notPrepped.filter((t) => !byTask.has(t.id)).map((t) => ({ id: crypto.randomUUID(), taskId: t.id, group: t.group, name: t.name, qty: null, note: null, doneAt: null, doneBy: null }))])}>
+                <Icon name="plus" />Add all</button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
       {leftForMorning.length ? <p className="prep-left"><Icon name="info" /><span>Already left for morning on the Prep checklist: <b>{leftForMorning.join(', ')}</b></span></p> : null}
       <button type="button" className={`prep-none ${status === 'none' ? 'on' : ''}`} aria-pressed={status === 'none'}
         onClick={() => onSaveNow(status === 'none' ? null : 'none', [])}>
