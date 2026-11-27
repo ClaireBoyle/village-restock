@@ -787,3 +787,17 @@ export async function clearTestActivity(_: ActionResult, form: FormData): Promis
     return { ok: true, message: `Cleared ${n} restock${n === 1 ? '' : 's'}${plans.length ? ` and ${d} defrost record${d === 1 ? '' : 's'}` : ''}. Devices drop their copies on their next sync.` };
   } catch (e) { return { error: (e as Error).message || 'Something went wrong. Nothing was cleared.' }; }
 }
+
+/** Admin → Restocks → an Unfinished restock: finish it now (records its shortages; no email). */
+export async function finishRestockLate(_: ActionResult, form: FormData): Promise<ActionResult> {
+  const me = await requireAdmin();
+  const id = String(form.get('id') ?? '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { error: 'Restock not found.' };
+  try {
+    const { finishUnfinished } = await import('@/lib/server/sync');
+    const st = await finishUnfinished(id, me.name);
+    if (!st) return { error: 'This restock isn’t unfinished any more (it may already have been finished).' };
+    revalidatePath('/admin', 'layout');
+    return { ok: true, message: st === 'finished' ? 'Finished. Its shortages are now in Shortages.' : 'Finished with exceptions (some work was left). Its shortages are now in Shortages.' };
+  } catch (e) { return { error: (e as Error).message || 'Something went wrong. Nothing was changed.' }; }
+}
