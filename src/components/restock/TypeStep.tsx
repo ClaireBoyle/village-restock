@@ -108,7 +108,7 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
               : going ? <Badge st="info">In progress since {timeOf(src!.startedAt)}</Badge> : <Badge st="none">Not started tonight</Badge>}
             {onReset && src ? <AdminMenu label={`${hasDefrost ? 'Kitchen' : 'Full'} restock`} onChoose={() => onReset({ kind: 'full' })} /> : null}
           </div>
-          <p className="lead">{refill ? 'Check the bar and upstairs stock, then collect what you need from downstairs.' : <>Every area, for <b>closing shifts</b>. Shared, so anyone can continue it.</>}</p>
+          {!refill && <p className="lead">Every area, for <b>closing shifts</b>. Shared, so anyone can continue it.</p>}
           {/* The button first, so it's on screen without scrolling. */}
           <div className="actions">
             {finished && fullSession ? <button className="btn primary big" onClick={onSummary}>View summary</button>
