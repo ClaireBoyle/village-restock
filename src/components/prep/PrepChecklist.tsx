@@ -29,7 +29,13 @@ export function PrepChecklist({ departmentId }: { departmentId: string }) {
   const [who] = useStaffName();
   const dept = catalogue?.departments.find((d) => d.id === departmentId);
   const tasks = useMemo(() => (catalogue?.prepTasks ?? []).filter((t) => t.departmentId === departmentId), [catalogue, departmentId]);
-  const groups = useMemo(() => checklistGroups(tasks), [tasks]);
+  // A heading for a single job is noise: those jobs go together under "Other prep" at the end, by their full name.
+  const groups = useMemo(() => {
+    const all = checklistGroups(tasks);
+    const singles = all.filter((g) => g.tasks.length === 1);
+    if (singles.length < 2) return all;
+    return [...all.filter((g) => g.tasks.length > 1), { name: 'Other prep', tasks: singles.map((g) => ({ ...g.tasks[0], short: g.tasks[0].label })) }];
+  }, [tasks]);
   const tz = catalogue?.settings.timeZone ?? 'Australia/Melbourne';
   const today = catalogue ? tradingDate(new Date(), tz, catalogue.settings.cutoffHour) : null;
   const [serverReady, setServerReady] = useState<boolean | null>(true);
@@ -84,27 +90,25 @@ export function PrepChecklist({ departmentId }: { departmentId: string }) {
       <main className="wrap restock-main pcl">
         <section className="pcl-head" aria-labelledby="pcl-h">
           <div className="pcl-top">
-            <div>
-              <p className="dp-eyebrow"><Icon name="clock" />This service &middot; {dayLabel}</p>
-              <h1 id="pcl-h">Prep checklist</h1>
-            </div>
+            <h1 id="pcl-h">Prep checklist <small>{dayLabel}</small></h1>
             <Link className="btn small" href={`/d/${departmentId}`}><Icon name="list" />Kitchen</Link>
           </div>
           {total ? (
             <>
-              <p className="pcl-sum" aria-live="polite"><b>{checked} of {total} checked</b>
-                {needs ? <span className="w"><Icon name="warn" />{needs} need prep</span> : null}
-                {morning ? <span><Icon name="clock" />{morning} left for morning</span> : null}</p>
-              <span className="pcl-bar" aria-hidden="true"><i style={{ width: `${Math.round((checked / total) * 100)}%` }} /></span>
-              <div className="segb pcl-filter" role="group" aria-label="Show">
-                <button className={filter === 'all' ? 'on' : ''} aria-pressed={filter === 'all'} onClick={() => pick('all')}>All jobs</button>
-                <button className={filter === 'needs' ? 'on' : ''} aria-pressed={filter === 'needs'} onClick={() => pick('needs')}>Needs prep{needs ? ` (${needs})` : ''}</button>
+              <div className="pcl-row">
+                <p className="pcl-sum" aria-live="polite"><b>{checked} of {total} checked</b>
+                  {needs ? <span className="w"><Icon name="warn" />{needs} need prep</span> : null}
+                  {morning ? <span><Icon name="clock" />{morning} for morning</span> : null}</p>
+                <div className="segb pcl-filter" role="group" aria-label="Show">
+                  <button className={filter === 'all' ? 'on' : ''} aria-pressed={filter === 'all'} onClick={() => pick('all')}>All</button>
+                  <button className={filter === 'needs' ? 'on' : ''} aria-pressed={filter === 'needs'} onClick={() => pick('needs')}>Needs prep{needs ? ` (${needs})` : ''}</button>
+                </div>
               </div>
+              <span className="pcl-bar" aria-hidden="true"><i style={{ width: `${Math.round((checked / total) * 100)}%` }} /></span>
+              <p className="pcl-hint">{filter === 'needs'
+                ? <>Tap a job once it&rsquo;s prepped to mark it <b>Ready</b>.</>
+                : <>Tap what <b>needs prep</b>, then <b>Rest ready</b>. Tap a job again to mark it Ready.</>}</p>
             </>
-          ) : null}
-          {groups.some((g) => chipsFor(g.tasks)) ? (
-            <p className="pcl-hint">Tap a job: once <span className="pcl-chip-i ok" aria-hidden="true"><Icon name="check" /></span>Ready, twice
-              <span className="pcl-chip-i w" aria-hidden="true"><Icon name="warn" /></span>Needs prep, again to clear.</p>
           ) : null}
           {serverReady === false ? <p className="pcl-warn"><Icon name="warn" />Saved on this device only: the server needs a database update (021_prep_checklist.sql) before other devices see these checks.</p> : null}
         </section>
@@ -118,29 +122,25 @@ export function PrepChecklist({ departmentId }: { departmentId: string }) {
           if (!list.length) return null;
           const done = g.tasks.filter((t) => byTask.get(t.id)?.status).length;
           const open = list.filter((t) => !byTask.get(t.id)?.status);
+          const flagged = list.filter((t) => { const c = byTask.get(t.id); return c?.status === 'needs' || c?.morning || c?.note; });
           return (
             <section key={g.name} className="pcl-group" aria-label={g.name}>
               <h2><span>{g.name}</span>
-                {open.length >= 2 ? <button type="button" className="linkbtn pcl-all" onClick={() => open.forEach((t) => save(t, { status: 'ready' }))}
-                  aria-label={`All ready: ${g.name}`}><Icon name="check" />All ready</button> : null}
-                <small>{done === g.tasks.length ? <><Icon name="check" />{g.tasks.length}</> : `${done} of ${g.tasks.length}`}</small></h2>
-              {chipsFor(g.tasks) ? (
-                // Short jobs (e.g. the Harvest Hommus veg): a grid of chips, tap to go Ready → Needs prep → clear.
-                <>
-                  <div className="pcl-chips" role="group" aria-label={`${g.name}: tap once for Ready, twice for Needs prep`}>
-                    {list.map((t) => <ChipJob key={t.id} label={t.label} short={t.short} check={byTask.get(t.id)} doing={filter === 'needs'} onChange={(f) => save(t, f)} />)}
-                  </div>
-                  {list.some((t) => { const c = byTask.get(t.id); return c?.status === 'needs' || c?.morning || c?.note; }) ? (
-                    <ul className="pcl-chip-x">{list.filter((t) => { const c = byTask.get(t.id); return c?.status === 'needs' || c?.morning || c?.note; }).map((t) => (
-                      <li key={t.id} className="pcl-job s-needs" data-job={t.label}>
-                        <JobExtras label={t.label} check={byTask.get(t.id)} onChange={(f) => save(t, f)} lead={<b className="pcl-x-n">{t.short}</b>} />
-                      </li>
-                    ))}</ul>
-                  ) : null}
-                </>
-              ) : (
-                <ul>{list.map((t) => <Job key={t.id} label={t.label} short={t.short} check={byTask.get(t.id)} onChange={(f) => save(t, f)} />)}</ul>
-              )}
+                {filter === 'all' && open.length && g.tasks.length >= 2 ? (
+                  <button type="button" className="pcl-all" onClick={() => open.forEach((t) => save(t, { status: 'ready' }))}
+                    aria-label={`${open.length === g.tasks.length ? 'All' : 'Rest'} ready: ${g.name}`}><Icon name="check" />{open.length === g.tasks.length ? 'All ready' : 'Rest ready'}</button>
+                ) : null}
+                <small>{done === g.tasks.length ? <><Icon name="check" />Done</> : `${done}/${g.tasks.length}`}</small></h2>
+              <div className="pcl-chips" role="group" aria-label={g.name}>
+                {list.map((t) => <ChipJob key={t.id} label={t.label} short={t.short} check={byTask.get(t.id)} doing={filter === 'needs'} onChange={(f) => save(t, f)} />)}
+              </div>
+              {flagged.length ? (
+                <ul className="pcl-chip-x">{flagged.map((t) => (
+                  <li key={t.id} className="pcl-job s-needs" data-job={t.label}>
+                    <JobExtras label={t.label} check={byTask.get(t.id)} onChange={(f) => save(t, f)} lead={<b className="pcl-x-n">{t.short}</b>} />
+                  </li>
+                ))}</ul>
+              ) : null}
             </section>
           );
         })}
@@ -164,23 +164,20 @@ export function PrepChecklist({ departmentId }: { departmentId: string }) {
   );
 }
 
-/** Three or more jobs, every one short (e.g. Carrot, Cucumber, Celery, Radish): shown as chips. */
-const chipsFor = (tasks: { short: string }[]) => tasks.length >= 3 && tasks.every((t) => t.short.length <= 24);
-
 /**
- * A chip: its name and state. Tap: Unchecked → Ready → Needs prep → Unchecked. Doing the prep (the Needs prep
- * filter): a Needs prep chip goes straight to Ready.
+ * A job: its name and state. Tap: Unchecked → Needs prep → Ready → Unchecked (what needs prep is the one to tap;
+ * "Rest ready" on the heading does the others). Doing the prep (the Needs prep filter): one tap → Ready.
  */
 function ChipJob({ label, short, check, doing, onChange }: { label: string; short: string; check: PrepCheck | undefined; doing: boolean; onChange: (f: Parameters<typeof setPrepCheck>[3]) => void }) {
   const st = check?.status ?? null;
   // Quick taps: count on from the last one, not the saved state (it can lag a tap behind).
   const last = useRef(st);
   useEffect(() => { last.current = st; }, [st]);
-  const nextOf = (v: typeof st) => (v === null ? 'ready' : v === 'ready' ? 'needs' : doing ? 'ready' : null);
+  const nextOf = (v: typeof st) => (doing ? (v === 'ready' ? 'needs' : 'ready') : v === null ? 'needs' : v === 'needs' ? 'ready' : null);
   const next = nextOf(st);
   const now = st === 'ready' ? 'Ready' : st === 'needs' ? 'Needs prep' : 'Unchecked';
   return (
-    <button type="button" className={`pcl-chip s-${st ?? 'none'} ${check?.morning ? 'morning' : ''}`} data-chip={label}
+    <button type="button" className={`pcl-chip s-${st ?? 'none'} ${check?.morning ? 'morning' : ''} ${short.length > 22 ? 'wide' : ''}`} data-chip={label}
       aria-label={`${label}: ${now}. Tap for ${next === 'ready' ? 'Ready' : next === 'needs' ? 'Needs prep' : 'Unchecked'}`}
       onClick={() => { const v = nextOf(last.current); last.current = v; onChange({ status: v }); }}>
       <span className="pcl-chip-i" aria-hidden="true">{st === 'ready' ? <Icon name="check" /> : st === 'needs' ? <Icon name="warn" /> : null}</span>
@@ -220,33 +217,5 @@ function JobExtras({ label, check, onChange, lead = null, onNote }: {
         <button type="button" className="linkbtn pcl-morning" onClick={() => onChange({ morning: true })} aria-label={`Leave for morning: ${label}`}><Icon name="clock" />Leave for morning</button>
       )}
     </div>
-  );
-}
-
-/**
- * One job, on one line: its name and Ready / Needs prep (tap again for Unchecked). The note and Leave for morning
- * appear once it needs prep, or when the name is tapped, and stay while there's a note or it's left for morning.
- */
-function Job({ label, short, check, onChange }: { label: string; short: string; check: PrepCheck | undefined; onChange: (f: Parameters<typeof setPrepCheck>[3]) => void }) {
-  const st = check?.status ?? null;
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const extras = open || editing || st === 'needs' || !!check?.note || !!check?.morning;
-  return (
-    <li className={`pcl-job ${st ? `s-${st}` : 's-none'}`} data-job={label}>
-      <div className="pcl-main">
-        <button type="button" className="pcl-t" aria-expanded={extras} onClick={() => setOpen(!open)} title={label !== short ? label : undefined}>
-          <b>{short}</b>
-          <small className="pcl-st">{st === 'ready' ? 'Ready' : st === 'needs' ? 'Needs prep' : 'Unchecked'}{check?.updatedBy && st ? ` · ${check.updatedBy}` : ''}</small>
-        </button>
-        <span className="pcl-seg" role="group" aria-label={`${label}: ready or needs prep?`}>
-          <button type="button" className={`pcl-ready ${st === 'ready' ? 'on' : ''}`} aria-pressed={st === 'ready'} aria-label={`${label}: ready`} onClick={() => onChange({ status: st === 'ready' ? null : 'ready' })}>
-            <Icon name="check" />Ready</button>
-          <button type="button" className={`pcl-needs ${st === 'needs' ? 'on' : ''}`} aria-pressed={st === 'needs'} aria-label={`${label}: needs prep`} onClick={() => onChange({ status: st === 'needs' ? null : 'needs' })}>
-            Needs prep</button>
-        </span>
-      </div>
-      {extras ? <JobExtras label={label} check={check} onChange={onChange} onNote={setEditing} /> : null}
-    </li>
   );
 }

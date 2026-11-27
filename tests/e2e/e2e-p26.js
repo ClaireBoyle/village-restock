@@ -116,9 +116,10 @@ const PIZZA = 'Pizza cheese (portioned bags)';
 
   // Prep checklist: the job, quantity-free.
   await P.goto(`${B}/d/${k.id}/prep`); await P.waitForSelector('.pcl-group');
-  const job = '.pcl-job[data-job="Portion pizza cheese into bags and freeze"]';
-  ok(await P.locator(`.pcl-group[aria-label="Portion cheese"] ${job}`).count() === 1 && await P.locator(`${job} input[inputmode]`).count() === 0, 'Prep checklist: "Portion pizza cheese into bags and freeze" (Portion cheese), no amount');
-  await P.click(`${job} .pcl-needs`); await P.waitForSelector(`${job}.s-needs`);
+  const job = '.pcl-chip[data-chip="Portion pizza cheese into bags and freeze"]';
+  const where = await P.$eval(job, (e) => e.closest('.pcl-group').getAttribute('aria-label'));
+  ok(['Portion cheese', 'Other prep'].includes(where) && await P.locator('.pcl input[inputmode]').count() === 0, `Prep checklist: "Portion pizza cheese into bags and freeze" (${where}), no amount`);
+  await P.click(job); await P.waitForSelector(`${job}.s-needs`);
   ok(true, 'flagged for this service: Needs prep');
 
   // Quick Restock: the same reminder.
