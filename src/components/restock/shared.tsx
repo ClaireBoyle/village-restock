@@ -39,8 +39,8 @@ export type Step = 'check' | 'refill' | 'boh' | 'collect' | 'fill' | 'finish';
 export function Stages({ kind, current, onGo, refill = false, fill = false }: { kind: 'full' | 'quick' | 'area'; current: Step; onGo: (s: Step) => void; refill?: boolean; fill?: boolean }) {
   const labels: [Step, string, string][] = refill
     // Front of house first, grab from upstairs, check upstairs, then the downstairs run.
-    // Check the bar, then upstairs (at each spot: grab for the bar, then what to bring up), then downstairs.
-    ? [['check', 'Check the bar', 'Bar'], ['boh', 'Upstairs', 'Up'], ['collect', 'Collect downstairs', 'Down'], ['finish', 'Finish', 'Finish']]
+    // FOH (check the bar), then BOH (the upstairs spots: grab for the bar, then what to bring up), then collect downstairs.
+    ? [['check', 'FOH', 'FOH'], ['boh', 'BOH', 'BOH'], ['collect', 'Collect', 'Collect'], ['finish', 'Finish', 'Finish']]
     : [['check', kind === 'full' ? 'Check stock' : kind === 'area' ? 'What’s needed' : 'Pick products', kind === 'quick' ? 'Pick' : 'Check'], ['collect', 'Collect', 'Collect'], ['finish', 'Finish', 'Finish']];
   if (fill) labels.splice(-1, 0, ['fill', 'Fill', 'Fill']);
   const idx = labels.findIndex(([s]) => s === current);

@@ -27,7 +27,8 @@ const hasText = (p, sel, t, timeout = 10000) => p.locator(sel).filter({ hasText:
   await A.click('.dcard2:has-text("Kitchen")'); await A.click('text=Start full restock'); await A.waitForSelector(card('Tomatoes'));
   await waitSynced(A);
   const Bp = await device('B', 'Jess');
-  await Bp.click('.dcard2:has-text("Kitchen")'); await Bp.click('button:has-text("Resume full restock")'); await Bp.waitForSelector(card('Tomatoes'));
+  await Bp.click('.dcard2:has-text("Kitchen")'); // Nothing entered on A yet: it still says Start, and joins the same restock.
+  await Bp.click('.type-full button:has-text("Start full restock")'); await Bp.waitForSelector(card('Tomatoes'));
 
   // Same device editing quickly is never a clash
   await fillQty(A, `${card('Lemons')}`, '3');

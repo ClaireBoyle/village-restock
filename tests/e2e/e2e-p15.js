@@ -136,7 +136,7 @@ const waitCur = async (P, name) => { await P.waitForSelector(`.area-btn.cur:has-
   ok(await P.locator('.area > .prows article.prow').count() === 23 && await P.locator('article.prow:has(h3:text-is("Heineken")) .pnote').count() === 0, 'FOH beer fridge: its own stop, 23 products, no "Already … for" notes');
   ok(await primaryText(P) === 'Done → Popcorn boxes', 'an area still open earlier in the lap comes next: "Done → Popcorn boxes"');
   await primary(P).click(); await waitCur(P, 'Popcorn boxes');
-  ok(await primaryText(P) === 'Done → Upstairs', 'last open area: "Done → Upstairs"');
+  ok(await primaryText(P) === 'Done → BOH', 'last open area: "Done → BOH"');
   await primary(P).click(); await P.waitForSelector('.area-btn.cur:has-text("BOH bar fridge")');
 
   // Upstairs, one screen per spot: grab for the bar, then bring up from downstairs.
@@ -147,7 +147,7 @@ const waitCur = async (P, name) => { await P.waitForSelector(`.area-btn.cur:has-
   ok(JSON.stringify(rooms) === JSON.stringify([['Upstairs cupboards', ['Cadbury Flake container', 'Sugar container']], ['Wine cupboard', ['Red Claw Shiraz']]]), 'Upstairs cupboards: grab for the bar, by cupboard: ' + JSON.stringify(rooms));
   ok(await sees(P, '.grab .line[data-line="Sugar container"]', 'next to the coffee machine') && await sees(P, '.grab .line[data-line="Cadbury Flake container"]', 'fill it to the top'), 'refill instructions on the grab list');
   ok(!JSON.stringify(rooms).includes('Crème de Café') && !JSON.stringify(rooms).includes('Coffee Beans') && !JSON.stringify(rooms).includes('Earl Grey'), 'downstairs items are not upstairs pickups');
-  ok(await primaryText(P) === 'Done → Collect downstairs', 'then "Done → Collect downstairs" (coffee beans and Crème de Café are on it)');
+  ok(await primaryText(P) === 'Done → Collect', 'then "Done → Collect" (coffee beans and Crème de Café are on it)');
   await P.screenshot({ path: `${OUT}/p15-refill-phone.png`, fullPage: true });
   ok(!errs.length, 'no page errors ' + errs.join(' | '));
   await b.close(); await sql.end();

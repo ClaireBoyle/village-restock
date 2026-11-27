@@ -140,6 +140,38 @@ export interface BoardItem { productId: string | null; productName: string; sinc
  * shortages from the last 14 days, not resolved by a manager, and not collected in full at any restock since. For
  * the Finish screen, so staff only write up what's new. `exclude` is the restock being finished.
  */
+/** The previous full restock's shortages (the night before): what it finished out of stock or low. */
+export interface LastNight { date: string; items: { productName: string; unitPlural: string; short: number; status: 'out' | 'low' | null }[] }
+
+/**
+ * What the previous finished full restock of this department (before the one being finished) was short of: storeroom
+ * shortages only ("not enough in the storeroom"), not "Not sure" ones. Null if there's no earlier full restock.
+ */
+export async function lastNight(departmentId: string, exclude: string | null): Promise<LastNight | null> {
+  const sql = db();
+  const [{ hasStatus }] = await sql`select exists (select 1 from information_schema.columns where table_name = 'shortages' and column_name = 'stock_status') as has_status`;
+  const [prev] = await sql`
+    select id, trading_date from restock_sessions
+    where department_id = ${departmentId} and kind = 'full' and status in ('finished', 'finished_exceptions') and finished_at is not null
+      and (${exclude}::uuid is null or id <> ${exclude}::uuid)
+      and (${exclude}::uuid is null or trading_date <= coalesce((select trading_date from restock_sessions where id = ${exclude}::uuid), current_date))
+    order by trading_date desc, finished_at desc limit 1`;
+  if (!prev) return null;
+  const rows = await sql`
+    select max(product_name) as product_name, max(unit_plural) as unit_plural, sum(shortfall_qty)::float as short,
+      ${hasStatus ? sql`max(to_jsonb(sh)->>'stock_status')` : sql`null::text`} as stock_status
+    from shortages sh
+    where sh.session_id = ${prev.id as string} and sh.reason = 'insufficient'
+      ${hasStatus ? sql`and coalesce(to_jsonb(sh)->>'stock_status', '') <> 'unconfirmed'` : sql``}
+    group by lower(sh.product_name)
+    order by (${hasStatus ? sql`max(to_jsonb(sh)->>'stock_status')` : sql`null::text`} = 'out') desc nulls last, max(product_name)`;
+  return {
+    date: dateStr(prev.tradingDate),
+    items: rows.map((r) => ({ productName: String(r.productName), unitPlural: String(r.unitPlural), short: Number(r.short),
+      status: r.stockStatus === 'out' ? 'out' : r.stockStatus === 'low' ? 'low' : null })),
+  };
+}
+
 export async function boardItems(departmentId: string, exclude: string | null): Promise<BoardItem[]> {
   const sql = db();
   const [{ hasStatus }] = await sql`select exists (select 1 from information_schema.columns where table_name = 'shortages' and column_name = 'stock_status') as has_status`;

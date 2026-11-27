@@ -395,7 +395,7 @@ async function noteColumn(tx: Tx): Promise<boolean> {
   return hasNoteColumn;
 }
 
-async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind: SessionKind; areaId: string | null }, reason: string | null, at: string, by: string | null, note: string | null, completedBy: string | null = null) {
+async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind: SessionKind; areaId: string | null }, reason: string | null, at: string, by: string | null, note: string | null, completedBy: string | null = null, opts: { email?: boolean } = {}) {
   const comment = note?.trim() ? note.trim() : null;
   const cat = await loadCatalogue();
   const whole = departmentView(cat, s.departmentId);
@@ -451,8 +451,8 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
   // "Completed by" (migration 015): kept on the finished restock.
   if (await completedByColumn(tx)) await tx`update restock_sessions set completed_by = ${completedBy?.slice(0, 40) ?? null} where id = ${s.id}`;
 
-  // Full and area restocks: queue the manager email in this same transaction.
-  if (s.kind !== 'quick' && view) {
+  // Full and area restocks: queue the manager email in this same transaction (not when a manager finishes it late).
+  if (s.kind !== 'quick' && view && opts.email !== false) {
     const [row] = await tx`select people from restock_sessions where id = ${s.id}`;
     const [dept] = await tx`select name, coalesce((to_jsonb(departments)->>'email_every_restock')::boolean, false) as email_every_restock
       from departments where id = ${s.departmentId}`;
@@ -487,6 +487,26 @@ async function finishSession(tx: Tx, s: { id: string; departmentId: string; kind
       link: host ? `https://${host}/admin/restocks/${s.id}` : null,
     }, Boolean(dept?.emailEveryRestock));
   }
+}
+
+/**
+ * A manager finishes a restock that was left open past the 5 am cut-off ("Unfinished"), from Admin: exactly what
+ * tapping Finish would have done (its stock shortages recorded, finished or finished with exceptions), as at the
+ * last time anyone worked on it. No manager email (it's after the fact). Returns the new status, or null if the
+ * restock isn't unfinished (already finished, still open tonight, or gone).
+ */
+export async function finishUnfinished(id: string, by: string): Promise<'finished' | 'finished_exceptions' | null> {
+  return db().begin(async (tx) => {
+    const [s] = await tx`select id, department_id, kind, area_id, status, started_at from restock_sessions where id = ${id} for update`;
+    if (!s || s.status !== 'unfinished') return null;
+    const [last] = await tx`select greatest((select max(updated_at) from session_items where session_id = ${id}),
+      (select max(updated_at) from session_areas where session_id = ${id})) as at`;
+    const at = new Date((last?.at as string | null) ?? (s.startedAt as string)).toISOString();
+    await finishSession(tx, { id, departmentId: String(s.departmentId), kind: s.kind as SessionKind, areaId: (s.areaId as string) ?? null },
+      null, at, by, null, `${by} (Admin)`.slice(0, 40), { email: false });
+    const [r] = await tx`select status from restock_sessions where id = ${id}`;
+    return r.status as 'finished' | 'finished_exceptions';
+  });
 }
 
 // ---------------------------------------------------------------------------

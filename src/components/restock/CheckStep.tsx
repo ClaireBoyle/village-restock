@@ -100,7 +100,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   const active = activePlacements(session.kind, view.placements, recorded);
   const byArea = session.kind === 'area';
   const single = view.areas.length === 1;
-  // What's on the lists so far: the downstairs run, plus (on Check the bar) what's to grab upstairs.
+  // What's on the lists so far: the downstairs run, plus (on FOH) what's to grab upstairs.
   const grabAll = phase !== 'all' ? refillLines(session.kind, ctx.placements, recorded, items) : [];
   const downstairs = collectionLines(collectPlacements(session.kind, ctx.placements, recorded), items);
   const lines = [...(phase === 'foh' ? grabAll : []), ...downstairs];
@@ -168,7 +168,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
   const nextOpen = after.find(({ area }) => !['complete', 'skipped'].includes(statusOf(area.id)));
   // Every area checked (done or skipped).
   const allChecked = view.areas.every(({ area }) => ['complete', 'skipped'].includes(statusOf(area.id)));
-  const stepName = phase === 'foh' ? 'Upstairs' : nextStep === 'finish' ? 'Finish' : flow ? 'Collect downstairs' : 'Collection list';
+  const stepName = phase === 'foh' ? 'BOH' : nextStep === 'finish' ? 'Finish' : flow ? 'Collect' : 'Collection list';
   // What to show as progress. Target-level products need a count; everything else is exception-based,
   // so we count what was entered rather than "checked".
   const progressOf = (ps: typeof active) => {

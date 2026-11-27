@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Icon } from '@/components/Icon';
 import { CopyButton } from '@/components/admin/CopyButton';
+import { FinishLateForm } from '@/components/admin/FinishLateForm';
 import { restockDetail } from '@/lib/server/restocks';
 import { STATUS } from '@/components/admin/restock-status';
 
@@ -31,7 +32,12 @@ export default async function RestockDetail({ params }: { params: Promise<{ id: 
       </div>
       {s.exceptionReason ? <div className="banner s-warn"><Icon name="warn" /><div><b>Finished with exceptions</b><p>Reason: {String(s.exceptionReason)}</p></div></div> : null}
       {s.finishNote ? <div className="banner s-info"><Icon name="info" /><div><b>Comments from staff</b><p style={{ whiteSpace: 'pre-wrap' }}>{String(s.finishNote)}</p></div></div> : null}
-      {s.status === 'unfinished' ? <div className="banner s-bad"><Icon name="warn" /><div><b>Never finished</b><p>This restock was still open after the 5 am cut-off. Check what was left below.</p></div></div> : null}
+      {s.status === 'unfinished' ? (
+        <div className="banner s-bad"><Icon name="warn" /><div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}><b>Never finished</b>
+          <p>This restock was still open after the 5 am cut-off. Check what was left below.</p>
+          <p>If the work was done and someone just didn&rsquo;t tap Finish, you can finish it here. It&rsquo;s recorded exactly as Finish would have done: its shortages go into Shortages (and on the stock board for the next restock), and it&rsquo;s marked finished, or finished with exceptions if anything was left. No email is sent.</p>
+          <FinishLateForm id={String(s.id)} /></div></div>
+      ) : null}
 
       {s.kind === 'full' && r.view ? (
         <section className="panel">

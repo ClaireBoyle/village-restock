@@ -1643,3 +1643,25 @@ button.room-h,button.lgrp-h{scroll-margin-top:calc(env(safe-area-inset-top,0px) 
 /* Area cards: the small photos open full screen too. */
 .ac-photos .pthumb.ac-ph{width:36px;height:36px;border-radius:10px;padding:2px;box-shadow:0 0 0 2px var(--surface);margin-left:-8px}
 .ac-photos .pthumb.ac-ph img{width:100%;height:100%;padding:0;box-shadow:none;margin:0;border-radius:8px}
+/* Finish (Gold Class Bar and Kitchen): what was short last night, folded until opened. */
+.lastnight{border-radius:14px;border:1px solid var(--hair);background:var(--surface)}
+.theme-navy .lastnight{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1)}
+.ln-h{width:100%;display:flex;align-items:center;gap:10px;min-height:52px;padding:8px 12px;border:0;background:none;color:var(--ink);text-align:left;cursor:pointer;font:inherit}
+.ln-h>.ic{width:18px;height:18px;flex:none;color:var(--d-accent, var(--accent))}
+.ln-h>.ic:last-child{color:var(--ink-2)}
+.ln-t{flex:1;display:flex;flex-direction:column;gap:1px;min-width:0}
+.ln-t b{font-size:15px;font-weight:700}
+.ln-t small{font-size:12.5px;color:var(--ink-2)}
+.ln-list{list-style:none;margin:0;padding:0 12px 10px;display:flex;flex-direction:column;gap:2px}
+.ln-row{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--hair)}
+.ln-row .sr-dot{margin-top:6px}
+.ln-row .sr-dot.out{background:#E5484D}
+.ln-row .sr-dot.low{background:#F2A93B}
+.ln-txt{display:flex;flex-direction:column;gap:1px;min-width:0}
+.ln-txt b{font-size:15px;font-weight:600;overflow-wrap:anywhere}
+.ln-txt small{font-size:13px;color:var(--ink-2)}
+.ln-now{display:inline-flex;align-items:center;gap:3px;font-weight:600;color:var(--ink)}
+.ln-now .ic{width:13px;height:13px}
+.ln-row.t-done .ln-now{color:var(--ok)}
+.ln-row.t-done .sr-dot{opacity:.45}
+.ln-row.t-none .ln-now{color:var(--warn)}
