@@ -40,7 +40,7 @@ const items = (P) => P.$$eval('.pcl-chip', (e) => e.map((x) => x.dataset.chip));
 
   const groups = await A.$$eval('.pcl-group', (els) => els.map((g) => `${g.querySelector('h2 span').textContent}: ${[...g.querySelectorAll('.pcl-chip')].map((j) => j.dataset.chip).join(', ')}`));
   ok(JSON.stringify(groups) === JSON.stringify([
-    'Cut veg for Harvest Hommus: Carrot, Cucumber, Celery, Radish', 'Portion proteins: Defrosted pulled beef for bao buns',
+    'Cut veg for Harvest Hommus: Carrot, Cucumber, Celery, Radish', 'Portion bao: Bao meat portioning',
     'Portion sauces: BBQ sauce, Sweet chilli sauce, Tomato sauce',
     'Make sauces: Vodka sauce, Sriracha mayo, Burger sauce, Hollandaise dressing, Tartare, Maple aioli, Sesame mayo',
   ]), 'grouped by shelf, in the current task order (only one lone job, so it keeps its heading):\n  ' + groups.join('\n  '));
