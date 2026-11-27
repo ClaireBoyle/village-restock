@@ -58,6 +58,14 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
     return <span key={area.id} className={`apill s-${AREA_BADGE[st]}`} title={AREA_LABEL[st]} aria-label={`${area.name}: ${AREA_LABEL[st]}`}><Icon name={AREA_BADGE[st] === 'ok' ? 'check' : AREA_BADGE[st] === 'skip' ? 'skip' : AREA_BADGE[st] === 'info' ? 'half' : 'circle'} />{area.name}</span>;
   });
 
+  const guide = hideTips ? (
+        <button className="linkbtn" style={{ alignSelf: 'flex-start' }} onClick={toggleTips}><Icon name="info" />How restocking works</button>
+      ) : (
+        <section className={`how ${steps.length > 3 ? 'compact' : ''}`} aria-label="How restocking works">
+          {steps.map(([t, d], i) => <div key={t} className="how-step"><span className="n">{i + 1}</span><div><b>{t}</b><p>{d}</p></div></div>)}
+          <button className="linkbtn" onClick={toggleTips}>Hide tips</button>
+        </section>
+      );
   return (
     <main className="wrap restock-main">
       <section className={`dhero ${view.department.theme === 'gold' ? 'gold' : ''}`}>
@@ -72,6 +80,7 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className="dh-mark" src="/brand/village-v-white.png" alt="" aria-hidden="true" />
       </section>
+      {refill && guide}
       <div className={closingLayout ? 'types closing-options' : 'types'} style={closingLayout ? {gridTemplateColumns:'minmax(0,1fr)'} : undefined}>
         <section style={closingLayout ? {borderColor:"#cfac70",borderLeftWidth:5} : undefined} className={`type type-full ${going && !finished ? 'k-active' : ''}`}>
           <div className="type-h">
@@ -110,14 +119,7 @@ export function TypeStep({ view, fullSession, remoteFull, quickSession, opening,
       {hasDefrost && <Link className="quick-link prep-link" href={`/d/${view.department.id}/defrost`}><Icon name="clock" /><span><b>Defrost planner</b></span><Icon name="next" /></Link>}
       {/* Kitchen: last night's morning prep handover, for the morning team (tracked apart from the restock). */}
       {prep ? <MorningPrepHome departmentId={view.department.id} today={prep.today} who={prep.who} tasks={prep.tasks} /> : null}
-      {hideTips ? (
-        <button className="linkbtn" style={{ alignSelf: 'flex-start' }} onClick={toggleTips}><Icon name="info" />How restocking works</button>
-      ) : (
-        <section className={`how ${steps.length > 3 ? 'compact' : ''}`} aria-label="How restocking works">
-          {steps.map(([t, d], i) => <div key={t} className="how-step"><span className="n">{i + 1}</span><div><b>{t}</b><p>{d}</p></div></div>)}
-          <button className="linkbtn" onClick={toggleTips}>Hide tips</button>
-        </section>
-      )}
+      {!refill && guide}
       {checklist ? (
         // Open any time (e.g. before a busy night): no restock or handover needed.
         <Link className="quick-link prep-link" href={`/d/${view.department.id}/prep`}>
