@@ -102,6 +102,10 @@ export function PrepChecklist({ departmentId }: { departmentId: string }) {
               </div>
             </>
           ) : null}
+          {groups.some((g) => chipsFor(g.tasks)) ? (
+            <p className="pcl-hint">Tap a job: once <span className="pcl-chip-i ok" aria-hidden="true"><Icon name="check" /></span>Ready, twice
+              <span className="pcl-chip-i w" aria-hidden="true"><Icon name="warn" /></span>Needs prep, again to clear.</p>
+          ) : null}
           {serverReady === false ? <p className="pcl-warn"><Icon name="warn" />Saved on this device only: the server needs a database update (021_prep_checklist.sql) before other devices see these checks.</p> : null}
         </section>
 
@@ -113,10 +117,30 @@ export function PrepChecklist({ departmentId }: { departmentId: string }) {
           const list = g.tasks.filter(show);
           if (!list.length) return null;
           const done = g.tasks.filter((t) => byTask.get(t.id)?.status).length;
+          const open = list.filter((t) => !byTask.get(t.id)?.status);
           return (
             <section key={g.name} className="pcl-group" aria-label={g.name}>
-              <h2><span>{g.name}</span><small>{done} of {g.tasks.length} checked</small></h2>
-              <ul>{list.map((t) => <Job key={t.id} label={t.label} check={byTask.get(t.id)} onChange={(f) => save(t, f)} />)}</ul>
+              <h2><span>{g.name}</span>
+                {open.length >= 2 ? <button type="button" className="linkbtn pcl-all" onClick={() => open.forEach((t) => save(t, { status: 'ready' }))}
+                  aria-label={`All ready: ${g.name}`}><Icon name="check" />All ready</button> : null}
+                <small>{done === g.tasks.length ? <><Icon name="check" />{g.tasks.length}</> : `${done} of ${g.tasks.length}`}</small></h2>
+              {chipsFor(g.tasks) ? (
+                // Short jobs (e.g. the Harvest Hommus veg): a grid of chips, tap to go Ready → Needs prep → clear.
+                <>
+                  <div className="pcl-chips" role="group" aria-label={`${g.name}: tap once for Ready, twice for Needs prep`}>
+                    {list.map((t) => <ChipJob key={t.id} label={t.label} short={t.short} check={byTask.get(t.id)} doing={filter === 'needs'} onChange={(f) => save(t, f)} />)}
+                  </div>
+                  {list.some((t) => { const c = byTask.get(t.id); return c?.status === 'needs' || c?.morning || c?.note; }) ? (
+                    <ul className="pcl-chip-x">{list.filter((t) => { const c = byTask.get(t.id); return c?.status === 'needs' || c?.morning || c?.note; }).map((t) => (
+                      <li key={t.id} className="pcl-job s-needs" data-job={t.label}>
+                        <JobExtras label={t.label} check={byTask.get(t.id)} onChange={(f) => save(t, f)} lead={<b className="pcl-x-n">{t.short}</b>} />
+                      </li>
+                    ))}</ul>
+                  ) : null}
+                </>
+              ) : (
+                <ul>{list.map((t) => <Job key={t.id} label={t.label} short={t.short} check={byTask.get(t.id)} onChange={(f) => save(t, f)} />)}</ul>
+              )}
             </section>
           );
         })}
@@ -140,46 +164,89 @@ export function PrepChecklist({ departmentId }: { departmentId: string }) {
   );
 }
 
-/** One job: Ready / Needs prep (tap again for Unchecked), an optional note, and Leave for morning. */
-function Job({ label, check, onChange }: { label: string; check: PrepCheck | undefined; onChange: (f: Parameters<typeof setPrepCheck>[3]) => void }) {
+/** Three or more jobs, every one short (e.g. Carrot, Cucumber, Celery, Radish): shown as chips. */
+const chipsFor = (tasks: { short: string }[]) => tasks.length >= 3 && tasks.every((t) => t.short.length <= 24);
+
+/**
+ * A chip: its name and state. Tap: Unchecked → Ready → Needs prep → Unchecked. Doing the prep (the Needs prep
+ * filter): a Needs prep chip goes straight to Ready.
+ */
+function ChipJob({ label, short, check, doing, onChange }: { label: string; short: string; check: PrepCheck | undefined; doing: boolean; onChange: (f: Parameters<typeof setPrepCheck>[3]) => void }) {
   const st = check?.status ?? null;
-  const [noteOpen, setNoteOpen] = useState(false);
+  // Quick taps: count on from the last one, not the saved state (it can lag a tap behind).
+  const last = useRef(st);
+  useEffect(() => { last.current = st; }, [st]);
+  const nextOf = (v: typeof st) => (v === null ? 'ready' : v === 'ready' ? 'needs' : doing ? 'ready' : null);
+  const next = nextOf(st);
+  const now = st === 'ready' ? 'Ready' : st === 'needs' ? 'Needs prep' : 'Unchecked';
+  return (
+    <button type="button" className={`pcl-chip s-${st ?? 'none'} ${check?.morning ? 'morning' : ''}`} data-chip={label}
+      aria-label={`${label}: ${now}. Tap for ${next === 'ready' ? 'Ready' : next === 'needs' ? 'Needs prep' : 'Unchecked'}`}
+      onClick={() => { const v = nextOf(last.current); last.current = v; onChange({ status: v }); }}>
+      <span className="pcl-chip-i" aria-hidden="true">{st === 'ready' ? <Icon name="check" /> : st === 'needs' ? <Icon name="warn" /> : null}</span>
+      <span className="pcl-chip-n">{short}</span>
+      {check?.morning ? <Icon name="clock" /> : null}
+    </button>
+  );
+}
+
+/** Add note / the note, and Leave for morning (or "Left for morning · Undo"). */
+function JobExtras({ label, check, onChange, lead = null, onNote }: {
+  label: string; check: PrepCheck | undefined; onChange: (f: Parameters<typeof setPrepCheck>[3]) => void; lead?: React.ReactNode; onNote?: (open: boolean) => void;
+}) {
+  const [noteOpen, setNoteOpenRaw] = useState(false);
+  const setNoteOpen = (v: boolean) => { setNoteOpenRaw(v); onNote?.(v); };
   const [draft, setDraft] = useState(check?.note ?? '');
   const noteRef = useRef<HTMLInputElement>(null);
   useEffect(() => { if (!noteOpen) setDraft(check?.note ?? ''); }, [check?.note, noteOpen]);
   const saveNote = () => { setNoteOpen(false); if ((draft.trim() || null) !== (check?.note ?? null)) onChange({ note: draft.trim() || null }); };
+  const editNote = () => { setNoteOpen(true); window.setTimeout(() => noteRef.current?.focus(), 30); };
+  return (
+    <div className="pcl-extra">
+      {lead}
+      {noteOpen ? (
+        <input ref={noteRef} className="pcl-note-in" value={draft} maxLength={200} placeholder="Note (optional)" aria-label={`Note for ${label}`}
+          onChange={(e) => setDraft(e.target.value)} onBlur={saveNote}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveNote(); } else if (e.key === 'Escape') { setDraft(check?.note ?? ''); setNoteOpen(false); } }} />
+      ) : check?.note ? (
+        <button type="button" className="linkbtn pcl-note" onClick={editNote}><Icon name="info" />{check.note}</button>
+      ) : (
+        <button type="button" className="linkbtn pcl-add-note" onClick={editNote}>Add note</button>
+      )}
+      {check?.morning ? (
+        <span className="pcl-morning on"><Icon name="clock" />Left for morning{check.morningDoneAt ? ' · done' : ''}
+          <button type="button" className="linkbtn" onClick={() => onChange({ morning: false })} aria-label={`Undo leave for morning: ${label}`}>Undo</button></span>
+      ) : (
+        <button type="button" className="linkbtn pcl-morning" onClick={() => onChange({ morning: true })} aria-label={`Leave for morning: ${label}`}><Icon name="clock" />Leave for morning</button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One job, on one line: its name and Ready / Needs prep (tap again for Unchecked). The note and Leave for morning
+ * appear once it needs prep, or when the name is tapped, and stay while there's a note or it's left for morning.
+ */
+function Job({ label, short, check, onChange }: { label: string; short: string; check: PrepCheck | undefined; onChange: (f: Parameters<typeof setPrepCheck>[3]) => void }) {
+  const st = check?.status ?? null;
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const extras = open || editing || st === 'needs' || !!check?.note || !!check?.morning;
   return (
     <li className={`pcl-job ${st ? `s-${st}` : 's-none'}`} data-job={label}>
       <div className="pcl-main">
-        <span className="pcl-t">
-          <b>{label}</b>
-          <small className="pcl-st">{st === 'ready' ? <><Icon name="check" />Ready</> : st === 'needs' ? <><Icon name="warn" />Needs prep</> : 'Unchecked'}
-            {check?.updatedBy && st ? <span className="pcl-by"> &middot; {check.updatedBy}</span> : null}</small>
-        </span>
+        <button type="button" className="pcl-t" aria-expanded={extras} onClick={() => setOpen(!open)} title={label !== short ? label : undefined}>
+          <b>{short}</b>
+          <small className="pcl-st">{st === 'ready' ? 'Ready' : st === 'needs' ? 'Needs prep' : 'Unchecked'}{check?.updatedBy && st ? ` · ${check.updatedBy}` : ''}</small>
+        </button>
         <span className="pcl-seg" role="group" aria-label={`${label}: ready or needs prep?`}>
-          <button type="button" className={`pcl-ready ${st === 'ready' ? 'on' : ''}`} aria-pressed={st === 'ready'} onClick={() => onChange({ status: st === 'ready' ? null : 'ready' })}>
+          <button type="button" className={`pcl-ready ${st === 'ready' ? 'on' : ''}`} aria-pressed={st === 'ready'} aria-label={`${label}: ready`} onClick={() => onChange({ status: st === 'ready' ? null : 'ready' })}>
             <Icon name="check" />Ready</button>
-          <button type="button" className={`pcl-needs ${st === 'needs' ? 'on' : ''}`} aria-pressed={st === 'needs'} onClick={() => onChange({ status: st === 'needs' ? null : 'needs' })}>
+          <button type="button" className={`pcl-needs ${st === 'needs' ? 'on' : ''}`} aria-pressed={st === 'needs'} aria-label={`${label}: needs prep`} onClick={() => onChange({ status: st === 'needs' ? null : 'needs' })}>
             Needs prep</button>
         </span>
       </div>
-      <div className="pcl-extra">
-        {noteOpen ? (
-          <input ref={noteRef} className="pcl-note-in" value={draft} maxLength={200} placeholder="Note (optional)" aria-label={`Note for ${label}`}
-            onChange={(e) => setDraft(e.target.value)} onBlur={saveNote}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveNote(); } else if (e.key === 'Escape') { setDraft(check?.note ?? ''); setNoteOpen(false); } }} />
-        ) : check?.note ? (
-          <button type="button" className="linkbtn pcl-note" onClick={() => { setNoteOpen(true); window.setTimeout(() => noteRef.current?.focus(), 30); }}><Icon name="info" />{check.note}</button>
-        ) : (
-          <button type="button" className="linkbtn pcl-add-note" onClick={() => { setNoteOpen(true); window.setTimeout(() => noteRef.current?.focus(), 30); }}>Add note</button>
-        )}
-        {check?.morning ? (
-          <span className="pcl-morning on"><Icon name="clock" />Left for morning{check.morningDoneAt ? ' · done' : ''}
-            <button type="button" className="linkbtn" onClick={() => onChange({ morning: false })} aria-label={`Undo leave for morning: ${label}`}>Undo</button></span>
-        ) : (
-          <button type="button" className="linkbtn pcl-morning" onClick={() => onChange({ morning: true })} aria-label={`Leave for morning: ${label}`}><Icon name="clock" />Leave for morning</button>
-        )}
-      </div>
+      {extras ? <JobExtras label={label} check={check} onChange={onChange} onNote={setEditing} /> : null}
     </li>
   );
 }

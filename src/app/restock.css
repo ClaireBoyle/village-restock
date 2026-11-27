@@ -1558,11 +1558,7 @@ button.pnote.open span{display:block}
 .pcl-none{display:flex;gap:6px;align-items:center}
 .prep-link{margin:0}
 .prep-left{display:flex;gap:6px;align-items:flex-start;margin:0;font-size:13.5px;color:var(--ink-2)}
-@media (max-width:480px){
-  .pcl-main{flex-wrap:wrap}
-  .pcl-seg{width:100%}
-  .pcl-seg button{flex:1;justify-content:center}
-}
+
 .q-step button.q-hide{visibility:hidden}
 /* Kitchen: one collection line split between defrost and the freezer it goes back into. */
 .l-split{display:flex;flex-direction:column;gap:1px}
@@ -1665,3 +1661,54 @@ button.room-h,button.lgrp-h{scroll-margin-top:calc(env(safe-area-inset-top,0px) 
 .ln-row.t-done .ln-now{color:var(--ok)}
 .ln-row.t-done .sr-dot{opacity:.45}
 .ln-row.t-none .ln-now{color:var(--warn)}
+
+/* Prep checklist, compact: one line per job (name · Ready · Needs prep), the heading says what's shared. */
+.pcl-group{gap:4px}
+.pcl-group h2{align-items:center;padding:0 2px}
+.pcl-group h2>span{flex:1;min-width:0}
+.pcl-group h2 small{display:inline-flex;align-items:center;gap:3px}
+.pcl-group h2 small .ic{width:13px;height:13px;color:var(--ok)}
+.pcl-all{display:inline-flex;align-items:center;gap:4px;min-height:36px;padding:0 4px;font-family:var(--f-body);font-size:13px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--ink-2)}
+.pcl-all .ic{width:14px;height:14px;color:var(--ok)}
+.pcl-group ul{gap:0;border-radius:14px;border:1px solid var(--hair);background:var(--surface);overflow:hidden}
+.theme-navy .pcl-group ul{background:rgba(255,255,255,.045);border-color:rgba(255,255,255,.08)}
+.pcl-job,.theme-navy .pcl-job{gap:0;padding:4px 6px 4px 12px;border:0;border-radius:0;background:transparent;box-shadow:inset 3px 0 0 transparent;min-height:52px;justify-content:center}
+.pcl-job+.pcl-job{border-top:1px solid var(--hair)}
+.theme-navy .pcl-job+.pcl-job{border-top-color:rgba(255,255,255,.07)}
+.pcl-job.s-ready{box-shadow:inset 3px 0 0 var(--ok)}
+.pcl-job.s-needs{box-shadow:inset 3px 0 0 var(--warn-fill);background:color-mix(in srgb,var(--warn-bg) 40%,transparent)}
+.pcl-main{gap:8px;flex-wrap:nowrap}
+.pcl-t{flex:1;min-width:0;align-self:stretch;display:flex;align-items:center;padding:6px 0;border:0;background:none;color:var(--ink);text-align:left;cursor:pointer;font:inherit}
+.pcl-t b{font-size:15.5px;font-weight:600;line-height:1.25;overflow-wrap:break-word}
+.s-ready .pcl-t b{color:var(--ink-2)}
+.pcl-st{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
+.pcl-seg{gap:4px}
+.pcl-seg button{min-height:40px;padding:0 10px;border-radius:10px;font-size:13.5px}
+.pcl-seg button .ic{width:15px;height:15px}
+.pcl-extra{padding:0 0 6px;min-height:0}
+@media (max-width:380px){.pcl-seg button{padding:0 8px;font-size:13px}}
+@media (min-width:900px){.pcl-group ul{grid-template-columns:1fr}}
+/* Prep checklist chips (short jobs, e.g. the Harvest Hommus veg): tap Ready → Needs prep → clear. */
+.pcl-chips{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,150px),1fr));gap:6px}
+.pcl-chip{display:flex;align-items:center;gap:6px;min-height:48px;padding:6px 10px;border-radius:12px;border:1px solid var(--hair);background:var(--surface);color:var(--ink);font:inherit;font-size:15px;font-weight:600;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.theme-navy .pcl-chip{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12)}
+.pcl-chip-i{flex:none;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center}
+.pcl-chip-i .ic{width:14px;height:14px}
+.pcl-chip-n{flex:1;min-width:0;line-height:1.2;overflow-wrap:break-word}
+.pcl-chip>.ic{width:14px;height:14px;color:var(--d-accent);flex:none}
+.pcl-chip.s-ready{border-color:color-mix(in srgb,var(--ok) 55%,transparent);background:color-mix(in srgb,var(--ok) 14%,transparent)}
+.pcl-chip.s-ready .pcl-chip-i{background:var(--ok);border-color:var(--ok);color:#fff}
+.pcl-chip.s-ready .pcl-chip-n{color:var(--ink-2)}
+.pcl-chip.s-needs{border-color:var(--warn-fill);background:color-mix(in srgb,var(--warn-fill) 18%,transparent)}
+.pcl-chip.s-needs .pcl-chip-i{background:var(--warn-fill);border-color:var(--warn-fill);color:#1d1300}
+.pcl-chip:active{transform:scale(.97)}
+.pcl-chip-x{margin-top:2px}
+.pcl-chip-x .pcl-job{min-height:0;padding:6px 10px 2px 12px}
+.pcl-chip-x .pcl-extra{padding-bottom:4px}
+.pcl-x-n{font-size:14px;font-weight:700;margin-right:4px}
+.pcl-t{flex-direction:column;align-items:flex-start;justify-content:center}
+.pcl-hint{margin:0;font-size:13px;color:var(--ink-2);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pcl-hint .pcl-chip-i{width:18px;height:18px;display:inline-grid}
+.pcl-hint .ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.pcl-hint .w{background:var(--warn-fill);border-color:var(--warn-fill);color:#1d1300}
+.pcl-hint .ic{width:12px;height:12px}
