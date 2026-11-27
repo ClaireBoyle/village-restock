@@ -13,7 +13,7 @@ const row = (n) => `article.prow:has(h3:text-is("${n}"))`;
   const b = await chromium.launch();
   const p = await (await b.newContext({ ...devices['iPhone 13'] })).newPage();
   await p.goto(B + '/'); await p.waitForSelector('.dcard2');
-  await p.click('.dcard2:has-text("Kitchen")'); await p.click('text=Start full restock'); await p.waitForSelector('article.prow');
+  await p.click('.dcard2:has-text("Kitchen")'); await p.click('text=/Start (full|closing) restock/'); await p.waitForSelector('article.prow');
   await p.waitForSelector('.pill.ok', { timeout: 20000 });
   const [s] = await sql`select id from restock_sessions`;
   // Another connection locks tonight's restock for 25 s (like a hung query)

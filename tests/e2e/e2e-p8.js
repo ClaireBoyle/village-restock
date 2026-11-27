@@ -19,7 +19,7 @@ const row = (scope, n) => `${scope} article.prow:has(h3:text-is("${n}"))`;
   await P.goto(B + '/'); await P.waitForSelector('.dcard2');
   await P.click('.who'); await P.fill('#staffname', 'Sam'); await P.click('.sheet .btn.primary');
   ok(await has(P, '.lane:has-text("Bar")', '1 areas') || await has(P, '.lane:has-text("Bar")', 'Not started'), 'home: sections are not counted as separate areas');
-  await P.click('.dcard2:has-text("Bar") >> nth=0'); await P.click('text=Start full restock'); await P.waitForSelector('article.prow');
+  await P.click('.dcard2:has-text("Bar") >> nth=0'); await P.click('text=/Start (full|closing) restock/'); await P.waitForSelector('article.prow');
 
   // Back bench visible straight away; sections collapsed
   const bench = await P.$$eval('.area > .prows article.prow h3', (els) => els.map((e) => e.textContent));

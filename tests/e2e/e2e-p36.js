@@ -25,7 +25,7 @@ const lane = '.lane:has-text("Bar"):not(:has-text("Candy")):not(:has-text("Kitch
   await P.goto(B + '/'); await P.waitForSelector(lane);
   ok((await text(P, lane)).includes('Not started') && !(await text(P, lane)).includes('Mia') && !(await text(P, lane)).includes('since'), 'home: opened but nothing entered → "Not started" (no name, no time): ' + await text(P, lane));
   await P.click('.dcard2:has-text("Bar") >> nth=0'); await P.waitForSelector('.type-full');
-  ok(await P.locator('.type-full .badge:has-text("Not started tonight")').count() === 1 && /^Start full restock/.test(await text(P, '.type-full button.btn.primary')), 'department page: "Not started tonight", "Start full restock"');
+  ok(await P.locator('.type-full .badge:has-text("Not started tonight")').count() === 1 && /^Start (full|closing) restock/.test(await text(P, '.type-full button.btn.primary')), 'department page: "Not started tonight", "Start full restock"');
   ok(!(await text(P, '.dhero')).includes('in progress') && await P.locator('.type-full .apills').count() === 0, 'no "Full restock in progress", no area pills');
   await P.screenshot({ path: `${OUT}/p36-not-started.png` });
 
@@ -35,7 +35,7 @@ const lane = '.lane:has-text("Bar"):not(:has-text("Candy")):not(:has-text("Kitch
   await P.goto(B + '/'); await P.waitForSelector(lane);
   ok((await text(P, lane)).includes('In progress') && (await text(P, lane)).includes('Mia'), 'home: one item entered → "In progress · Mia": ' + await text(P, lane));
   await P.click('.dcard2:has-text("Bar") >> nth=0'); await P.waitForSelector('.type-full');
-  ok(await P.locator('.type-full .badge:has-text("In progress since")').count() === 1 && /^Resume full restock/.test(await text(P, '.type-full button.btn.primary')), 'department page: "In progress since …", "Resume full restock"');
+  ok(await P.locator('.type-full .badge:has-text("In progress since")').count() === 1 && /^Resume (full|closing) restock/.test(await text(P, '.type-full button.btn.primary')), 'department page: "In progress since …", "Resume full restock"');
   ok(!errs.length, 'no page errors ' + errs.join(' | '));
   await b.close(); await sql.end();
 })().catch(async (e) => { console.error(e); await sql.end(); process.exit(1); });

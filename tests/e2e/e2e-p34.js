@@ -1,6 +1,6 @@
 // Collection list, less to look at: a storeroom folds up a moment after its last item is ticked (tap its heading to
-// open it again; it opens by itself if something in it goes back to "to collect"), and Fill the stand has no Close
-// button: tapping Fill Side A again closes it. Candy Bar confection stand, phone.
+// open it again; it opens by itself if something in it goes back to "to collect"), then "Fill the stand" is the next
+// step. Candy Bar confection stand, phone.
 // Before running: reset the test database, then load candy-fixture.sql and candy-area-fixture.sql.
 const { chromium, devices } = require('playwright');
 const postgres = require('postgres');
@@ -46,13 +46,8 @@ const line = (n) => `.line[data-line="${n}"]`;
   await P.click(`${line('Kit Kat')} .l-all`); await P.waitForTimeout(1700);
   ok(await P.locator(`${R} .line`).count() === 0, 'ticked again: folds up again');
 
-  // Fill the stand: no Close button; tap the side again to close.
-  await P.click('.fill-btns button:has-text("Fill Side A")'); await P.waitForSelector('.fill-list');
-  ok(await P.locator('.fill-list button, .fill-list .linkbtn').count() === 0, 'Fill Side A: no Close button');
-  await P.click('.fill-btns button:has-text("Fill Side A")'); await P.waitForTimeout(300);
-  ok(await P.locator('.fill-list').count() === 0, 'tap Fill Side A again: closed');
-  await P.click('.fill-btns button:has-text("Fill Side B")'); await P.click('.fill-btns button:has-text("Fill Side A")'); await P.waitForTimeout(300);
-  ok(await P.locator('.fill-list[aria-label="Fill Side A"]').count() === 1, 'switching straight from Side B to Side A');
+  // Fill the stand: its own step now (not on the collection list).
+  ok(await P.locator('.fill-sides').count() === 0 && await P.locator('.dock .btn.primary:has-text("Fill the stand")').count() === 1, 'Collect: "Fill the stand" is the next step');
   ok(await P.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'phone: no sideways scrolling');
   ok(!errs.length, 'no page errors ' + errs.join(' | '));
   await b.close(); await sql.end();

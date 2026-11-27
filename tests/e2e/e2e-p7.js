@@ -60,7 +60,7 @@ const off = http.createServer((req, res) => {
   // Staff: photo on the row and in the collection list, credit in the full-size view
   const P = await (await b.newContext({ ...devices['iPhone 13'] })).newPage(); P.on('pageerror', (e) => errs.push(e.message));
   await P.goto(B + '/'); await P.waitForSelector('.dcard2');
-  await P.click('.dcard2:has-text("Candy")'); await P.click('text=Start full restock'); await P.waitForSelector('article.prow');
+  await P.click('.dcard2:has-text("Candy")'); await P.click('text=/Start (full|closing) restock/'); await P.waitForSelector('article.prow');
   const row = 'article.prow:has(h3:text-is("Maltesers"))';
   await P.locator(`${row} .pthumb img`).waitFor({ timeout: 15000 });
   ok(await P.locator(`${row} .pthumb img`).evaluate((i) => i.complete && i.naturalWidth > 0), 'product photo on the staff row');

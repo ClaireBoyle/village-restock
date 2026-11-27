@@ -88,7 +88,7 @@ async function run(b, device, name) {
   const errs = [];
   const P = await (await b.newContext({ viewport: { width: 1280, height: 800 } })).newPage(); P.on('pageerror', (e) => errs.push(e.message));
   await P.goto(B + '/'); await P.waitForSelector('.dcard2');
-  await P.click('.dcard2:has-text("Kitchen") >> nth=0'); await P.click('button:has-text("Start stock top-up")'); await P.waitForSelector('#qsearch');
+  await P.click('.dcard2:has-text("Kitchen") >> nth=0'); await P.click('button:text-matches("Start (stock )?top-up")'); await P.waitForSelector('#qsearch');
   await P.fill('#qsearch', 'milk'); await P.fill(`${pick('Milk')} .q-num`, '2'); await P.waitForSelector(listed('Milk'));
   ok(await unit(P, pick('Milk')) !== '' && await collectOn(P), 'kitchen: Milk 2 on Your list, Collection list on');
   const [{ n }] = await waitDb(() => sql`select count(*)::int as n from session_items i join restock_sessions s on s.id = i.session_id where s.kind = 'quick' and i.product_name = 'Milk' and i.requested_qty = 2`, (r) => r[0].n === 1);

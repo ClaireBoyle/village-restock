@@ -14,7 +14,7 @@ const ok = (c, m) => { if (!c) throw new Error('FAIL: ' + m); console.log('PASS:
   await p.tap('.sheet button.btn.primary');
   await p.waitForSelector('.who .avatar:has-text("J")');
   ok(true, 'typed name shows straight away in the top bar');
-  await p.click('.dcard2:has-text("Kitchen")'); await p.click('text=Start full restock'); await p.waitForSelector('article.card');
+  await p.click('.dcard2:has-text("Kitchen")'); await p.click('text=/Start (full|closing) restock/'); await p.waitForSelector('article.card');
   const pg = require('postgres')(process.env.E2E_DATABASE_URL || 'postgres://vr:vr@localhost:5432/village_restock', { onnotice: () => {} });
   let people = [];
   for (let k = 0; k < 40 && !people.includes('Jess'); k++) { [{ people } = { people: [] }] = await pg`select people from restock_sessions`; await p.waitForTimeout(250); }

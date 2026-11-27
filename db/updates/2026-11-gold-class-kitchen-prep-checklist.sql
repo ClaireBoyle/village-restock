@@ -5,7 +5,7 @@
 --   Portion sauces              BBQ sauce, Sweet chilli sauce, Tomato sauce
 --   Make sauces                 Vodka sauce, Sriracha mayo, Burger sauce, Hollandaise dressing, Tartare, Maple aioli, Sesame mayo
 --   Cut veg for Harvest Hommus  Carrot, Cucumber, Celery, Radish
---   Portion proteins            Defrosted pulled beef for bao buns
+--   Portion bao                 Bao meat portioning
 --
 -- Portioned lamb, cauliflower popcorn and Fisherman's Baskets stay on the morning handover (from the Freezer 2
 -- portioning check) but aren't on the checklist yet: switch them on in Admin → Morning prep if wanted.
@@ -30,7 +30,7 @@ declare
     ['Cut cucumber for Harvest Hommus', 'Cut veg for Harvest Hommus', 'Cucumber'],
     ['Cut celery for Harvest Hommus', 'Cut veg for Harvest Hommus', 'Celery'],
     ['Cut radish for Harvest Hommus', 'Cut veg for Harvest Hommus', 'Radish'],
-    ['Portion defrosted pulled beef', 'Portion proteins', 'Defrosted pulled beef for bao buns']
+    ['Portion defrosted pulled beef', 'Portion bao', 'Bao meat portioning']
   ];
   grp text;
 begin

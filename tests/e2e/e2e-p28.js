@@ -17,7 +17,7 @@ const layout = (P) => P.$$eval('.room', (rs) => rs.map((r) => [r.querySelector('
 
 async function quick(P, dept, picks) {
   await P.goto(B + '/'); await P.waitForSelector('.dcard2');
-  await P.click(`.dcard2:has-text("${dept}") >> nth=0`); await P.click('text=Start stock top-up'); await P.waitForSelector('#qsearch');
+  await P.click(`.dcard2:has-text("${dept}") >> nth=0`); await P.click('text=/Start (stock )?top-up/'); await P.waitForSelector('#qsearch');
   for (const [n, q, area] of picks) {
     await P.fill('#qsearch', n); await P.waitForTimeout(250);
     // A product kept in several areas: the row for that area.

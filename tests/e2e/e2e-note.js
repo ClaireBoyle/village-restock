@@ -10,7 +10,7 @@ const waitDb = async (q, check, ms = 20000) => { const end = Date.now() + ms; fo
   p.on('pageerror', (e) => errs.push(e.message));
   await p.goto(B + '/'); await p.waitForSelector('.dcard2');
   await p.click('.who'); await p.fill('#staffname', 'Sam'); await p.click('.sheet .btn.primary');
-  await p.click('.dcard2:has-text("Kitchen")'); await p.click('text=Start full restock');
+  await p.click('.dcard2:has-text("Kitchen")'); await p.click('text=/Start (full|closing) restock/');
   await p.waitForSelector('article.card');
   console.log(p.url()); await p.click('.stages .stage:has-text("Finish")');
   await p.waitForSelector('#finish-note');

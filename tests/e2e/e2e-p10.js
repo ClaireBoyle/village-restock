@@ -35,8 +35,8 @@ const syncNow = (p) => p.evaluate(() => window.dispatchEvent(new Event('online')
   await A.p.waitForURL(/\/admin$/);
 
   // ---------- 1. Open full restock, two devices; another department untouched ----------
-  await S.p.goto(`${B}/d/${kit.id}`); await S.p.click('button:has-text("Start full restock")'); await S.p.waitForSelector('article.prow'); // Kitchen restock must survive
-  await S.p.goto(`${B}/d/${bar.id}`); await S.p.click('button:has-text("Start full restock")'); await S.p.waitForSelector('article.prow');
+  await S.p.goto(`${B}/d/${kit.id}`); await S.p.click('button:text-matches("Start (full|closing) restock")'); await S.p.waitForSelector('article.prow'); // Kitchen restock must survive
+  await S.p.goto(`${B}/d/${bar.id}`); await S.p.click('button:text-matches("Start (full|closing) restock")'); await S.p.waitForSelector('article.prow');
   await fillQty(S.p, row('Heineken'), '3');
   await T.p.goto(`${B}/d/${bar.id}`); await T.p.click('button:has-text("full restock")'); await T.p.waitForSelector(row('Heineken'));
   await waitDb(() => sessionsOf('Gold Class Bar'), (r) => r.length === 1 && r[0].items === 1);
@@ -68,7 +68,7 @@ const syncNow = (p) => p.evaluate(() => window.dispatchEvent(new Event('online')
   ok(await has(S.p, '.reset-note', 'reset by an admin', 30000), 'staff device: notice that an admin reset the restock');
   ok(await S.p.locator('.type-full').count() === 1 && await has(S.p, '.type-full', 'Not started tonight'), 'staff device leaves the reset restock and shows it as not started');
   await S.p.click('.reset-note .linkbtn');
-  await S.p.click('button:has-text("Start full restock")'); await S.p.waitForSelector(row('Heineken'));
+  await S.p.click('button:text-matches("Start (full|closing) restock")'); await S.p.waitForSelector(row('Heineken'));
   ok(await S.p.inputValue(`${row('Heineken')} .qty-input`) === '', 'a fresh restock starts straight away, empty, the same day');
   await fillQty(S.p, row('Heineken'), '1');
   const fresh = await waitDb(() => sessionsOf('Gold Class Bar'), (r) => r.length === 1 && r[0].items === 1);
@@ -126,13 +126,13 @@ const syncNow = (p) => p.evaluate(() => window.dispatchEvent(new Event('online')
   ok(!(await A.p.textContent('main')).includes('Kit Kat'), 'Stock Insights has nothing from the reset restock');
 
   // ---------- 3. Quick restock on the admin's own device ----------
-  await A.p.goto(`${B}/d/${kit.id}`); await A.p.click('button:has-text("Start stock top-up")'); await A.p.waitForSelector('.qrow');
+  await A.p.goto(`${B}/d/${kit.id}`); await A.p.click('button:text-matches("Start (stock )?top-up")'); await A.p.waitForSelector('.qrow');
   await A.p.fill('.qpanel .qrow:has-text("Milk") .q-num', '2'); await A.p.waitForSelector('.picked .qrow:has-text("Milk")');
   await waitDb(() => sql`select count(*)::int as n from restock_sessions where kind = 'quick'`, (r) => r[0].n === 1);
   await A.p.goto(`${B}/d/${kit.id}`); await A.p.waitForSelector('.type-quick .amenu');
   await A.p.click('.type-quick .amenu-btn'); await A.p.click('.amenu-pop button:has-text("Reset restock")');
   await A.p.waitForSelector('.rs-list li'); await A.p.check('.rs-sure input'); await A.p.click('.sheet button.danger'); await has(A.p, '.toast', 'Restock reset');
-  ok((await sql`select count(*)::int as n from restock_sessions where kind = 'quick'`)[0].n === 0 && await has(A.p, '.type-quick', 'Start stock top-up'), 'quick restock reset: gone from the server and this device');
+  ok((await sql`select count(*)::int as n from restock_sessions where kind = 'quick'`)[0].n === 0 && await has(A.p, '.type-quick', /Start (stock )?top-up/), 'quick restock reset: gone from the server and this device');
   ok((await sessionsOf('Gold Class Kitchen')).length === 1, 'kitchen full restock still untouched');
 
   // ---------- Offline admin: a shared reset needs the server ----------

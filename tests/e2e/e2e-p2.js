@@ -28,7 +28,7 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
   const A = await device('A');
   await A.goto(B + '/'); await A.waitForSelector('.dcard2');
   await A.click('.who'); await A.fill('#staffname', 'Sam'); await A.click('.sheet .btn.primary');
-  await A.click('.dcard2:has-text("Kitchen")'); await A.click('text=Start full restock');
+  await A.click('.dcard2:has-text("Kitchen")'); await A.click('text=/Start (full|closing) restock/');
   await A.waitForSelector(card('Tomatoes'));
   await fillQty(A, `${card('Tomatoes')}`, '2');
   ok(await hasText(A, `${card('Tomatoes')} .ps`, '6'), 'scenario 1: 2 tomatoes vs target 8 -> collect 6');
@@ -65,8 +65,8 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
   await Bp.waitForFunction(() => document.querySelector('.lane:nth-child(2)')?.textContent?.includes('1 of 4 areas') ?? false, null, { timeout: 15000 });
   ok(true, 'second device home sees the restock started on the first device');
   await Bp.click('.dcard2:has-text("Kitchen")');
-  await Bp.waitForSelector('button:has-text("Resume full restock")'); ok(true, 'second device offers Resume, not Start');
-  await Bp.click('button:has-text("Resume full restock")');
+  await Bp.waitForSelector('button:text-matches("Resume (full|closing) restock")'); ok(true, 'second device offers Resume, not Start');
+  await Bp.click('button:text-matches("Resume (full|closing) restock")');
   await Bp.waitForSelector('.area-btn:has-text("Fridge 1") >> text=Checked');
   ok(await Bp.inputValue(`${card('Tomatoes')} .qty-input`).catch(() => '') === '' || true, 'joined');
   await Bp.click('.area-btn:has-text("Fridge 2")'); await Bp.waitForSelector(card('Milk'));
@@ -79,7 +79,7 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
   ok(s1.people.includes('Sam') && s1.people.includes('Jess'), 'both staff recorded on the restock: ' + s1.people.join(', '));
 
   // Device A picks up Jess's work
-  await A.click('.dcard2:has-text("Kitchen")'); await A.click('button:has-text("Resume full restock")');
+  await A.click('.dcard2:has-text("Kitchen")'); await A.click('button:text-matches("Resume (full|closing) restock")');
   await A.waitForSelector('.area-btn:has-text("Fridge 2") >> text=Checked', { timeout: 30000 });
   ok(true, 'first device sees Fridge 2 completed by the other device');
 
@@ -145,7 +145,7 @@ const waitSynced = (p) => p.waitForSelector('.pill.ok:has-text("All changes sync
   // ---------- Quick restock in Candy Bar (scenario 9) ----------
   await A.click('.dock button:has-text("Back to home")'); await A.waitForSelector('.dcard2');
   ok(await hasText(A, '.lane:nth-child(2) .fin-label', '✓ Done ·'), 'home shows Kitchen finished, with what needs following up (✓ Done · …)');
-  await A.click('.dcard2:has-text("Candy Bar")'); await A.click('text=Start stock top-up');
+  await A.click('.dcard2:has-text("Candy Bar")'); await A.click('text=/Start (stock )?top-up/');
   // Quick restock asks for the amount needed, straight in the product row (also for target-level products).
   await A.fill('#qsearch', 'large'); await A.fill('.qpanel .qrow:has-text("Large cups") .q-num', '3');
   await A.waitForSelector('.picked .qrow:has-text("Large cups")');

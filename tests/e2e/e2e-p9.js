@@ -119,7 +119,7 @@ const card = (n) => `.acard:has(h2:text-is("${n}"))`;
 
   // Gold Class departments keep the full restock
   await P.click('.dcard2:has-text("Bar") >> nth=0');
-  ok(await has(P, 'main', 'Start full restock'), 'other departments keep the full restock (not area by area)');
+  ok(await has(P, 'main', /Start (full|closing) restock/), 'other departments keep the full restock (not area by area)');
 
   // Tablet and desktop: same flow, two columns of rows on wide screens
   for (const [name, vp] of [['tablet', { width: 820, height: 1180 }], ['desktop', { width: 1366, height: 900 }]]) {

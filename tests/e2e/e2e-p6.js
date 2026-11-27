@@ -73,7 +73,7 @@ const prow = (n) => `article.prow:has(h3:text-is("${n}"))`;
   ok(await P.inputValue(`${prow('Tomatoes')} .qty-input`) === '3', 'back in Kitchen Restock with progress kept');
 
   // ---- Exception-based restocking (Candy Bar) ----
-  await P.goto(B + '/'); await P.click('.dcard2:has-text("Candy")'); await P.click('text=Start full restock'); await P.waitForSelector('article.prow');
+  await P.goto(B + '/'); await P.click('.dcard2:has-text("Candy")'); await P.click('text=/Start (full|closing) restock/'); await P.waitForSelector('article.prow');
   const first = (await P.$$eval('article.prow h3', (els) => els.map((x) => x.textContent)))[0];
   await fillQty(P, `${prow(first)}`, '2');
   ok(await P.locator('.area-end:has-text("still needed")').count() === 0, 'no "still to check" demand for blank staff-entered products');
