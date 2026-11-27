@@ -15,6 +15,16 @@ import { checklistGroups, type PrepCheck, type PrepTask } from '@/lib/prep';
 
 const portionNames = new Set(['portion lamb', 'portion zucchini wedges', 'portion cauliflower popcorn', "portion fisherman's baskets", "portion fisherman's basket"]);
 
+function serviceGroups(tasks: PrepTask[]) {
+  const ingredients: [RegExp, string][] = [[/\\bcarrots?\\b/i, 'Carrot'], [/\\bcucumbers?\\b/i, 'Cucumber'], [/\\bcelery\\b/i, 'Celery'], [/\\bradish(?:es)?\\b/i, 'Radish']];
+  return checklistGroups(tasks.map(task => {
+    const context = [task.checklistGroup, task.checklistName, task.name].join(' ');
+    const ingredient = ingredients.find(([pattern]) => pattern.test(context));
+    if (!ingredient || (!/harvest|h[ou]mm?[ou]s/i.test(context) && !/^cut (carrots?|cucumbers?|celery|radish(?:es)?)$/i.test(task.name.trim()))) return task;
+    return { ...task, checklistGroup: 'Harvest hummus veg', checklistName: ingredient[1] };
+  }));
+}
+
 const RECHECK_MS = 20_000;
 
 /**
@@ -29,7 +39,7 @@ export function PrepChecklist({ departmentId }: { departmentId: string }) {
   const [who] = useStaffName();
   const dept = catalogue?.departments.find((d) => d.id === departmentId);
   const tasks = useMemo(() => (catalogue?.prepTasks ?? []).filter((t) => t.departmentId === departmentId), [catalogue, departmentId]);
-  const groups = useMemo(() => checklistGroups(tasks), [tasks]);
+  const groups = useMemo(() => serviceGroups(tasks), [tasks]);
   const tz = catalogue?.settings.timeZone ?? 'Australia/Melbourne';
   const today = catalogue ? tradingDate(new Date(), tz, catalogue.settings.cutoffHour) : null;
   const [serverReady, setServerReady] = useState<boolean | null>(true);
@@ -142,6 +152,7 @@ export function PrepChecklist({ departmentId }: { departmentId: string }) {
 
 /** One job: Ready / Needs prep (tap again for Unchecked), an optional note, and Leave for morning. */
 function Job({ label, check, onChange }: { label: string; check: PrepCheck | undefined; onChange: (f: Parameters<typeof setPrepCheck>[3]) => void }) {
+  const [expanded, setExpanded] = useState(false);
   const st = check?.status ?? null;
   const [noteOpen, setNoteOpen] = useState(false);
   const [draft, setDraft] = useState(check?.note ?? '');
@@ -151,11 +162,11 @@ function Job({ label, check, onChange }: { label: string; check: PrepCheck | und
   return (
     <li className={`pcl-job ${st ? `s-${st}` : 's-none'}`} data-job={label}>
       <div className="pcl-main">
-        <span className="pcl-t">
-          <b>{label}</b>
-          <small className="pcl-st">{st === 'ready' ? <><Icon name="check" />Ready</> : st === 'needs' ? <><Icon name="warn" />Needs prep</> : 'Unchecked'}
-            {check?.updatedBy && st ? <span className="pcl-by"> &middot; {check.updatedBy}</span> : null}</small>
-        </span>
+        <button type="button" className="linkbtn pcl-t" aria-expanded={expanded} aria-label={`Notes and morning handover for ${label}`} onClick={() => setExpanded(!expanded)} style={{textAlign:'left',minHeight:44}}>
+          <b>{label}</b><span aria-hidden="true">{expanded ? ' ▴' : ' ▾'}</span>
+          {check?.morning && <small> · Morning</small>}
+          {check?.note && <Icon name="info" />}
+        </button>
         <span className="pcl-seg" role="group" aria-label={`${label}: ready or needs prep?`}>
           <button type="button" className={`pcl-ready ${st === 'ready' ? 'on' : ''}`} aria-pressed={st === 'ready'} onClick={() => onChange({ status: st === 'ready' ? null : 'ready' })}>
             <Icon name="check" />Ready</button>
@@ -163,7 +174,8 @@ function Job({ label, check, onChange }: { label: string; check: PrepCheck | und
             Needs prep</button>
         </span>
       </div>
-      <div className="pcl-extra">
+      {expanded && <div className="pcl-extra">
+        {check?.updatedBy && st && <small>Checked by {check.updatedBy}</small>}
         {noteOpen ? (
           <input ref={noteRef} className="pcl-note-in" value={draft} maxLength={200} placeholder="Note (optional)" aria-label={`Note for ${label}`}
             onChange={(e) => setDraft(e.target.value)} onBlur={saveNote}
@@ -179,7 +191,7 @@ function Job({ label, check, onChange }: { label: string; check: PrepCheck | und
         ) : (
           <button type="button" className="linkbtn pcl-morning" onClick={() => onChange({ morning: true })} aria-label={`Leave for morning: ${label}`}><Icon name="clock" />Leave for morning</button>
         )}
-      </div>
+      </div>}
     </li>
   );
 }
