@@ -31,19 +31,21 @@ export function StandFillStep({ ctx }: { ctx: RestockCtx }) {
     setMarks(next);
     try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* Current visit still works. */ }
   }
+  const signatureOf = (list: { id: string; amount: string }[]) => JSON.stringify(list.map(row => [row.id, row.amount]));
+  const remaining = [...groups].filter(([group, list]) => marks[group] !== signatureOf(list)).length;
   return <>
     <main className="wrap restock-main">
       {ctx.header}
       <h2>Fill the stand</h2>
       {!groups.size && <p className="empty">Nothing collected to put out.</p>}
       {[...groups].sort(([a], [b]) => a.localeCompare(b)).map(([group, list]) => {
-        const signature = JSON.stringify(list.map(row => [row.id, row.amount]));
+        const signature = signatureOf(list);
         const filled = marks[group] === signature;
         return <section className="stand-panel" data-filled={filled} key={group}>
           <header className="stand-heading">
             <h3>{group}</h3>
-            <button className="stand-mark" aria-label={filled ? 'Undo ' + group + ' filled' : 'Mark ' + group + ' filled'} aria-pressed={filled} onClick={() => toggle(group, signature)}>
-              {filled ? '✓ Filled · Undo' : 'Mark filled'}
+            <button className="stand-mark" aria-label={filled ? 'Undo ' + group + ' filled' : 'Mark ' + group + ' filled'} aria-pressed={filled} onClick={() => { toggle(group, signature); if (!filled && remaining === 1) ctx.go('finish'); }}>
+              {filled ? '✓ Filled · Undo' : remaining === 1 ? 'All done → Finish' : 'Mark filled'}
             </button>
           </header>
           <ul className="stand-products">{list.map(row => <li key={row.id}>
