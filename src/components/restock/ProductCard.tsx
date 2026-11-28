@@ -51,7 +51,7 @@ export function ProductRow({ p, item, onChange, showArea, onRemove, note, sugges
   // A top-up typed in here (not a suggested amount): "Some left" is chosen for it, until staff say otherwise.
   // Kept when the amount changes; cleared with the amount (it's only shown with one).
   const withTick = (v: number | null): Partial<ItemState> => {
-    if (field !== 'requestedQty' || !noneLeft) return { [field]: v };
+    if (field !== 'requestedQty' || !noneLeft || p.prepTaskId) return { [field]: v };
     if (!v) return item.leftHere || item.noneLeftHere ? { [field]: v, leftHere: null, noneLeftHere: false } : { [field]: v };
     const first = !value && suggestedQty === undefined && !item.leftHere && !item.noneLeftHere;
     return first ? { [field]: v, leftHere: 'some', noneLeftHere: false } : { [field]: v };

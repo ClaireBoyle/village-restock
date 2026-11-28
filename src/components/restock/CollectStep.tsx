@@ -40,7 +40,7 @@ export function CollectStep({ ctx }: { ctx: RestockCtx }) {
   // Kitchen: drawers answered "Needs stock", to fill once the stock is up.
   const refills = pendingRefills(session.kind, placements, recorded, items);
   // Gold Class Bar: what the Bar and Upstairs checks said ("None left here"), for each line's label.
-  const up = view.department.noneLeftCheck ? upstairsDetail(session.kind, placements, recorded, items, view.bohScreenIds) : null;
+  const up = view.department.noneLeftCheck ? upstairsDetail(session.kind, placements, recorded, items, view.department.name === 'Gold Class Bar' ? view.bohScreenIds : undefined) : null;
   const checkOf = up ? (l: CollectionLine) => up.get(view.byId.get(l.parts[0].placementId)?.productId ?? '') ?? { check: 'unknown' as const, where: null } : undefined;
 
   return (

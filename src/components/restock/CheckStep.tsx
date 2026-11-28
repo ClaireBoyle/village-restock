@@ -487,7 +487,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
             </section>
           ) : null}
           {noneLeftOn && cur.placements.some((p) => p.method === 'manual' && (needOf(p, items.get(p.placementId) ?? EMPTY_ITEM) ?? 0) > 0) ? (
-            <p className="aguide-line nl-hint"><Icon name="info" /><span>Entered a top-up? <b>Some left</b> is chosen for you: an open bottle or jar with usable stock counts. Tap <b>None left</b> if the spot is empty.</span></p>
+            <p className="aguide-line nl-hint"><Icon name="info" /><span>Choose <b>Some left</b> if this spot has usable stock, or <b>None left</b> if it’s empty.</span></p>
           ) : null}
           {usesAdmits(cur.placements) ? (
             // Tomorrow's forecast admits: once per restock, for every suggested amount.

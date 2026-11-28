@@ -253,7 +253,8 @@ export function departmentView(cat: Catalogue, departmentId: string): Department
   const bohScreenIds = new Set(placements.filter((p) => p.pickupAreaId && !p.defrost && screenOf(p.pickupAreaId) !== p.screenAreaId)
     .map((p) => screenOf(p.pickupAreaId!)));
   return {
-    department, areas, placements, bohScreenIds, pickupOrder,
+    department: department.name === 'Gold Class Kitchen' ? { ...department, noneLeftCheck: true } : department,
+    areas, placements, bohScreenIds, pickupOrder,
     byId: new Map(placements.map((p) => [p.placementId, p])),
     locationOrder: new Map(cat.locations.map((l, i) => [l.id, l.sortOrder * 1000 + i])),
     locationNotes: new Map(cat.locations.filter((l) => l.collectNote?.trim()).map((l) => [l.id, l.collectNote!.trim()])),
@@ -1025,7 +1026,7 @@ export function stockOutcomes(lines: CollectionLine[], items: Map<string, ItemSt
 /** The stock outcomes of a restock, with the department's rule (Candy Bar "None on display", Gold Class Bar "None left here"). */
 export function restockOutcomes(kind: SessionKind, view: DepartmentView, placements: PlacementView[], recordedAreas: Map<string, AreaStatus>, items: Map<string, ItemState>, lines?: CollectionLine[]): StockOutcome[] {
   const ls = lines ?? collectionLines(collectPlacements(kind, placements, recordedAreas), items);
-  const detail = view.department.noneLeftCheck ? upstairsDetail(kind, placements, recordedAreas, items, view.bohScreenIds) : undefined;
+  const detail = view.department.noneLeftCheck ? upstairsDetail(kind, placements, recordedAreas, items, view.department.name === 'Gold Class Bar' ? view.bohScreenIds : undefined) : undefined;
   const up = detail ? new Map([...detail].map(([id, d]) => [id, d.check])) : undefined;
   const where = detail ? new Map([...detail].map(([id, d]) => [id, d.where])) : undefined;
   return stockOutcomes(ls, items, view.byId, !!view.department.noneOnDisplay, up, where);
