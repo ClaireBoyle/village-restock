@@ -50,7 +50,7 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
     try { return JSON.parse(localStorage.getItem('vr-stand-side') ?? '{}') as Record<string, string>; } catch { return {}; }
   });
   const pickSide = (areaId: string, secId: string) => setSideOn((s) => {
-    const next = { ...s, [areaId]: secId };
+    const next = { ...s, [`${session.id}:${areaId}`]: secId };
     try { localStorage.setItem('vr-stand-side', JSON.stringify(next)); } catch { /* private mode */ }
     return next;
   });
@@ -302,7 +302,10 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
       onChange={(fields, resolve) => void onItem(p, fields, resolve)} />
   );
   // A stand checked side by side (the Candy Bar confection stand, its water stand too): counted in fives.
-  const standBy5 = cur.sections.some((x) => x.mode === 'side');
+  const sides = cur.sections.filter(x => x.mode === 'side');
+  const standBy5 = sides.length > 0;
+  const on = sides.find(x => x.area.id === sideOn[`${session.id}:${cur.area.id}`]) ?? sides[0];
+  const nextSide = sides[sides.indexOf(on) + 1];
   const renderRow = (p: (typeof cur.placements)[number], showArea = false) => {
     const row = stockRow(p, showArea);
     if (session.kind !== 'full' || whole.department.name !== 'Gold Class Kitchen' ||
@@ -527,12 +530,10 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
 
           {(() => {
             // Sides of a stand: one switch, one side's list at a time (entries are saved as they're made).
-            const sides = cur.sections.filter((x) => x.mode === 'side');
             if (!sides.length) return null;
-            const on = sides.find((x) => x.area.id === sideOn[cur.area.id]) ?? sides[0];
             return (
               <section className={`stand-sides side-${sides.indexOf(on) % 2 ? 'b' : 'a'}`} aria-label="Sides of the stand">
-                <div className="side-switch" role="tablist" aria-label="Side">
+                <div id="stand-side-switch" className="side-switch" role="tablist" aria-label="Side">
                   {sides.map((x) => {
                     const n = x.placements.filter(chk).length;
                     return (
@@ -628,8 +629,12 @@ export function CheckStep({ ctx, phase = 'all' }: { ctx: RestockCtx; phase?: 'fo
           <button type="button" className="dock-2 dock-review" onClick={() => setReview(!review)} disabled={!lines.length} aria-expanded={review} aria-controls="entered-list">
             {lines.length ? `${lines.length} to collect` : 'Nothing added to the collection list'}{lines.length ? <Icon name={review ? 'down' : 'up'} /> : null}</button></>}
         sub={walk ? undefined : next && st === 'complete' ? `Next area: ${next.area.name}` : byArea && !lines.length ? 'Tap + Add on anything that needs topping up' : undefined}>
-        <button className="btn save-exit" onClick={ctx.saveAndExit} aria-label="Save and exit"><Icon name="save" /><span className="lg">Save and exit</span><span className="sm">Save &amp; exit</span></button>
-        {isDefrost && !flow ? (
+        {byArea ? <button className="linkbtn" onClick={ctx.saveAndExit}>Pause</button> : <button className="btn save-exit" onClick={ctx.saveAndExit} aria-label="Save and exit"><Icon name="save" /><span className="lg">Save and exit</span><span className="sm">Save &amp; exit</span></button>}
+        {byArea && nextSide ? (
+          <button className="btn primary big" onClick={() => { pickSide(cur.area.id, nextSide.area.id); document.getElementById("stand-side-switch")?.scrollIntoView({ block: "center" }); }}>Next: {nextSide.area.name}<Icon name="next" /></button>
+        ) : byArea && lines.length > 0 ? (
+          <button className="btn primary big" onClick={() => ctx.go("collect")}>Start collecting<Icon name="next" /></button>
+        ) : isDefrost && !flow ? (
           // Defrost: carry on to the next area (Defrost counts as done); the collection list is there but secondary.
           <>
             <button className="btn dr-list" onClick={() => ctx.go('collect')}><span className="lg">Collection list</span><span className="sm">List</span></button>
